@@ -1,0 +1,49 @@
+{
+  "name": "tea-time",
+  "version": "0.0.0",
+  "engines": {
+    "node": ">=4.0.0"
+  },
+  "description": "Unit test: Tea Time!",
+  "main": "lib/tea-time.js",
+  "bin": {
+    "tea-time": "./bin/tea-time"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "async-kit": "^1.0.0",
+    "glob": "^7.0.3",
+    "minimist": "^1.2.0",
+    "string-kit": "^0.4.1",
+    "terminal-kit": "^0.24.2"
+  },
+  "devDependencies": {
+    "expect.js": "^0.3.1",
+    "jshint": "^2.9.2",
+    "mocha": "^2.4.5"
+  },
+  "scripts": {
+    "test": "mocha -R dot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cronvel/tea-time.git"
+  },
+  "keywords": [
+    "bench"
+  ],
+  "author": "Cédric Ronvel",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cronvel/tea-time/issues"
+  },
+  "copyright": {
+    "title": "Tea Time!",
+    "years": [
+      2016
+    ],
+    "owner": "Cédric Ronvel"
+  }
+}
