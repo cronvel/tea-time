@@ -80,6 +80,39 @@ describe( "Async tests" , function() {
 
 
 
+describe( "Suite into suite" , function() {
+	
+	//it( "Some test #1" , function() {} ) ;
+	
+	describe( "Suite into suite" , function() {
+		
+		it( "Some sub-test #1" , function() {
+		} ) ;
+		
+		it( "Some sub-test #2" , function() {
+			throw new Error( "Failed!" ) ;
+		} ) ;
+	} ) ;
+	
+	describe( "Suite into suite" , function() {
+		
+		it( "Some sub-test #1" , function() {
+		} ) ;
+		
+		it( "Some sub-test #2" , function() {
+			throw new Error( "Failed!" ) ;
+		} ) ;
+	} ) ;
+	
+	/*
+	it( "Some test #2" , function() {
+		throw new Error( "Failed!" ) ;
+	} ) ;
+	*/
+} ) ;
+
+
+
 describe( "Misc tests" , function() {
 	
 	it( "Pending" ) ;
