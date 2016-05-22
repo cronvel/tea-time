@@ -9,8 +9,6 @@ describe( "Sync tests" , function() {
 	it( "Sync Exception" , function() {
 		throw new Error( "Failed!" ) ;
 	} ) ;
-	
-	it( "Pending" ) ;
 } ) ;
 
 
@@ -44,6 +42,20 @@ describe( "Async tests" , function() {
 		setTimeout( function() {
 			done( new Error( 'Failed!' ) ) ;
 		} , 10 ) ;
+	} ) ;
+} ) ;
+
+
+
+describe( "Misc tests" , function() {
+	
+	it( "Pending" ) ;
+	
+	it( "Same name" , function() {
+	} ) ;
+	
+	it( "Same name" , function() {
+		throw new Error( "Failed!" ) ;
 	} ) ;
 } ) ;
 
