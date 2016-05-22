@@ -126,3 +126,8 @@ describe( "Misc tests" , function() {
 } ) ;
 
 
+
+it( "Out of suite test" , function() {
+} ) ;
+	
+
