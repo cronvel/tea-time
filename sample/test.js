@@ -43,6 +43,39 @@ describe( "Async tests" , function() {
 			done( new Error( 'Failed!' ) ) ;
 		} , 10 ) ;
 	} ) ;
+	
+	it( "Async Ok 100ms" , function( done ) {
+		setTimeout( done , 100 ) ;
+	} ) ;
+	
+	it( "Async Ok 300ms" , function( done ) {
+		setTimeout( done , 300 ) ;
+	} ) ;
+	
+	it( "Async Ok 1000ms" , function( done ) {
+		setTimeout( done , 1000 ) ;
+	} ) ;
+	
+	it( "Async Exception 100ms" , function( done ) {
+		setTimeout( function() {
+			throw new Error( "Failed!" ) ;
+			done() ;
+		} , 100 ) ;
+	} ) ;
+	
+	it( "Async Exception 300ms" , function( done ) {
+		setTimeout( function() {
+			throw new Error( "Failed!" ) ;
+			done() ;
+		} , 300 ) ;
+	} ) ;
+	
+	it( "Async Exception 1000ms" , function( done ) {
+		setTimeout( function() {
+			throw new Error( "Failed!" ) ;
+			done() ;
+		} , 1000 ) ;
+	} ) ;
 } ) ;
 
 
