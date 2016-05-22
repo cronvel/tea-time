@@ -113,9 +113,32 @@ describe( "Suite into suite" , function() {
 
 
 
+describe( "Sync setup" , function() {
+	
+	setup( function() {
+		console.log( 'Setup!' ) ;
+	} ) ;
+	
+	it( "One" , function() {
+	} ) ;
+	
+	it( "Two" , function() {
+	} ) ;
+	
+	it( "Three" , function() {
+		throw new Error( "Failed!" ) ;
+	} ) ;
+} ) ;
+
+
+
 describe( "Misc tests" , function() {
 	
 	it( "Pending" ) ;
+	
+	it.skip( "Skip" , function() {
+		throw new Error( "Failed!" ) ;
+	} ) ;
 	
 	it( "Same name" , function() {
 	} ) ;
