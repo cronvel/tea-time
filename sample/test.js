@@ -3,11 +3,11 @@
 
 describe( "Sync tests" , function() {
 	
-	it( "Sync Ok" , function() {
-	} ) ;
-	
 	it( "Sync Exception" , function() {
 		throw new Error( "Failed!" ) ;
+	} ) ;
+	
+	it( "Sync Ok" , function() {
 	} ) ;
 } ) ;
 
