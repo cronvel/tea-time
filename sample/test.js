@@ -113,14 +113,50 @@ describe( "Suite into suite" , function() {
 
 
 
-describe( "Sync setup" , function() {
+describe( "Hooks" , function() {
+	
+	before( function() {
+		console.log( 'Sync Before!' ) ;
+	} ) ;
+	
+	after( function() {
+		console.log( 'Sync After!' ) ;
+	} ) ;
 	
 	beforeEach( function() {
-		console.log( 'BeforeEach!' ) ;
+		console.log( 'Sync BeforeEach!' ) ;
 	} ) ;
 	
 	afterEach( function() {
-		console.log( 'afterEach!' ) ;
+		console.log( 'Sync AfterEach!' ) ;
+	} ) ;
+	
+	before( function( done ) {
+		setTimeout( function() {
+			console.log( 'Async Before!' ) ;
+			done() ;
+		} , 10 ) ;
+	} ) ;
+	
+	after( function( done ) {
+		setTimeout( function() {
+			console.log( 'Async After!' ) ;
+			done() ;
+		} , 10 ) ;
+	} ) ;
+	
+	beforeEach( function( done ) {
+		setTimeout( function() {
+			console.log( 'Async BeforeEach!' ) ;
+			done() ;
+		} , 10 ) ;
+	} ) ;
+	
+	afterEach( function( done ) {
+		setTimeout( function() {
+			console.log( 'Async AfterEach!' ) ;
+			done() ;
+		} , 10 ) ;
 	} ) ;
 	
 	it( "One" , function() {
