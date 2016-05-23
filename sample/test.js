@@ -115,11 +115,16 @@ describe( "Suite into suite" , function() {
 
 describe( "Sync setup" , function() {
 	
-	setup( function() {
-		console.log( 'Setup!' ) ;
+	beforeEach( function() {
+		console.log( 'BeforeEach!' ) ;
+	} ) ;
+	
+	afterEach( function() {
+		console.log( 'afterEach!' ) ;
 	} ) ;
 	
 	it( "One" , function() {
+		throw new Error( "Failed!" ) ;
 	} ) ;
 	
 	it( "Two" , function() {
