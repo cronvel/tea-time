@@ -173,6 +173,42 @@ describe( "Hooks" , function() {
 
 
 
+describe( "Failing hooks" , function() {
+	
+	context( "Sync" , function() {
+		
+		beforeEach( function() {
+			console.log( 'Sync BeforeEach!' ) ;
+			throw new Error( 'Failed hook!' ) ;
+		} ) ;
+		
+		it( "One" , function() {
+		} ) ;
+		
+		it( "Two" , function() {
+		} ) ;
+	} ) ;
+	
+	context( "Async" , function() {
+		
+		beforeEach( function( done ) {
+			setTimeout( function() {
+				console.log( 'Async BeforeEach!' ) ;
+				throw new Error( 'Failed hook!' ) ;
+				done() ;
+			} , 10 ) ;
+		} ) ;
+		
+		it( "One" , function() {
+		} ) ;
+		
+		it( "Two" , function() {
+		} ) ;
+	} ) ;
+} ) ;
+
+
+
 describe( "Misc tests" , function() {
 	
 	it( "Pending" ) ;
