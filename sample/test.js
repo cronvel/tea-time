@@ -173,7 +173,43 @@ describe( "Hooks" , function() {
 
 
 
-describe( "Failing hooks" , function() {
+describe( "Failing suite setup" , function() {
+	
+	context( "Sync" , function() {
+		
+		before( function() {
+			console.log( 'Sync Before!' ) ;
+			throw new Error( 'Failed hook!' ) ;
+		} ) ;
+		
+		it( "One" , function() {
+		} ) ;
+		
+		it( "Two" , function() {
+		} ) ;
+	} ) ;
+	
+	context( "Async" , function() {
+		
+		before( function( done ) {
+			setTimeout( function() {
+				console.log( 'Async Before!' ) ;
+				throw new Error( 'Failed hook!' ) ;
+				done() ;
+			} , 10 ) ;
+		} ) ;
+		
+		it( "One" , function() {
+		} ) ;
+		
+		it( "Two" , function() {
+		} ) ;
+	} ) ;
+} ) ;
+
+
+
+describe( "Failing setup hooks" , function() {
 	
 	context( "Sync" , function() {
 		
@@ -194,6 +230,78 @@ describe( "Failing hooks" , function() {
 		beforeEach( function( done ) {
 			setTimeout( function() {
 				console.log( 'Async BeforeEach!' ) ;
+				throw new Error( 'Failed hook!' ) ;
+				done() ;
+			} , 10 ) ;
+		} ) ;
+		
+		it( "One" , function() {
+		} ) ;
+		
+		it( "Two" , function() {
+		} ) ;
+	} ) ;
+} ) ;
+
+
+
+describe( "Failing suite teardown" , function() {
+	
+	context( "Sync" , function() {
+		
+		after( function() {
+			console.log( 'Sync After!' ) ;
+			throw new Error( 'Failed hook!' ) ;
+		} ) ;
+		
+		it( "One" , function() {
+		} ) ;
+		
+		it( "Two" , function() {
+		} ) ;
+	} ) ;
+	
+	context( "Async" , function() {
+		
+		after( function( done ) {
+			setTimeout( function() {
+				console.log( 'Async After!' ) ;
+				throw new Error( 'Failed hook!' ) ;
+				done() ;
+			} , 10 ) ;
+		} ) ;
+		
+		it( "One" , function() {
+		} ) ;
+		
+		it( "Two" , function() {
+		} ) ;
+	} ) ;
+} ) ;
+
+
+
+describe( "Failing teardown" , function() {
+	
+	context( "Sync" , function() {
+		
+		afterEach( function() {
+			console.log( 'Sync AfterEach!' ) ;
+			throw new Error( 'Failed hook!' ) ;
+		} ) ;
+		
+		it( "One" , function() {
+		} ) ;
+		
+		it( "Two" , function() {
+		} ) ;
+	} ) ;
+	
+	context( "Async" , function() {
+		
+		afterEach( function( done ) {
+			setTimeout( function() {
+				console.log( 'Async AfterEach!' ) ;
 				throw new Error( 'Failed hook!' ) ;
 				done() ;
 			} , 10 ) ;

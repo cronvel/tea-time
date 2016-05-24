@@ -1,9 +1,3 @@
 
-Broken:
-* bail out is broken
-* uncaughtException leaks
-
-
-* fail in hooks
 * expected/actual diffs
 * package.json options
