@@ -317,6 +317,29 @@ describe( "Failing teardown" , function() {
 
 
 
+describe( "Expected/actual" , function() {
+	
+	it( "Expected/actual" , function() {
+		var error = new Error( "Expected some value to be some other" ) ;
+		
+		error.expected = {
+			a: 1 ,
+			b: 2 ,
+			c: 3
+		} ;
+		
+		error.actual = {
+			a: 1 ,
+			b: 'two' ,
+			c: 3
+		} ;
+		
+		throw error ;
+	} ) ;
+} ) ;
+
+
+
 describe( "Misc tests" , function() {
 	
 	it( "Pending" ) ;
