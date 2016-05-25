@@ -43,39 +43,6 @@ describe( "Async tests" , function() {
 			done( new Error( 'Failed!' ) ) ;
 		} , 10 ) ;
 	} ) ;
-	
-	it( "Async Ok 100ms" , function( done ) {
-		setTimeout( done , 100 ) ;
-	} ) ;
-	
-	it( "Async Ok 300ms" , function( done ) {
-		setTimeout( done , 300 ) ;
-	} ) ;
-	
-	it( "Async Ok 1000ms" , function( done ) {
-		setTimeout( done , 1000 ) ;
-	} ) ;
-	
-	it( "Async Exception 100ms" , function( done ) {
-		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
-			done() ;
-		} , 100 ) ;
-	} ) ;
-	
-	it( "Async Exception 300ms" , function( done ) {
-		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
-			done() ;
-		} , 300 ) ;
-	} ) ;
-	
-	it( "Async Exception 1000ms" , function( done ) {
-		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
-			done() ;
-		} , 1000 ) ;
-	} ) ;
 } ) ;
 
 
@@ -381,6 +348,68 @@ describe( "Expected/actual" , function() {
 		} ;
 		
 		throw error ;
+	} ) ;
+} ) ;
+
+	
+
+describe( "Timeout" , function() {
+	
+	it( "Async Ok 100ms" , function( done ) {
+		setTimeout( done , 100 ) ;
+	} ) ;
+	
+	it( "Async Ok 300ms" , function( done ) {
+		setTimeout( done , 300 ) ;
+	} ) ;
+	
+	it( "Async Ok 1000ms" , function( done ) {
+		setTimeout( done , 1000 ) ;
+	} ) ;
+	
+	it( "Async Ok 3000ms (timeout)" , function( done ) {
+		setTimeout( done , 3000 ) ;
+	} ) ;
+	
+	it( "Async Ok 3000ms (no timeout)" , function( done ) {
+		this.timeout( 4000 ) ;
+		setTimeout( done , 3000 ) ;
+	} ) ;
+	
+	it( "Async Exception 100ms" , function( done ) {
+		setTimeout( function() {
+			throw new Error( "Failed!" ) ;
+			done() ;
+		} , 100 ) ;
+	} ) ;
+	
+	it( "Async Exception 300ms" , function( done ) {
+		setTimeout( function() {
+			throw new Error( "Failed!" ) ;
+			done() ;
+		} , 300 ) ;
+	} ) ;
+	
+	it( "Async Exception 1000ms" , function( done ) {
+		setTimeout( function() {
+			throw new Error( "Failed!" ) ;
+			done() ;
+		} , 1000 ) ;
+	} ) ;
+	
+	it( "Async Exception 3000ms (timeout)" , function( done ) {
+		setTimeout( function() {
+			throw new Error( "Failed!" ) ;
+			done() ;
+		} , 3000 ) ;
+	} ) ;
+	
+	it( "Async Exception 3000ms (no timeout)" , function( done ) {
+		this.timeout( 4000 ) ;
+		setTimeout( function() {
+			throw new Error( "Failed!" ) ;
+			done() ;
+		} , 3000 ) ;
 	} ) ;
 } ) ;
 
