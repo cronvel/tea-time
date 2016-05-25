@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "engines": {
     "node": ">=4.0.0"
   },
@@ -17,8 +17,8 @@
     "diff": "^2.2.2",
     "glob": "^7.0.3",
     "minimist": "^1.2.0",
-    "string-kit": "^0.4.1",
-    "terminal-kit": "^0.24.2",
+    "string-kit": "^0.5.1",
+    "terminal-kit": "^0.24.3",
     "tree-kit": "^0.5.20"
   },
   "devDependencies": {
@@ -44,6 +44,7 @@
   "copyright": {
     "title": "Tea Time!",
     "years": [
+      2015,
       2016
     ],
     "owner": "Cédric Ronvel"
