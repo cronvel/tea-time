@@ -319,18 +319,44 @@ describe( "Failing teardown" , function() {
 
 describe( "Expected/actual" , function() {
 	
-	it( "Expected/actual" , function() {
+	it( "Simple expected/actual" , function() {
 		var error = new Error( "Expected some value to be some other" ) ;
 		
 		error.expected = {
 			a: 1 ,
 			b: 2 ,
+			c: 3 ,
+			x: 'four'
+		} ;
+		
+		error.actual = {
+			a: 1 ,
+			b: 'two' ,
+			c: 3 ,
+			x: 'five'
+		} ;
+		
+		throw error ;
+	} ) ;
+	
+	it( "Complex expected/actual" , function() {
+		var error = new Error( "Expected some value to be some other" ) ;
+		
+		error.expected = {
+			a: 1 ,
+			b: 2 ,
+			x: {
+				f: 'formidable'
+			} ,
 			c: 3
 		} ;
 		
 		error.actual = {
 			a: 1 ,
 			b: 'two' ,
+			y: {
+				g: 'Gee'
+			} ,
 			c: 3
 		} ;
 		
