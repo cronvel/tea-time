@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "engines": {
     "node": ">=4.0.0"
   },
@@ -17,7 +17,7 @@
     "diff": "^2.2.2",
     "glob": "^7.0.3",
     "minimist": "^1.2.0",
-    "string-kit": "^0.5.1",
+    "string-kit": "^0.5.2",
     "terminal-kit": "^0.24.3",
     "tree-kit": "^0.5.20"
   },
