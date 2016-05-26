@@ -7,6 +7,6 @@
 
 Mocha compatibility:
 
-* slow time
+* hook name arguments
 * this.retry()
 

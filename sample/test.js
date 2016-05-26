@@ -359,6 +359,11 @@ describe( "Timeout" , function() {
 		setTimeout( done , 100 ) ;
 	} ) ;
 	
+	it( "Async Ok 100ms (slow 150)" , function( done ) {
+		this.slow( 150 ) ;
+		setTimeout( done , 100 ) ;
+	} ) ;
+	
 	it( "Async Ok 300ms" , function( done ) {
 		setTimeout( done , 300 ) ;
 	} ) ;
