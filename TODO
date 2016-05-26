@@ -2,6 +2,7 @@
 
 * package.json options
 * more event for reporters
+* this.parallel() (in suite context): run all test in this suite in parallel
 
 
 

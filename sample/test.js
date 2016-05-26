@@ -82,15 +82,15 @@ describe( "Suite into suite" , function() {
 
 describe( "Hooks" , function() {
 	
-	before( function() {
+	before( "suite setup hook" , function() {
 		console.log( 'Sync Before!' ) ;
 	} ) ;
 	
-	after( function() {
+	after( "suite teardown hook" , function() {
 		console.log( 'Sync After!' ) ;
 	} ) ;
 	
-	beforeEach( function() {
+	beforeEach( function beforeEach() {
 		console.log( 'Sync BeforeEach!' ) ;
 	} ) ;
 	
