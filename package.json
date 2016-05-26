@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "engines": {
     "node": ">=4.0.0"
   },
@@ -38,7 +38,12 @@
     "url": "https://github.com/cronvel/tea-time.git"
   },
   "keywords": [
-    "bench"
+    "unit",
+    "test",
+    "bdd",
+    "tdd",
+    "tap",
+    "mocha"
   ],
   "author": "Cédric Ronvel",
   "license": "MIT",
