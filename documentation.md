@@ -23,9 +23,9 @@ Reporters:
 * tap *Test Anything Protocol*
 * dot *output colorful dots*
 * verbose *like classic, but more verbose*
-* report *use in conjunction with another reporter, only output the final passing/failing/pending report*
+* report *use in conjunction with another reporter, only output the final status report*
 * error-report *use in conjunction with another reporter, only output the final error report*
-* notify *use in conjunction with another reporter, send a freedesktop.org notification with the passing/failing/pending report*
+* notify *use in conjunction with another reporter, send a freedesktop.org notification with the final status report*
 
 
 

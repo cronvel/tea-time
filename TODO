@@ -2,6 +2,7 @@
 
 * package.json options
 * this.parallel() (in suite context): run all test in this suite in parallel
+* better OOP
 
 
 
