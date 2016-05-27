@@ -1,2 +1,2 @@
 #!/usr/bin/env node
-require( __dirname + '/../lib/tea-time.js' ).cli() ;
+require( __dirname + '/../lib/cli.js' )() ;
