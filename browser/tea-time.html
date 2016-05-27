@@ -6,16 +6,12 @@
 <body>
 	<script src="./tea-time.js"></script>
 	<script>
-		var teaTime = createTeaTime() ;
+		createTeaTime() ;
 	</script>
+	<script src="reporters/console.js"></script>
+	<script src="reporters/classic.js"></script>
 	<script src="../sample/test.js"></script>
 	<script>
-		teaTime.on( 'ok' , function( testName , ok ) {
-			console.log( testName , 'ok' ) ;
-		} ) ;
-		teaTime.on( 'report' , function( ok , fail , skip ) {
-			console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' pending:' , skip ) ;
-		} ) ;
 		teaTime.run() ;
 	</script>
 </body>

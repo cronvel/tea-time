@@ -44,8 +44,11 @@ function createTeaTime()
 			setTimeout( callback , 0 ) ;
 		} ,
 		onceUncaughtException: function( callback ) {
+			var triggered = false ;
 			window.onerror = function( message , source , lineno , colno , error ) {
+				if ( triggered ) { return ; }
 				callback( error ) ;
+				return true ;	// prevent the event propagation
 			} ;
 		} ,
 		offUncaughtException: function() {
@@ -54,11 +57,10 @@ function createTeaTime()
 		allowConsole: true
 	} ;
 	
-	var teaTime = TeaTime.create( options ) ;
+	window.teaTime = TeaTime.create( options ) ;
+	window.teaTime.init() ;
 	
-	teaTime.init() ;
-	
-	return teaTime ;
+	return window.teaTime ;
 }
 
 module.exports = createTeaTime ;
@@ -498,7 +500,7 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 	var context = {
 		timeout: function( timeout ) {
 			if ( callbackTriggered ) { return ; }
-			if ( timer ) { clearTimeout( timer ) ; timer = null ; }
+			if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
 			timer = setTimeout( triggerCallback.bind( undefined , new Error( 'Test timeout (local)' ) ) , timeout ) ;
 		} ,
 		slow: function( slowTime_ ) { slowTime = slowTime_ ; }
@@ -510,7 +512,7 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		
 		time = Date.now() - startTime ;
 		callbackTriggered = true ;
-		if ( timer ) { clearTimeout( timer ) ; timer = null ; }
+		if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
 		
 		self.offUncaughtException( triggerCallback ) ;
 		//process.removeListener( 'uncaughtException' , triggerCallback ) ;

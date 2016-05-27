@@ -1,8 +1,8 @@
 
 
+* BUG: test that asyncly timeout THEN asyncly throw ('uncaughtError' is throwed during the next test, turning it to a fail)
 * package.json options
 * this.parallel() (in suite context): run all test in this suite in parallel
-* better OOP
 
 
 
