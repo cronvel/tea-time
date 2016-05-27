@@ -33,14 +33,14 @@ describe( "Async tests" , function() {
 	
 	it( "Async Exception" , function( done ) {
 		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
+			throw new Error( "Asyncly Failed!" ) ;
 			done() ;
 		} , 10 ) ;
 	} ) ;
 	
 	it( "Async fail callback" , function( done ) {
 		setTimeout( function() {
-			done( new Error( 'Failed!' ) ) ;
+			done( new Error( 'Asyncly Failed!' ) ) ;
 		} , 10 ) ;
 	} ) ;
 } ) ;
@@ -383,28 +383,28 @@ describe( "Timeout" , function() {
 	
 	it( "Async Exception 100ms" , function( done ) {
 		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
+			throw new Error( "Asyncly Failed!" ) ;
 			done() ;
 		} , 100 ) ;
 	} ) ;
 	
 	it( "Async Exception 300ms" , function( done ) {
 		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
+			throw new Error( "Asyncly Failed!" ) ;
 			done() ;
 		} , 300 ) ;
 	} ) ;
 	
 	it( "Async Exception 1000ms" , function( done ) {
 		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
+			throw new Error( "Asyncly Failed!" ) ;
 			done() ;
 		} , 1000 ) ;
 	} ) ;
 	
 	it( "Async Exception 3000ms (timeout)" , function( done ) {
 		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
+			throw new Error( "Asyncly Failed!" ) ;
 			done() ;
 		} , 3000 ) ;
 	} ) ;
@@ -412,7 +412,7 @@ describe( "Timeout" , function() {
 	it( "Async Exception 3000ms (no timeout)" , function( done ) {
 		this.timeout( 4000 ) ;
 		setTimeout( function() {
-			throw new Error( "Failed!" ) ;
+			throw new Error( "Asyncly Failed!" ) ;
 			done() ;
 		} , 3000 ) ;
 	} ) ;

@@ -1,0 +1,22 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta charset="utf8" />
+</head>
+<body>
+	<script src="./tea-time.js"></script>
+	<script>
+		var teaTime = createTeaTime() ;
+	</script>
+	<script src="../sample/test.js"></script>
+	<script>
+		teaTime.on( 'ok' , function( testName , ok ) {
+			console.log( testName , 'ok' ) ;
+		} ) ;
+		teaTime.on( 'report' , function( ok , fail , skip ) {
+			console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' pending:' , skip ) ;
+		} ) ;
+		teaTime.run() ;
+	</script>
+</body>
+</html>
