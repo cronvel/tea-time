@@ -33,6 +33,7 @@
 
 var TeaTime = require( './tea-time.js' ) ;
 var diff = require( './diff.js' ) ;
+var htmlColorDiff = require( './htmlColorDiff.js' ) ;
 var inspect = require( 'string-kit/lib/inspect.js' ) ;
 
 
@@ -62,6 +63,7 @@ function createTeaTime()
 	window.teaTime = TeaTime.create( options ) ;
 	window.teaTime.init() ;
 	window.teaTime.diff = diff ;
+	window.teaTime.htmlColorDiff = htmlColorDiff ;
 	window.teaTime.inspect = inspect ;
 	
 	return window.teaTime ;
@@ -70,7 +72,7 @@ function createTeaTime()
 module.exports = createTeaTime ;
 
 
-},{"./diff.js":2,"./tea-time.js":3,"string-kit/lib/inspect.js":29}],2:[function(require,module,exports){
+},{"./diff.js":2,"./htmlColorDiff.js":3,"./tea-time.js":4,"string-kit/lib/inspect.js":30}],2:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -162,7 +164,74 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":20,"string-kit/lib/inspect.js":29}],3:[function(require,module,exports){
+},{"diff":21,"string-kit/lib/inspect.js":30}],3:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var rawDiff = require( './diff.js' ).raw ;
+
+
+
+module.exports = function htmlColorDiff( oldValue , newValue )
+{
+	var str = '' ,
+		diff = rawDiff( oldValue , newValue ) ;
+	
+	diff.forEach( function( part ) {
+		
+		if ( part.added )
+		{
+			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , function( match , pre , value , after ) {
+				return pre + '<span style="background-color:green;color:white">' + value + '</span>' + after ;
+			} ) ;
+		}
+		else if ( part.removed )
+		{
+			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , function( match , pre , value , after ) {
+				return pre + '<span style="background-color:red;color:white">' + value + '</span>' + after ;
+			} ) ;
+		}
+		else
+		{  
+			str += '<span style="color:grey">' + part.value + '</span>' ;
+		}
+	} ) ;
+	
+	return str ;
+} ;
+
+
+
+
+
+},{"./diff.js":2}],4:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -868,7 +937,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":4,"nextgen-events":26}],4:[function(require,module,exports){
+},{"async-kit":5,"nextgen-events":27}],5:[function(require,module,exports){
 /*
 	Copyright (c) 2016 Cédric Ronvel 
 	
@@ -905,7 +974,7 @@ async.exit = require( './exit.js' ) ;
 
 
 
-},{"./core.js":5,"./exit.js":6,"./wrapper.js":7}],5:[function(require,module,exports){
+},{"./core.js":6,"./exit.js":7,"./wrapper.js":8}],6:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
 	
@@ -2916,7 +2985,7 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"events":8,"tree-kit/lib/extend.js":30}],6:[function(require,module,exports){
+},{"events":9,"tree-kit/lib/extend.js":31}],7:[function(require,module,exports){
 (function (process){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
@@ -3006,7 +3075,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":4,"_process":10}],7:[function(require,module,exports){
+},{"./async.js":5,"_process":11}],8:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
 	
@@ -3073,7 +3142,7 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -3373,7 +3442,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**
  * Determine if an object is Buffer
  *
@@ -3392,7 +3461,7 @@ module.exports = function (obj) {
     ))
 }
 
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -3488,7 +3557,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -3514,7 +3583,7 @@ function convertChangesToDMP(changes) {
 }
 
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -3551,7 +3620,7 @@ function escapeHTML(s) {
 }
 
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -3780,7 +3849,7 @@ function clonePath(path) {
 }
 
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -3800,7 +3869,7 @@ function diffChars(oldStr, newStr, callback) {
 }
 
 
-},{"./base":13}],15:[function(require,module,exports){
+},{"./base":14}],16:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -3824,7 +3893,7 @@ function diffCss(oldStr, newStr, callback) {
 }
 
 
-},{"./base":13}],16:[function(require,module,exports){
+},{"./base":14}],17:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -3926,7 +3995,7 @@ function canonicalize(obj, stack, replacementStack) {
 }
 
 
-},{"./base":13,"./line":17}],17:[function(require,module,exports){
+},{"./base":14,"./line":18}],18:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -3981,7 +4050,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":25,"./base":13}],18:[function(require,module,exports){
+},{"../util/params":26,"./base":14}],19:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4005,7 +4074,7 @@ function diffSentences(oldStr, newStr, callback) {
 }
 
 
-},{"./base":13}],19:[function(require,module,exports){
+},{"./base":14}],20:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4077,7 +4146,7 @@ function diffWordsWithSpace(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":25,"./base":13}],20:[function(require,module,exports){
+},{"../util/params":26,"./base":14}],21:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4150,7 +4219,7 @@ exports. /*istanbul ignore end*/Diff = _base2.default;
 /*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
 
 
-},{"./convert/dmp":11,"./convert/xml":12,"./diff/base":13,"./diff/character":14,"./diff/css":15,"./diff/json":16,"./diff/line":17,"./diff/sentence":18,"./diff/word":19,"./patch/apply":21,"./patch/create":22,"./patch/parse":23}],21:[function(require,module,exports){
+},{"./convert/dmp":12,"./convert/xml":13,"./diff/base":14,"./diff/character":15,"./diff/css":16,"./diff/json":17,"./diff/line":18,"./diff/sentence":19,"./diff/word":20,"./patch/apply":22,"./patch/create":23,"./patch/parse":24}],22:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4313,7 +4382,7 @@ function applyPatches(uniDiff, options) {
 }
 
 
-},{"../util/distance-iterator":24,"./parse":23}],22:[function(require,module,exports){
+},{"../util/distance-iterator":25,"./parse":24}],23:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4468,7 +4537,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 }
 
 
-},{"../diff/line":17}],23:[function(require,module,exports){
+},{"../diff/line":18}],24:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4604,7 +4673,7 @@ function parsePatch(uniDiff) {
 }
 
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -4653,7 +4722,7 @@ exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
 };
 
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4673,7 +4742,7 @@ function generateOptions(options, defaults) {
 }
 
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK NextGen Events
 	
@@ -5398,7 +5467,7 @@ NextGenEvents.processQueue = function processQueue( contextName , isCompletionCa
 
 
 
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -5458,7 +5527,7 @@ module.exports = {
 
 
 
-},{}],28:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -5557,8 +5626,8 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],29:[function(require,module,exports){
-(function (Buffer){
+},{}],30:[function(require,module,exports){
+(function (Buffer,process){
 /*
 	String Kit
 	
@@ -5912,36 +5981,6 @@ function keyNeedingQuotes( key )
 
 
 
-function inspectError( options , error )
-{
-	var str = '' , stack , type , code ;
-	
-	if ( arguments.length < 2 ) { error = options ; options = {} ; }
-	else if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
-	if ( ! ( error instanceof Error ) ) { return  ; }
-	
-	if ( ! options.style ) { options.style = inspectStyle.none ; }
-	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
-	
-	if ( error.stack ) { stack = inspectStack( options , error.stack ) ; }
-	
-	type = error.type || error.constructor.name ;
-	code = error.code || error.name || error.errno || error.number ;
-	
-	str += options.style.errorType( type ) +
-		( code ? ' [' + options.style.errorType( code ) + ']' : '' ) + ': ' ;
-	str += options.style.errorMessage( error.message ) + '\n' ;
-	
-	if ( stack ) { str += options.style.errorStack( stack ) + '\n' ; }
-	
-	return str ;
-}
-
-exports.inspectError = inspectError ;
-
-
-
 // Some special object are better written down when substituted by something else
 function specialObjectSubstitution( variable )
 {
@@ -5983,6 +6022,36 @@ function specialObjectSubstitution( variable )
 
 
 
+function inspectError( options , error )
+{
+	var str = '' , stack , type , code ;
+	
+	if ( arguments.length < 2 ) { error = options ; options = {} ; }
+	else if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	if ( ! ( error instanceof Error ) ) { return  ; }
+	
+	if ( ! options.style ) { options.style = inspectStyle.none ; }
+	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
+	
+	if ( error.stack ) { stack = inspectStack( options , error.stack ) ; }
+	
+	type = error.type || error.constructor.name ;
+	code = error.code || error.name || error.errno || error.number ;
+	
+	str += options.style.errorType( type ) +
+		( code ? ' [' + options.style.errorType( code ) + ']' : '' ) + ': ' ;
+	str += options.style.errorMessage( error.message ) + '\n' ;
+	
+	if ( stack ) { str += options.style.errorStack( stack ) + '\n' ; }
+	
+	return str ;
+}
+
+exports.inspectError = inspectError ;
+
+
+
 function inspectStack( options , stack )
 {
 	if ( arguments.length < 2 ) { stack = options ; options = {} ; }
@@ -5993,20 +6062,39 @@ function inspectStack( options , stack )
 	
 	if ( ! stack ) { return ; }
 	
-	stack = stack.replace( /^[^\n]*\n/ , '' ) ;
-	stack = stack.replace(
-		/^\s*(at)\s+(?:([^\s:\(\)\[\]\n]+)\s)?(?:\[as ([^\s:\(\)\[\]\n]+)\]\s)?(?:\(?([^:\(\)\[\]\n]+):([0-9]+):([0-9]+)\)?)?$/mg ,
-		function( matches , at , method , as , file , line , column ) {	// jshint ignore:line
-			return options.style.errorStack( '    at ' ) +
-				( method ? options.style.errorStackMethod( method ) + ' ' : '' ) +
-				( as ? options.style.errorStack( '[as ' ) + options.style.errorStackMethodAs( as ) + options.style.errorStack( '] ' ) : '' ) +
-				options.style.errorStack( '(' ) +
-				( file ? options.style.errorStackFile( file ) : options.style.errorStack( 'unknown' ) ) +
-				( line ? options.style.errorStack( ':' ) + options.style.errorStackLine( line ) : '' ) +
-				( column ? options.style.errorStack( ':' ) + options.style.errorStackColumn( column ) : '' ) +
-				options.style.errorStack( ')' ) ;
-		}
-	) ;
+	if ( process.browser && stack.indexOf( '@' ) !== -1 )
+	{
+		// Assume a Firefox-compatible stack-trace here...
+		stack = stack.replace(
+			/^\s*([^@]*)\s*@\s*([^\n]*)(?::([0-9]+):([0-9]+))?$/mg ,
+			function( matches , method , file , line , column ) {	// jshint ignore:line
+				return options.style.errorStack( '    at ' ) +
+					( method ? options.style.errorStackMethod( method ) + ' ' : '' ) +
+					options.style.errorStack( '(' ) +
+					( file ? options.style.errorStackFile( file ) : options.style.errorStack( 'unknown' ) ) +
+					( line ? options.style.errorStack( ':' ) + options.style.errorStackLine( line ) : '' ) +
+					( column ? options.style.errorStack( ':' ) + options.style.errorStackColumn( column ) : '' ) +
+					options.style.errorStack( ')' ) ;
+			}
+		) ;
+	}
+	else
+	{
+		stack = stack.replace( /^[^\n]*\n/ , '' ) ;
+		stack = stack.replace(
+			/^\s*(at)\s+(?:([^\s:\(\)\[\]\n]+)\s)?(?:\[as ([^\s:\(\)\[\]\n]+)\]\s)?(?:\(?([^:\(\)\[\]\n]+):([0-9]+):([0-9]+)\)?)?$/mg ,
+			function( matches , at , method , as , file , line , column ) {	// jshint ignore:line
+				return options.style.errorStack( '    at ' ) +
+					( method ? options.style.errorStackMethod( method ) + ' ' : '' ) +
+					( as ? options.style.errorStack( '[as ' ) + options.style.errorStackMethodAs( as ) + options.style.errorStack( '] ' ) : '' ) +
+					options.style.errorStack( '(' ) +
+					( file ? options.style.errorStackFile( file ) : options.style.errorStack( 'unknown' ) ) +
+					( line ? options.style.errorStack( ':' ) + options.style.errorStackLine( line ) : '' ) +
+					( column ? options.style.errorStack( ':' ) + options.style.errorStackColumn( column ) : '' ) +
+					options.style.errorStack( ')' ) ;
+			}
+		) ;
+	}
 	
 	return stack ;
 }
@@ -6099,8 +6187,8 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 
-}).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")})
-},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":9,"./ansi.js":27,"./escape.js":28,"tree-kit/lib/extend.js":30}],30:[function(require,module,exports){
+}).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")},require('_process'))
+},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":10,"./ansi.js":28,"./escape.js":29,"_process":11,"tree-kit/lib/extend.js":31}],31:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK object tree toolbox
 

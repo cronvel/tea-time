@@ -2,20 +2,24 @@
 	
 	var container ;
 	
-	document.querySelector( 'body' ).insertAdjacentHTML( 'beforeend' , '<div class="tea-time-classic-reporter"></div>' ) ;
+	document.querySelector( 'body' )
+		.insertAdjacentHTML( 'beforeend' ,
+			'<div class="tea-time-classic-reporter" style="background-color:black;color:white"></div>'
+		) ;
 	
 	container = document.querySelector( 'div.tea-time-classic-reporter' ) ;
 	
 	var scrollDown = function scrollDown()
 	{
 		( document.querySelector( 'div.tea-time-classic-reporter p:last-child' ) ||
-			document.querySelector( 'div.tea-time-classic-reporter h4:last-child' ) )
+			document.querySelector( 'div.tea-time-classic-reporter h4:last-child' ) ||
+			document.querySelector( 'div.tea-time-classic-reporter pre:last-child' ) )
 				.scrollIntoView() ;
 	}
 	
 	var indentStyle = function indentStyle( depth )
 	{
-		return 'margin-left:' + ( 1 + 2 * depth ) + 'em;' ;
+		return 'margin-left:' + ( 1 + 2 * depth ) + '%;' ;
 	}
 	
 	var passingStyle = "color:green;" ;
@@ -101,26 +105,23 @@
 	
 	var reportOneError = function reportOneError( error )
 	{
-		var diff , content = '' ;
+		var content = '' ;
 		
 		if ( error.expected && error.actual )
 		{
-			content += '<p class="tea-time-classic-reporter" style="' + indentStyle( 1 ) + '">' +
+			content += '<p class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
 				'<span style="' + expectedStyle + '">expected</span><span style="' + actualStyle + '">actual</span>' +
 				'</p>' ;
 			
-			diff = teaTime.diff( error.actual , error.expected ) ;
-			
-			diff = diff.replace( /^( *)([^\n]*)$/mg , function( line , indent , content ) {
-				return '<p class="tea-time-classic-reporter"; style="' + indentStyle( 1 + indent.length / 2 ) + '">' + content + '</p>' ;
-			} ) ;
-			
-			content += diff ;
+			content += '<pre class="tea-time-classic-reporter"; style="' + indentStyle( 2 ) + '">' ;
+			content += teaTime.htmlColorDiff( error.actual , error.expected ) ;
+			content += '</pre>' ;
 		}
 		
-		content += teaTime.inspect.inspectError( { style: 'html' } , error ).replace( /^[^\n]*$/mg , function( line ) {
-			return '<p class="tea-time-classic-reporter"; style="' + indentStyle( 3 ) + '">' + line + '</p>' ;
-		} ) ;
+		content += 
+			'<pre class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' + 
+			teaTime.inspect.inspectError( { style: 'html' } , error ) +
+			'</pre>' ;
 		
 		return content ;
 	} ;
