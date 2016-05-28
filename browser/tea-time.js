@@ -32,6 +32,8 @@
 
 
 var TeaTime = require( './tea-time.js' ) ;
+var diff = require( './diff.js' ) ;
+var inspect = require( 'string-kit/lib/inspect.js' ) ;
 
 
 
@@ -59,6 +61,8 @@ function createTeaTime()
 	
 	window.teaTime = TeaTime.create( options ) ;
 	window.teaTime.init() ;
+	window.teaTime.diff = diff ;
+	window.teaTime.inspect = inspect ;
 	
 	return window.teaTime ;
 }
@@ -66,7 +70,99 @@ function createTeaTime()
 module.exports = createTeaTime ;
 
 
-},{"./tea-time.js":2}],2:[function(require,module,exports){
+},{"./diff.js":2,"./tea-time.js":3,"string-kit/lib/inspect.js":29}],2:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var inspect = require( 'string-kit/lib/inspect.js' ) ;
+var jsdiff = require( 'diff' ) ;
+
+
+
+var inspectOptions = { minimal: true , depth: 10 , sort: true } ;
+
+
+
+function textDiff( oldValue , newValue )
+{
+	var str = '' ,
+		diff = textDiff.raw( oldValue , newValue , true ) ;
+	
+	diff.forEach( function( part ) {
+		
+		str += part.value.replace( /^(?!$)/mg , function() {
+			if ( part.added ) { return '++' ; }
+			else if ( part.removed ) { return '--' ; }
+			else { return '  ' ; }
+		} ) ;
+	} ) ;
+	
+	return str ;
+}
+
+module.exports = textDiff ;
+
+
+
+textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
+{
+	var diff , score = 0 ;
+	
+	var oldStr = inspect.inspect( inspectOptions , oldValue ) ;
+	var newStr = inspect.inspect( inspectOptions , newValue ) ;
+	
+	if ( ! noCharMode )
+	{
+		// First try the diffChars algorithm, it looks great if there are only few changes
+		diff = jsdiff.diffChars( oldStr , newStr ) ;
+		
+		// Try to evaluate the weirdness
+		diff.forEach( function( part ) {
+			if ( part.added || part.removed )
+			{
+				score += 15 + part.value.length ;
+			}
+		} ) ;
+		
+		// If too much weirdness, fallback to line mode
+		if ( score < 80 ) { return diff ; }
+	}
+	
+	diff = jsdiff.diffLines( oldStr , newStr ) ;
+	
+	return diff ;
+} ;
+
+
+
+},{"diff":20,"string-kit/lib/inspect.js":29}],3:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -772,7 +868,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":3,"nextgen-events":9}],3:[function(require,module,exports){
+},{"async-kit":4,"nextgen-events":26}],4:[function(require,module,exports){
 /*
 	Copyright (c) 2016 Cédric Ronvel 
 	
@@ -809,7 +905,7 @@ async.exit = require( './exit.js' ) ;
 
 
 
-},{"./core.js":4,"./exit.js":5,"./wrapper.js":6}],4:[function(require,module,exports){
+},{"./core.js":5,"./exit.js":6,"./wrapper.js":7}],5:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
 	
@@ -2820,7 +2916,7 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"events":7,"tree-kit/lib/extend.js":10}],5:[function(require,module,exports){
+},{"events":8,"tree-kit/lib/extend.js":30}],6:[function(require,module,exports){
 (function (process){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
@@ -2910,7 +3006,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":3,"_process":8}],6:[function(require,module,exports){
+},{"./async.js":4,"_process":10}],7:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
 	
@@ -2977,7 +3073,7 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 
 
-},{}],7:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -3277,7 +3373,26 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
+/**
+ * Determine if an object is Buffer
+ *
+ * Author:   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * License:  MIT
+ *
+ * `npm install is-buffer`
+ */
+
+module.exports = function (obj) {
+  return !!(obj != null &&
+    (obj._isBuffer || // For Safari 5-7 (missing Object.prototype.constructor)
+      (obj.constructor &&
+      typeof obj.constructor.isBuffer === 'function' &&
+      obj.constructor.isBuffer(obj))
+    ))
+}
+
+},{}],10:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -3373,7 +3488,1192 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
+/*istanbul ignore start*/"use strict";
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/convertChangesToDMP = convertChangesToDMP;
+// See: http://code.google.com/p/google-diff-match-patch/wiki/API
+function convertChangesToDMP(changes) {
+  var ret = [],
+      change = /*istanbul ignore start*/void 0 /*istanbul ignore end*/,
+      operation = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+  for (var i = 0; i < changes.length; i++) {
+    change = changes[i];
+    if (change.added) {
+      operation = 1;
+    } else if (change.removed) {
+      operation = -1;
+    } else {
+      operation = 0;
+    }
+
+    ret.push([operation, change.value]);
+  }
+  return ret;
+}
+
+
+},{}],12:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/convertChangesToXML = convertChangesToXML;
+function convertChangesToXML(changes) {
+  var ret = [];
+  for (var i = 0; i < changes.length; i++) {
+    var change = changes[i];
+    if (change.added) {
+      ret.push('<ins>');
+    } else if (change.removed) {
+      ret.push('<del>');
+    }
+
+    ret.push(escapeHTML(change.value));
+
+    if (change.added) {
+      ret.push('</ins>');
+    } else if (change.removed) {
+      ret.push('</del>');
+    }
+  }
+  return ret.join('');
+}
+
+function escapeHTML(s) {
+  var n = s;
+  n = n.replace(/&/g, '&amp;');
+  n = n.replace(/</g, '&lt;');
+  n = n.replace(/>/g, '&gt;');
+  n = n.replace(/"/g, '&quot;');
+
+  return n;
+}
+
+
+},{}],13:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.default = /*istanbul ignore end*/Diff;
+function Diff() {}
+
+Diff.prototype = { /*istanbul ignore start*/
+  /*istanbul ignore end*/diff: function diff(oldString, newString) {
+    /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+    var callback = options.callback;
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    }
+    this.options = options;
+
+    var self = this;
+
+    function done(value) {
+      if (callback) {
+        setTimeout(function () {
+          callback(undefined, value);
+        }, 0);
+        return true;
+      } else {
+        return value;
+      }
+    }
+
+    // Allow subclasses to massage the input prior to running
+    oldString = this.castInput(oldString);
+    newString = this.castInput(newString);
+
+    oldString = this.removeEmpty(this.tokenize(oldString));
+    newString = this.removeEmpty(this.tokenize(newString));
+
+    var newLen = newString.length,
+        oldLen = oldString.length;
+    var editLength = 1;
+    var maxEditLength = newLen + oldLen;
+    var bestPath = [{ newPos: -1, components: [] }];
+
+    // Seed editLength = 0, i.e. the content starts with the same values
+    var oldPos = this.extractCommon(bestPath[0], newString, oldString, 0);
+    if (bestPath[0].newPos + 1 >= newLen && oldPos + 1 >= oldLen) {
+      // Identity per the equality and tokenizer
+      return done([{ value: newString.join(''), count: newString.length }]);
+    }
+
+    // Main worker method. checks all permutations of a given edit length for acceptance.
+    function execEditLength() {
+      for (var diagonalPath = -1 * editLength; diagonalPath <= editLength; diagonalPath += 2) {
+        var basePath = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+        var addPath = bestPath[diagonalPath - 1],
+            removePath = bestPath[diagonalPath + 1],
+            _oldPos = (removePath ? removePath.newPos : 0) - diagonalPath;
+        if (addPath) {
+          // No one else is going to attempt to use this value, clear it
+          bestPath[diagonalPath - 1] = undefined;
+        }
+
+        var canAdd = addPath && addPath.newPos + 1 < newLen,
+            canRemove = removePath && 0 <= _oldPos && _oldPos < oldLen;
+        if (!canAdd && !canRemove) {
+          // If this path is a terminal then prune
+          bestPath[diagonalPath] = undefined;
+          continue;
+        }
+
+        // Select the diagonal that we want to branch from. We select the prior
+        // path whose position in the new string is the farthest from the origin
+        // and does not pass the bounds of the diff graph
+        if (!canAdd || canRemove && addPath.newPos < removePath.newPos) {
+          basePath = clonePath(removePath);
+          self.pushComponent(basePath.components, undefined, true);
+        } else {
+          basePath = addPath; // No need to clone, we've pulled it from the list
+          basePath.newPos++;
+          self.pushComponent(basePath.components, true, undefined);
+        }
+
+        _oldPos = self.extractCommon(basePath, newString, oldString, diagonalPath);
+
+        // If we have hit the end of both strings, then we are done
+        if (basePath.newPos + 1 >= newLen && _oldPos + 1 >= oldLen) {
+          return done(buildValues(self, basePath.components, newString, oldString, self.useLongestToken));
+        } else {
+          // Otherwise track this path as a potential candidate and continue.
+          bestPath[diagonalPath] = basePath;
+        }
+      }
+
+      editLength++;
+    }
+
+    // Performs the length of edit iteration. Is a bit fugly as this has to support the
+    // sync and async mode which is never fun. Loops over execEditLength until a value
+    // is produced.
+    if (callback) {
+      (function exec() {
+        setTimeout(function () {
+          // This should not happen, but we want to be safe.
+          /* istanbul ignore next */
+          if (editLength > maxEditLength) {
+            return callback();
+          }
+
+          if (!execEditLength()) {
+            exec();
+          }
+        }, 0);
+      })();
+    } else {
+      while (editLength <= maxEditLength) {
+        var ret = execEditLength();
+        if (ret) {
+          return ret;
+        }
+      }
+    }
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/pushComponent: function pushComponent(components, added, removed) {
+    var last = components[components.length - 1];
+    if (last && last.added === added && last.removed === removed) {
+      // We need to clone here as the component clone operation is just
+      // as shallow array clone
+      components[components.length - 1] = { count: last.count + 1, added: added, removed: removed };
+    } else {
+      components.push({ count: 1, added: added, removed: removed });
+    }
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/extractCommon: function extractCommon(basePath, newString, oldString, diagonalPath) {
+    var newLen = newString.length,
+        oldLen = oldString.length,
+        newPos = basePath.newPos,
+        oldPos = newPos - diagonalPath,
+        commonCount = 0;
+    while (newPos + 1 < newLen && oldPos + 1 < oldLen && this.equals(newString[newPos + 1], oldString[oldPos + 1])) {
+      newPos++;
+      oldPos++;
+      commonCount++;
+    }
+
+    if (commonCount) {
+      basePath.components.push({ count: commonCount });
+    }
+
+    basePath.newPos = newPos;
+    return oldPos;
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/equals: function equals(left, right) {
+    return left === right;
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/removeEmpty: function removeEmpty(array) {
+    var ret = [];
+    for (var i = 0; i < array.length; i++) {
+      if (array[i]) {
+        ret.push(array[i]);
+      }
+    }
+    return ret;
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/castInput: function castInput(value) {
+    return value;
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/tokenize: function tokenize(value) {
+    return value.split('');
+  }
+};
+
+function buildValues(diff, components, newString, oldString, useLongestToken) {
+  var componentPos = 0,
+      componentLen = components.length,
+      newPos = 0,
+      oldPos = 0;
+
+  for (; componentPos < componentLen; componentPos++) {
+    var component = components[componentPos];
+    if (!component.removed) {
+      if (!component.added && useLongestToken) {
+        var value = newString.slice(newPos, newPos + component.count);
+        value = value.map(function (value, i) {
+          var oldValue = oldString[oldPos + i];
+          return oldValue.length > value.length ? oldValue : value;
+        });
+
+        component.value = value.join('');
+      } else {
+        component.value = newString.slice(newPos, newPos + component.count).join('');
+      }
+      newPos += component.count;
+
+      // Common case
+      if (!component.added) {
+        oldPos += component.count;
+      }
+    } else {
+      component.value = oldString.slice(oldPos, oldPos + component.count).join('');
+      oldPos += component.count;
+
+      // Reverse add and remove so removes are output first to match common convention
+      // The diffing algorithm is tied to add then remove output and this is the simplest
+      // route to get the desired output with minimal overhead.
+      if (componentPos && components[componentPos - 1].added) {
+        var tmp = components[componentPos - 1];
+        components[componentPos - 1] = components[componentPos];
+        components[componentPos] = tmp;
+      }
+    }
+  }
+
+  // Special case handle for when one terminal is ignored. For this case we merge the
+  // terminal into the prior string and drop the change.
+  var lastComponent = components[componentLen - 1];
+  if (componentLen > 1 && (lastComponent.added || lastComponent.removed) && diff.equals('', lastComponent.value)) {
+    components[componentLen - 2].value += lastComponent.value;
+    components.pop();
+  }
+
+  return components;
+}
+
+function clonePath(path) {
+  return { newPos: path.newPos, components: path.components.slice(0) };
+}
+
+
+},{}],14:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.characterDiff = undefined;
+exports. /*istanbul ignore end*/diffChars = diffChars;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/*istanbul ignore end*/var characterDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/characterDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
+function diffChars(oldStr, newStr, callback) {
+  return characterDiff.diff(oldStr, newStr, callback);
+}
+
+
+},{"./base":13}],15:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.cssDiff = undefined;
+exports. /*istanbul ignore end*/diffCss = diffCss;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/*istanbul ignore end*/var cssDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/cssDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
+cssDiff.tokenize = function (value) {
+  return value.split(/([{}:;,]|\s+)/);
+};
+
+function diffCss(oldStr, newStr, callback) {
+  return cssDiff.diff(oldStr, newStr, callback);
+}
+
+
+},{"./base":13}],16:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.jsonDiff = undefined;
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
+exports. /*istanbul ignore end*/diffJson = diffJson;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = canonicalize;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_line = require('./line') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/*istanbul ignore end*/
+
+var objectPrototypeToString = Object.prototype.toString;
+
+var jsonDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/jsonDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
+// Discriminate between two lines of pretty-printed, serialized JSON where one of them has a
+// dangling comma and the other doesn't. Turns out including the dangling comma yields the nicest output:
+jsonDiff.useLongestToken = true;
+
+jsonDiff.tokenize = /*istanbul ignore start*/_line.lineDiff. /*istanbul ignore end*/tokenize;
+jsonDiff.castInput = function (value) {
+  return typeof value === 'string' ? value : JSON.stringify(canonicalize(value), undefined, '  ');
+};
+jsonDiff.equals = function (left, right) {
+  return (/*istanbul ignore start*/_base2.default. /*istanbul ignore end*/prototype.equals(left.replace(/,([\r\n])/g, '$1'), right.replace(/,([\r\n])/g, '$1'))
+  );
+};
+
+function diffJson(oldObj, newObj, callback) {
+  return jsonDiff.diff(oldObj, newObj, callback);
+}
+
+// This function handles the presence of circular references by bailing out when encountering an
+// object that is already on the "stack" of items being processed.
+function canonicalize(obj, stack, replacementStack) {
+  stack = stack || [];
+  replacementStack = replacementStack || [];
+
+  var i = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+
+  for (i = 0; i < stack.length; i += 1) {
+    if (stack[i] === obj) {
+      return replacementStack[i];
+    }
+  }
+
+  var canonicalizedObj = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+
+  if ('[object Array]' === objectPrototypeToString.call(obj)) {
+    stack.push(obj);
+    canonicalizedObj = new Array(obj.length);
+    replacementStack.push(canonicalizedObj);
+    for (i = 0; i < obj.length; i += 1) {
+      canonicalizedObj[i] = canonicalize(obj[i], stack, replacementStack);
+    }
+    stack.pop();
+    replacementStack.pop();
+    return canonicalizedObj;
+  }
+
+  if (obj && obj.toJSON) {
+    obj = obj.toJSON();
+  }
+
+  if ( /*istanbul ignore start*/(typeof /*istanbul ignore end*/obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object' && obj !== null) {
+    stack.push(obj);
+    canonicalizedObj = {};
+    replacementStack.push(canonicalizedObj);
+    var sortedKeys = [],
+        key = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+    for (key in obj) {
+      /* istanbul ignore else */
+      if (obj.hasOwnProperty(key)) {
+        sortedKeys.push(key);
+      }
+    }
+    sortedKeys.sort();
+    for (i = 0; i < sortedKeys.length; i += 1) {
+      key = sortedKeys[i];
+      canonicalizedObj[key] = canonicalize(obj[key], stack, replacementStack);
+    }
+    stack.pop();
+    replacementStack.pop();
+  } else {
+    canonicalizedObj = obj;
+  }
+  return canonicalizedObj;
+}
+
+
+},{"./base":13,"./line":17}],17:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.lineDiff = undefined;
+exports. /*istanbul ignore end*/diffLines = diffLines;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffTrimmedLines = diffTrimmedLines;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_params = require('../util/params') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/*istanbul ignore end*/var lineDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/lineDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
+lineDiff.tokenize = function (value) {
+  var retLines = [],
+      linesAndNewlines = value.split(/(\n|\r\n)/);
+
+  // Ignore the final empty token that occurs if the string ends with a new line
+  if (!linesAndNewlines[linesAndNewlines.length - 1]) {
+    linesAndNewlines.pop();
+  }
+
+  // Merge the content and line separators into single tokens
+  for (var i = 0; i < linesAndNewlines.length; i++) {
+    var line = linesAndNewlines[i];
+
+    if (i % 2 && !this.options.newlineIsToken) {
+      retLines[retLines.length - 1] += line;
+    } else {
+      if (this.options.ignoreWhitespace) {
+        line = line.trim();
+      }
+      retLines.push(line);
+    }
+  }
+
+  return retLines;
+};
+
+function diffLines(oldStr, newStr, callback) {
+  return lineDiff.diff(oldStr, newStr, callback);
+}
+function diffTrimmedLines(oldStr, newStr, callback) {
+  var options = /*istanbul ignore start*/(0, _params.generateOptions) /*istanbul ignore end*/(callback, { ignoreWhitespace: true });
+  return lineDiff.diff(oldStr, newStr, options);
+}
+
+
+},{"../util/params":25,"./base":13}],18:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.sentenceDiff = undefined;
+exports. /*istanbul ignore end*/diffSentences = diffSentences;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/*istanbul ignore end*/var sentenceDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/sentenceDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
+sentenceDiff.tokenize = function (value) {
+  return value.split(/(\S.+?[.!?])(?=\s+|$)/);
+};
+
+function diffSentences(oldStr, newStr, callback) {
+  return sentenceDiff.diff(oldStr, newStr, callback);
+}
+
+
+},{"./base":13}],19:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.wordDiff = undefined;
+exports. /*istanbul ignore end*/diffWords = diffWords;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWordsWithSpace = diffWordsWithSpace;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_params = require('../util/params') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/*istanbul ignore end*/
+
+// Based on https://en.wikipedia.org/wiki/Latin_script_in_Unicode
+//
+// Ranges and exceptions:
+// Latin-1 Supplement, 0080–00FF
+//  - U+00D7  × Multiplication sign
+//  - U+00F7  ÷ Division sign
+// Latin Extended-A, 0100–017F
+// Latin Extended-B, 0180–024F
+// IPA Extensions, 0250–02AF
+// Spacing Modifier Letters, 02B0–02FF
+//  - U+02C7  ˇ &#711;  Caron
+//  - U+02D8  ˘ &#728;  Breve
+//  - U+02D9  ˙ &#729;  Dot Above
+//  - U+02DA  ˚ &#730;  Ring Above
+//  - U+02DB  ˛ &#731;  Ogonek
+//  - U+02DC  ˜ &#732;  Small Tilde
+//  - U+02DD  ˝ &#733;  Double Acute Accent
+// Latin Extended Additional, 1E00–1EFF
+var extendedWordChars = /^[A-Za-z\xC0-\u02C6\u02C8-\u02D7\u02DE-\u02FF\u1E00-\u1EFF]+$/;
+
+var reWhitespace = /\S/;
+
+var wordDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/wordDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
+wordDiff.equals = function (left, right) {
+  return left === right || this.options.ignoreWhitespace && !reWhitespace.test(left) && !reWhitespace.test(right);
+};
+wordDiff.tokenize = function (value) {
+  var tokens = value.split(/(\s+|\b)/);
+
+  // Join the boundary splits that we do not consider to be boundaries. This is primarily the extended Latin character set.
+  for (var i = 0; i < tokens.length - 1; i++) {
+    // If we have an empty string in the next field and we have only word chars before and after, merge
+    if (!tokens[i + 1] && tokens[i + 2] && extendedWordChars.test(tokens[i]) && extendedWordChars.test(tokens[i + 2])) {
+      tokens[i] += tokens[i + 2];
+      tokens.splice(i + 1, 2);
+      i--;
+    }
+  }
+
+  return tokens;
+};
+
+function diffWords(oldStr, newStr, callback) {
+  var options = /*istanbul ignore start*/(0, _params.generateOptions) /*istanbul ignore end*/(callback, { ignoreWhitespace: true });
+  return wordDiff.diff(oldStr, newStr, options);
+}
+function diffWordsWithSpace(oldStr, newStr, callback) {
+  return wordDiff.diff(oldStr, newStr, callback);
+}
+
+
+},{"../util/params":25,"./base":13}],20:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.canonicalize = exports.convertChangesToXML = exports.convertChangesToDMP = exports.parsePatch = exports.applyPatches = exports.applyPatch = exports.createPatch = exports.createTwoFilesPatch = exports.structuredPatch = exports.diffJson = exports.diffCss = exports.diffSentences = exports.diffTrimmedLines = exports.diffLines = exports.diffWordsWithSpace = exports.diffWords = exports.diffChars = exports.Diff = undefined;
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_base = require('./diff/base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_character = require('./diff/character') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_word = require('./diff/word') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_line = require('./diff/line') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_sentence = require('./diff/sentence') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_css = require('./diff/css') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_json = require('./diff/json') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_apply = require('./patch/apply') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_parse = require('./patch/parse') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_create = require('./patch/create') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_dmp = require('./convert/dmp') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_xml = require('./convert/xml') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* See LICENSE file for terms of use */
+
+/*
+ * Text diff implementation.
+ *
+ * This library supports the following APIS:
+ * JsDiff.diffChars: Character by character diff
+ * JsDiff.diffWords: Word (as defined by \b regex) diff which ignores whitespace
+ * JsDiff.diffLines: Line based diff
+ *
+ * JsDiff.diffCss: Diff targeted at CSS content
+ *
+ * These methods are based on the implementation proposed in
+ * "An O(ND) Difference Algorithm and its Variations" (Myers, 1986).
+ * http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.4.6927
+ */
+exports. /*istanbul ignore end*/Diff = _base2.default;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffChars = _character.diffChars;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWords = _word.diffWords;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWordsWithSpace = _word.diffWordsWithSpace;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffLines = _line.diffLines;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffTrimmedLines = _line.diffTrimmedLines;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffSentences = _sentence.diffSentences;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffCss = _css.diffCss;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffJson = _json.diffJson;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/structuredPatch = _create.structuredPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/createTwoFilesPatch = _create.createTwoFilesPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/createPatch = _create.createPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatch = _apply.applyPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatches = _apply.applyPatches;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/parsePatch = _parse.parsePatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/convertChangesToDMP = _dmp.convertChangesToDMP;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/convertChangesToXML = _xml.convertChangesToXML;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
+
+
+},{"./convert/dmp":11,"./convert/xml":12,"./diff/base":13,"./diff/character":14,"./diff/css":15,"./diff/json":16,"./diff/line":17,"./diff/sentence":18,"./diff/word":19,"./patch/apply":21,"./patch/create":22,"./patch/parse":23}],21:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/applyPatch = applyPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatches = applyPatches;
+
+var /*istanbul ignore start*/_parse = require('./parse') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_distanceIterator = require('../util/distance-iterator') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _distanceIterator2 = _interopRequireDefault(_distanceIterator);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/*istanbul ignore end*/function applyPatch(source, uniDiff) {
+  /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+  if (typeof uniDiff === 'string') {
+    uniDiff = /*istanbul ignore start*/(0, _parse.parsePatch) /*istanbul ignore end*/(uniDiff);
+  }
+
+  if (Array.isArray(uniDiff)) {
+    if (uniDiff.length > 1) {
+      throw new Error('applyPatch only works with a single input.');
+    }
+
+    uniDiff = uniDiff[0];
+  }
+
+  // Apply the diff to the input
+  var lines = source.split('\n'),
+      hunks = uniDiff.hunks,
+      compareLine = options.compareLine || function (lineNumber, line, operation, patchContent) /*istanbul ignore start*/{
+    return (/*istanbul ignore end*/line === patchContent
+    );
+  },
+      errorCount = 0,
+      fuzzFactor = options.fuzzFactor || 0,
+      minLine = 0,
+      offset = 0,
+      removeEOFNL = /*istanbul ignore start*/void 0 /*istanbul ignore end*/,
+      addEOFNL = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+
+  /**
+   * Checks if the hunk exactly fits on the provided location
+   */
+  function hunkFits(hunk, toPos) {
+    for (var j = 0; j < hunk.lines.length; j++) {
+      var line = hunk.lines[j],
+          operation = line[0],
+          content = line.substr(1);
+
+      if (operation === ' ' || operation === '-') {
+        // Context sanity check
+        if (!compareLine(toPos + 1, lines[toPos], operation, content)) {
+          errorCount++;
+
+          if (errorCount > fuzzFactor) {
+            return false;
+          }
+        }
+        toPos++;
+      }
+    }
+
+    return true;
+  }
+
+  // Search best fit offsets for each hunk based on the previous ones
+  for (var i = 0; i < hunks.length; i++) {
+    var hunk = hunks[i],
+        maxLine = lines.length - hunk.oldLines,
+        localOffset = 0,
+        toPos = offset + hunk.oldStart - 1;
+
+    var iterator = /*istanbul ignore start*/(0, _distanceIterator2.default) /*istanbul ignore end*/(toPos, minLine, maxLine);
+
+    for (; localOffset !== undefined; localOffset = iterator()) {
+      if (hunkFits(hunk, toPos + localOffset)) {
+        hunk.offset = offset += localOffset;
+        break;
+      }
+    }
+
+    if (localOffset === undefined) {
+      return false;
+    }
+
+    // Set lower text limit to end of the current hunk, so next ones don't try
+    // to fit over already patched text
+    minLine = hunk.offset + hunk.oldStart + hunk.oldLines;
+  }
+
+  // Apply patch hunks
+  for (var _i = 0; _i < hunks.length; _i++) {
+    var _hunk = hunks[_i],
+        _toPos = _hunk.offset + _hunk.newStart - 1;
+
+    for (var j = 0; j < _hunk.lines.length; j++) {
+      var line = _hunk.lines[j],
+          operation = line[0],
+          content = line.substr(1);
+
+      if (operation === ' ') {
+        _toPos++;
+      } else if (operation === '-') {
+        lines.splice(_toPos, 1);
+        /* istanbul ignore else */
+      } else if (operation === '+') {
+          lines.splice(_toPos, 0, content);
+          _toPos++;
+        } else if (operation === '\\') {
+          var previousOperation = _hunk.lines[j - 1] ? _hunk.lines[j - 1][0] : null;
+          if (previousOperation === '+') {
+            removeEOFNL = true;
+          } else if (previousOperation === '-') {
+            addEOFNL = true;
+          }
+        }
+    }
+  }
+
+  // Handle EOFNL insertion/removal
+  if (removeEOFNL) {
+    while (!lines[lines.length - 1]) {
+      lines.pop();
+    }
+  } else if (addEOFNL) {
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+// Wrapper that supports multiple file patches via callbacks.
+function applyPatches(uniDiff, options) {
+  if (typeof uniDiff === 'string') {
+    uniDiff = /*istanbul ignore start*/(0, _parse.parsePatch) /*istanbul ignore end*/(uniDiff);
+  }
+
+  var currentIndex = 0;
+  function processIndex() {
+    var index = uniDiff[currentIndex++];
+    if (!index) {
+      return options.complete();
+    }
+
+    options.loadFile(index, function (err, data) {
+      if (err) {
+        return options.complete(err);
+      }
+
+      var updatedContent = applyPatch(data, index, options);
+      options.patched(index, updatedContent);
+
+      setTimeout(processIndex, 0);
+    });
+  }
+  processIndex();
+}
+
+
+},{"../util/distance-iterator":24,"./parse":23}],22:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/structuredPatch = structuredPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/createTwoFilesPatch = createTwoFilesPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/createPatch = createPatch;
+
+var /*istanbul ignore start*/_line = require('../diff/line') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+/*istanbul ignore end*/function structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
+  if (!options) {
+    options = { context: 4 };
+  }
+
+  var diff = /*istanbul ignore start*/(0, _line.diffLines) /*istanbul ignore end*/(oldStr, newStr);
+  diff.push({ value: '', lines: [] }); // Append an empty value to make cleanup easier
+
+  function contextLines(lines) {
+    return lines.map(function (entry) {
+      return ' ' + entry;
+    });
+  }
+
+  var hunks = [];
+  var oldRangeStart = 0,
+      newRangeStart = 0,
+      curRange = [],
+      oldLine = 1,
+      newLine = 1;
+  /*istanbul ignore start*/
+  var _loop = function _loop( /*istanbul ignore end*/i) {
+    var current = diff[i],
+        lines = current.lines || current.value.replace(/\n$/, '').split('\n');
+    current.lines = lines;
+
+    if (current.added || current.removed) {
+      /*istanbul ignore start*/
+      var _curRange;
+
+      /*istanbul ignore end*/
+      // If we have previous context, start with that
+      if (!oldRangeStart) {
+        var prev = diff[i - 1];
+        oldRangeStart = oldLine;
+        newRangeStart = newLine;
+
+        if (prev) {
+          curRange = options.context > 0 ? contextLines(prev.lines.slice(-options.context)) : [];
+          oldRangeStart -= curRange.length;
+          newRangeStart -= curRange.length;
+        }
+      }
+
+      // Output our changes
+      /*istanbul ignore start*/(_curRange = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/lines.map(function (entry) {
+        return (current.added ? '+' : '-') + entry;
+      })));
+
+      // Track the updated file position
+      if (current.added) {
+        newLine += lines.length;
+      } else {
+        oldLine += lines.length;
+      }
+    } else {
+      // Identical context lines. Track line changes
+      if (oldRangeStart) {
+        // Close out any changes that have been output (or join overlapping)
+        if (lines.length <= options.context * 2 && i < diff.length - 2) {
+          /*istanbul ignore start*/
+          var _curRange2;
+
+          /*istanbul ignore end*/
+          // Overlapping
+          /*istanbul ignore start*/(_curRange2 = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange2 /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/contextLines(lines)));
+        } else {
+          /*istanbul ignore start*/
+          var _curRange3;
+
+          /*istanbul ignore end*/
+          // end the range and output
+          var contextSize = Math.min(lines.length, options.context);
+          /*istanbul ignore start*/(_curRange3 = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange3 /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/contextLines(lines.slice(0, contextSize))));
+
+          var hunk = {
+            oldStart: oldRangeStart,
+            oldLines: oldLine - oldRangeStart + contextSize,
+            newStart: newRangeStart,
+            newLines: newLine - newRangeStart + contextSize,
+            lines: curRange
+          };
+          if (i >= diff.length - 2 && lines.length <= options.context) {
+            // EOF is inside this hunk
+            var oldEOFNewline = /\n$/.test(oldStr);
+            var newEOFNewline = /\n$/.test(newStr);
+            if (lines.length == 0 && !oldEOFNewline) {
+              // special case: old has no eol and no trailing context; no-nl can end up before adds
+              curRange.splice(hunk.oldLines, 0, '\\ No newline at end of file');
+            } else if (!oldEOFNewline || !newEOFNewline) {
+              curRange.push('\\ No newline at end of file');
+            }
+          }
+          hunks.push(hunk);
+
+          oldRangeStart = 0;
+          newRangeStart = 0;
+          curRange = [];
+        }
+      }
+      oldLine += lines.length;
+      newLine += lines.length;
+    }
+  };
+
+  for (var i = 0; i < diff.length; i++) {
+    /*istanbul ignore start*/
+    _loop( /*istanbul ignore end*/i);
+  }
+
+  return {
+    oldFileName: oldFileName, newFileName: newFileName,
+    oldHeader: oldHeader, newHeader: newHeader,
+    hunks: hunks
+  };
+}
+
+function createTwoFilesPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
+  var diff = structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options);
+
+  var ret = [];
+  if (oldFileName == newFileName) {
+    ret.push('Index: ' + oldFileName);
+  }
+  ret.push('===================================================================');
+  ret.push('--- ' + diff.oldFileName + (typeof diff.oldHeader === 'undefined' ? '' : '\t' + diff.oldHeader));
+  ret.push('+++ ' + diff.newFileName + (typeof diff.newHeader === 'undefined' ? '' : '\t' + diff.newHeader));
+
+  for (var i = 0; i < diff.hunks.length; i++) {
+    var hunk = diff.hunks[i];
+    ret.push('@@ -' + hunk.oldStart + ',' + hunk.oldLines + ' +' + hunk.newStart + ',' + hunk.newLines + ' @@');
+    ret.push.apply(ret, hunk.lines);
+  }
+
+  return ret.join('\n') + '\n';
+}
+
+function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
+  return createTwoFilesPatch(fileName, fileName, oldStr, newStr, oldHeader, newHeader, options);
+}
+
+
+},{"../diff/line":17}],23:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/parsePatch = parsePatch;
+function parsePatch(uniDiff) {
+  /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+  var diffstr = uniDiff.split('\n'),
+      list = [],
+      i = 0;
+
+  function parseIndex() {
+    var index = {};
+    list.push(index);
+
+    // Parse diff metadata
+    while (i < diffstr.length) {
+      var line = diffstr[i];
+
+      // File header found, end parsing diff metadata
+      if (/^(\-\-\-|\+\+\+|@@)\s/.test(line)) {
+        break;
+      }
+
+      // Diff index
+      var header = /^(?:Index:|diff(?: -r \w+)+)\s+(.+?)\s*$/.exec(line);
+      if (header) {
+        index.index = header[1];
+      }
+
+      i++;
+    }
+
+    // Parse file headers if they are defined. Unified diff requires them, but
+    // there's no technical issues to have an isolated hunk without file header
+    parseFileHeader(index);
+    parseFileHeader(index);
+
+    // Parse hunks
+    index.hunks = [];
+
+    while (i < diffstr.length) {
+      var _line = diffstr[i];
+
+      if (/^(Index:|diff|\-\-\-|\+\+\+)\s/.test(_line)) {
+        break;
+      } else if (/^@@/.test(_line)) {
+        index.hunks.push(parseHunk());
+      } else if (_line && options.strict) {
+        // Ignore unexpected content unless in strict mode
+        throw new Error('Unknown line ' + (i + 1) + ' ' + JSON.stringify(_line));
+      } else {
+        i++;
+      }
+    }
+  }
+
+  // Parses the --- and +++ headers, if none are found, no lines
+  // are consumed.
+  function parseFileHeader(index) {
+    var fileHeader = /^(\-\-\-|\+\+\+)\s+(\S*)\s?(.*?)\s*$/.exec(diffstr[i]);
+    if (fileHeader) {
+      var keyPrefix = fileHeader[1] === '---' ? 'old' : 'new';
+      index[keyPrefix + 'FileName'] = fileHeader[2];
+      index[keyPrefix + 'Header'] = fileHeader[3];
+
+      i++;
+    }
+  }
+
+  // Parses a hunk
+  // This assumes that we are at the start of a hunk.
+  function parseHunk() {
+    var chunkHeaderIndex = i,
+        chunkHeaderLine = diffstr[i++],
+        chunkHeader = chunkHeaderLine.split(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+
+    var hunk = {
+      oldStart: +chunkHeader[1],
+      oldLines: +chunkHeader[2] || 1,
+      newStart: +chunkHeader[3],
+      newLines: +chunkHeader[4] || 1,
+      lines: []
+    };
+
+    var addCount = 0,
+        removeCount = 0;
+    for (; i < diffstr.length; i++) {
+      var operation = diffstr[i][0];
+
+      if (operation === '+' || operation === '-' || operation === ' ' || operation === '\\') {
+        hunk.lines.push(diffstr[i]);
+
+        if (operation === '+') {
+          addCount++;
+        } else if (operation === '-') {
+          removeCount++;
+        } else if (operation === ' ') {
+          addCount++;
+          removeCount++;
+        }
+      } else {
+        break;
+      }
+    }
+
+    // Handle the empty block count case
+    if (!addCount && hunk.newLines === 1) {
+      hunk.newLines = 0;
+    }
+    if (!removeCount && hunk.oldLines === 1) {
+      hunk.oldLines = 0;
+    }
+
+    // Perform optional sanity checking
+    if (options.strict) {
+      if (addCount !== hunk.newLines) {
+        throw new Error('Added line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
+      }
+      if (removeCount !== hunk.oldLines) {
+        throw new Error('Removed line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
+      }
+    }
+
+    return hunk;
+  }
+
+  while (i < diffstr.length) {
+    parseIndex();
+  }
+
+  return list;
+}
+
+
+},{}],24:[function(require,module,exports){
+/*istanbul ignore start*/"use strict";
+
+exports.__esModule = true;
+
+exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
+  var wantForward = true,
+      backwardExhausted = false,
+      forwardExhausted = false,
+      localOffset = 1;
+
+  return function iterator() {
+    if (wantForward && !forwardExhausted) {
+      if (backwardExhausted) {
+        localOffset++;
+      } else {
+        wantForward = false;
+      }
+
+      // Check if trying to fit beyond text length, and if not, check it fits
+      // after offset location (or desired location on first iteration)
+      if (start + localOffset <= maxLine) {
+        return localOffset;
+      }
+
+      forwardExhausted = true;
+    }
+
+    if (!backwardExhausted) {
+      if (!forwardExhausted) {
+        wantForward = true;
+      }
+
+      // Check if trying to fit before text beginning, and if not, check it fits
+      // before offset location
+      if (minLine <= start - localOffset) {
+        return - localOffset++;
+      }
+
+      backwardExhausted = true;
+      return iterator();
+    }
+
+    // We tried to fit hunk before text beginning and beyond text lenght, then
+    // hunk can't fit on the text. Return undefined
+  };
+};
+
+
+},{}],25:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/generateOptions = generateOptions;
+function generateOptions(options, defaults) {
+  if (typeof options === 'function') {
+    defaults.callback = options;
+  } else if (options) {
+    for (var name in options) {
+      /* istanbul ignore else */
+      if (options.hasOwnProperty(name)) {
+        defaults[name] = options[name];
+      }
+    }
+  }
+  return defaults;
+}
+
+
+},{}],26:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK NextGen Events
 	
@@ -4098,7 +5398,709 @@ NextGenEvents.processQueue = function processQueue( contextName , isCompletionCa
 
 
 
-},{}],10:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+// To solve dependency hell, we do not rely on terminal-kit anymore.
+module.exports = {
+	reset: '\x1b[0m' ,
+	bold: '\x1b[1m' ,
+	dim: '\x1b[2m' ,
+	italic: '\x1b[3m' ,
+	underline: '\x1b[4m' ,
+	inverse: '\x1b[7m' ,
+	defaultColor: '\x1b[39m' ,
+	black: '\x1b[30m' ,
+	red: '\x1b[31m' ,
+	green: '\x1b[32m' ,
+	yellow: '\x1b[33m' ,
+	blue: '\x1b[34m' ,
+	magenta: '\x1b[35m' ,
+	cyan: '\x1b[36m' ,
+	white: '\x1b[37m' ,
+	brightBlack: '\x1b[90m' ,
+	brightRed: '\x1b[91m' ,
+	brightGreen: '\x1b[92m' ,
+	brightYellow: '\x1b[93m' ,
+	brightBlue: '\x1b[94m' ,
+	brightMagenta: '\x1b[95m' ,
+	brightCyan: '\x1b[96m' ,
+	brightWhite: '\x1b[97m' ,
+} ;
+
+
+
+},{}],28:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+/*
+	Escape collection.
+*/
+
+
+
+"use strict" ;
+
+
+
+// Load modules
+//var tree = require( 'tree-kit' ) ;
+
+
+
+// From Mozilla Developper Network
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
+exports.regExp = exports.regExpPattern = function escapeRegExpPattern( str ) {
+	return str.replace( /([.*+?^${}()|\[\]\/\\])/g , '\\$1' ) ;
+} ;
+
+exports.regExpReplacement = function escapeRegExpReplacement( str ) {
+	return str.replace( /\$/g , '$$$$' ) ;	// This replace any single $ by a double $$
+} ;
+
+
+
+exports.format = function escapeFormat( str ) {
+	return str.replace( /%/g , '%%' ) ;	// This replace any single % by a double %%
+} ;
+
+
+
+exports.shellArg = function escapeShellArg( str ) {
+	return '\'' + str.replace( /\'/g , "'\\''" ) + '\'' ;
+} ;
+
+
+
+var escapeControlMap = { '\r': '\\r', '\n': '\\n', '\t': '\\t', '\x7f': '\\x7f' } ;
+
+// Escape \r \n \t so they become readable again, escape all ASCII control character as well, using \x syntaxe
+exports.control = function escapeControl( str ) {
+	return str.replace( /[\x00-\x1f\x7f]/g , function( match ) {
+		if ( escapeControlMap[ match ] !== undefined ) { return escapeControlMap[ match ] ; }
+		var hex = match.charCodeAt( 0 ).toString( 16 ) ;
+		if ( hex.length % 2 ) { hex = '0' + hex ; }
+		return '\\x' + hex ;
+	} ) ;
+} ;
+
+
+
+var escapeHtmlMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' } ;
+
+// Only escape & < > so this is suited for content outside tags
+exports.html = function escapeHtml( str ) {
+	return str.replace( /[&<>]/g , function( match ) { return escapeHtmlMap[ match ] ; } ) ;
+} ;
+
+// Escape & < > " so this is suited for content inside a double-quoted attribute
+exports.htmlAttr = function escapeHtmlAttr( str ) {
+	return str.replace( /[&<>"]/g , function( match ) { return escapeHtmlMap[ match ] ; } ) ;
+} ;
+
+// Escape all html special characters & < > " '
+exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
+	return str.replace( /[&<>"']/g , function( match ) { return escapeHtmlMap[ match ] ; } ) ;
+} ;
+
+
+
+},{}],29:[function(require,module,exports){
+(function (Buffer){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+/* global Map, Set */
+
+/*
+	Variable inspector.
+*/
+
+
+
+"use strict" ;
+
+
+
+// Load modules
+var treeExtend = require( 'tree-kit/lib/extend.js' ) ;
+var escape = require( './escape.js' ) ;
+var ansi = require( './ansi.js' ) ;
+
+
+
+/*
+	Inspect a variable, return a string ready to be displayed with console.log(), or even as an HTML output.
+	
+	Options:
+		* style:
+			* 'none': (default) normal output suitable for console.log() or writing in a file
+			* 'color': colorful output suitable for terminal
+			* 'html': html output
+		* depth: depth limit, default: 3
+		* noFunc: do not display functions
+		* noDescriptor: do not display descriptor information
+		* noType: do not display type and constructor
+		* enumOnly: only display enumerable properties
+		* funcDetails: display function's details
+		* proto: display object's prototype
+		* sort: sort the keys
+		* minimal: imply noFunc: true, noDescriptor: true, noType: true, enumOnly: true, proto: false and funcDetails: false.
+		  Display a minimal JSON-like output
+		* useInspect? use .inspect() method when available on an object
+*/
+
+function inspect( options , variable )
+{
+	if ( arguments.length < 2 ) { variable = options ; options = {} ; }
+	else if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	var runtime = { depth: 0 , ancestors: [] } ;
+	
+	if ( ! options.style ) { options.style = inspectStyle.none ; }
+	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
+	
+	if ( options.depth === undefined ) { options.depth = 3 ; }
+	
+	// /!\ nofunc is deprecated
+	if ( options.nofunc ) { options.noFunc = true ; }
+	
+	if ( options.minimal )
+	{
+		options.noFunc = true ;
+		options.noDescriptor = true ;
+		options.noType = true ;
+		options.enumOnly = true ;
+		options.funcDetails = false ;
+		options.proto = false ;
+	}
+	
+	return inspect_( runtime , options , variable ) ;
+}
+
+
+
+function inspect_( runtime , options , variable )
+{
+	var i , funcName , length , propertyList , constructor , keyIsProperty ,
+		type , pre , indent , isArray , isFunc , specialObject ,
+		str = '' , key = '' , descriptorStr = '' , descriptor , nextAncestors ;
+	
+	
+	// Prepare things (indentation, key, descriptor, ... )
+	
+	type = typeof variable ;
+	indent = options.style.tab.repeat( runtime.depth ) ;
+	
+	if ( type === 'function' && options.noFunc ) { return '' ; }
+	
+	if ( runtime.key !== undefined )
+	{
+		if ( runtime.descriptor )
+		{
+			descriptorStr = [] ;
+			
+			if ( ! runtime.descriptor.configurable ) { descriptorStr.push( '-conf' ) ; }
+			if ( ! runtime.descriptor.enumerable ) { descriptorStr.push( '-enum' ) ; }
+			
+			// Already displayed by runtime.forceType
+			//if ( runtime.descriptor.get || runtime.descriptor.set ) { descriptorStr.push( 'getter/setter' ) ; } else
+			if ( ! runtime.descriptor.writable ) { descriptorStr.push( '-w' ) ; }
+			
+			//if ( descriptorStr.length ) { descriptorStr = '(' + descriptorStr.join( ' ' ) + ')' ; }
+			if ( descriptorStr.length ) { descriptorStr = descriptorStr.join( ' ' ) ; }
+			else { descriptorStr = '' ; }
+		}
+		
+		if ( runtime.keyIsProperty )
+		{
+			if ( keyNeedingQuotes( runtime.key ) )
+			{
+				key = '"' + options.style.key( runtime.key ) + '": ' ;
+			}
+			else
+			{
+				key = options.style.key( runtime.key ) + ': ' ;
+			}
+		}
+		else
+		{
+			key = '[' + options.style.index( runtime.key ) + '] ' ;
+		}
+		
+		if ( descriptorStr ) { descriptorStr = ' ' + options.style.type( descriptorStr ) ; }
+	}
+	
+	pre = runtime.noPre ? '' : indent + key ;
+	
+	
+	// Describe the current variable
+	
+	if ( variable === undefined )
+	{
+		str += pre + options.style.constant( 'undefined' ) + descriptorStr + options.style.nl ;
+	}
+	else if ( variable === null )
+	{
+		str += pre + options.style.constant( 'null' ) + descriptorStr + options.style.nl ;
+	}
+	else if ( variable === false )
+	{
+		str += pre + options.style.constant( 'false' ) + descriptorStr + options.style.nl ;
+	}
+	else if ( variable === true )
+	{
+		str += pre + options.style.constant( 'true' ) + descriptorStr + options.style.nl ;
+	}
+	else if ( type === 'number' )
+	{
+		str += pre + options.style.number( variable.toString() ) +
+			( options.noType ? '' : ' ' + options.style.type( 'number' ) ) +
+			descriptorStr + options.style.nl ;
+	}
+	else if ( type === 'string' )
+	{
+		str += pre + '"' + options.style.string( escape.control( variable ) ) + '" ' +
+			( options.noType ? '' : options.style.type( 'string' ) + options.style.length( '(' + variable.length + ')' ) ) +
+			descriptorStr + options.style.nl ;
+	}
+	else if ( Buffer.isBuffer( variable ) )
+	{
+		str += pre + options.style.inspect( variable.inspect() ) + ' ' +
+			( options.noType ? '' : options.style.type( 'Buffer' ) + options.style.length( '(' + variable.length + ')' ) ) +
+			descriptorStr + options.style.nl ;
+	}
+	else if ( type === 'object' || type === 'function' )
+	{
+		funcName = length = '' ;
+		isFunc = false ;
+		if ( type === 'function' )
+		{
+			isFunc = true ;
+			funcName = ' ' + options.style.funcName( ( variable.name ? variable.name : '(anonymous)' ) ) ;
+			length = options.style.length( '(' + variable.length + ')' ) ;
+		}
+		
+		isArray = false ;
+		if ( Array.isArray( variable ) )
+		{
+			isArray = true ;
+			length = options.style.length( '(' + variable.length + ')' ) ;
+		}
+		
+		if ( ! variable.constructor ) { constructor = '(no constructor)' ; }
+		else if ( ! variable.constructor.name ) { constructor = '(anonymous)' ; }
+		else { constructor = variable.constructor.name ; }
+		
+		constructor = options.style.constructorName( constructor ) ;
+		
+		str += pre ;
+		
+		if ( ! options.noType )
+		{
+			if ( runtime.forceType ) { str += options.style.type( runtime.forceType ) ; }
+			else { str += constructor + funcName + length + ' ' + options.style.type( type ) + descriptorStr ; }
+			
+			if ( ! isFunc || options.funcDetails ) { str += ' ' ; }	// if no funcDetails imply no space here
+		}
+		
+		propertyList = Object.getOwnPropertyNames( variable ) ;
+		
+		if ( options.sort ) { propertyList.sort() ; }
+		
+		// Special Objects
+		specialObject = specialObjectSubstitution( variable ) ;
+		
+		if ( specialObject !== undefined )
+		{
+			str += '=> ' + inspect_( {
+					depth: runtime.depth ,
+					ancestors: runtime.ancestors ,
+					noPre: true
+				} ,
+				options ,
+				specialObject
+			) ;
+		}
+		else if ( isFunc && ! options.funcDetails )
+		{
+			str += options.style.nl ;
+		}
+		else if ( ! propertyList.length && ! options.proto )
+		{
+			str += '{}' + options.style.nl ;
+		}
+		else if ( runtime.depth >= options.depth )
+		{
+			str += options.style.limit( '[depth limit]' ) + options.style.nl ;
+		}
+		else if ( runtime.ancestors.indexOf( variable ) !== -1 )
+		{
+			str += options.style.limit( '[circular]' ) + options.style.nl ;
+		}
+		else
+		{
+			str += ( isArray && options.noType ? '[' : '{' ) + options.style.nl ;
+			
+			// Do not use .concat() here, it doesn't works as expected with arrays...
+			nextAncestors = runtime.ancestors.slice() ;
+			nextAncestors.push( variable ) ;
+			
+			for ( i = 0 ; i < propertyList.length ; i ++ )
+			{
+				try {
+					descriptor = Object.getOwnPropertyDescriptor( variable , propertyList[ i ] ) ;
+					
+					if ( ! descriptor.enumerable && options.enumOnly ) { continue ; }
+					
+					keyIsProperty = ! isArray || ! descriptor.enumerable || isNaN( propertyList[ i ] ) ;
+					
+					if ( ! options.noDescriptor && ( descriptor.get || descriptor.set ) )
+					{
+						str += inspect_( {
+								depth: runtime.depth + 1 ,
+								ancestors: nextAncestors ,
+								key: propertyList[ i ] ,
+								keyIsProperty: keyIsProperty ,
+								descriptor: descriptor ,
+								forceType: 'getter/setter'
+							} ,
+							options ,
+							{ get: descriptor.get , set: descriptor.set }
+						) ;
+					}
+					else
+					{
+						str += inspect_( {
+								depth: runtime.depth + 1 ,
+								ancestors: nextAncestors ,
+								key: propertyList[ i ] ,
+								keyIsProperty: keyIsProperty ,
+								descriptor: options.noDescriptor ? undefined : descriptor
+							} ,
+							options ,
+							variable[ propertyList[ i ] ]
+						) ;
+					}
+				}
+				catch ( error ) {
+					str += inspect_( {
+							depth: runtime.depth + 1 ,
+							ancestors: nextAncestors ,
+							key: propertyList[ i ] ,
+							keyIsProperty: keyIsProperty ,
+							descriptor: options.noDescriptor ? undefined : descriptor
+						} ,
+						options ,
+						error
+					) ;
+				}
+			}
+			
+			if ( options.proto )
+			{
+				str += inspect_( {
+						depth: runtime.depth + 1 ,
+						ancestors: nextAncestors ,
+						key: '__proto__' ,
+						keyIsProperty: true
+					} ,
+					options ,
+					variable.__proto__	// jshint ignore:line
+				) ;
+			}
+			
+			str += indent + ( isArray && options.noType ? ']' : '}' ) + options.style.nl ;
+		}
+	}
+	
+	
+	// Finalizing
+	
+	if ( runtime.depth === 0 )
+	{
+		if ( options.style === 'html' ) { str = escape.html( str ) ; }
+	}
+	
+	return str ;
+}
+
+exports.inspect = inspect ;
+
+
+
+function keyNeedingQuotes( key )
+{
+	if ( ! key.length ) { return true ; }
+	return false ;
+}
+
+
+
+function inspectError( options , error )
+{
+	var str = '' , stack , type , code ;
+	
+	if ( arguments.length < 2 ) { error = options ; options = {} ; }
+	else if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	if ( ! ( error instanceof Error ) ) { return  ; }
+	
+	if ( ! options.style ) { options.style = inspectStyle.none ; }
+	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
+	
+	if ( error.stack ) { stack = inspectStack( options , error.stack ) ; }
+	
+	type = error.type || error.constructor.name ;
+	code = error.code || error.name || error.errno || error.number ;
+	
+	str += options.style.errorType( type ) +
+		( code ? ' [' + options.style.errorType( code ) + ']' : '' ) + ': ' ;
+	str += options.style.errorMessage( error.message ) + '\n' ;
+	
+	if ( stack ) { str += options.style.errorStack( stack ) + '\n' ; }
+	
+	return str ;
+}
+
+exports.inspectError = inspectError ;
+
+
+
+// Some special object are better written down when substituted by something else
+function specialObjectSubstitution( variable )
+{
+	switch ( variable.constructor.name )
+	{
+		case 'Date' :
+			if ( variable instanceof Date )
+			{
+				return variable.toString() + ' [' + variable.getTime() + ']' ;
+			}
+			break ;
+		case 'Set' :
+			if ( typeof Set === 'function' && variable instanceof Set )
+			{
+				// This is an ES6 'Set' Object
+				return Array.from( variable ) ;
+			}
+			break ;
+		case 'Map' :
+			if ( typeof Map === 'function' && variable instanceof Map )
+			{
+				// This is an ES6 'Map' Object
+				return Array.from( variable ) ;
+			}
+			break ;
+		case 'ObjectID' :
+			if ( variable._bsontype )
+			{
+				// This is a MongoDB ObjectID, rather boring to display in its original form
+				// due to esoteric characters that confuse both the user and the terminal displaying it.
+				// Substitute it to its string representation
+				return variable.toString() ;
+			}
+			break ;
+	}
+	
+	return ;
+}
+
+
+
+function inspectStack( options , stack )
+{
+	if ( arguments.length < 2 ) { stack = options ; options = {} ; }
+	else if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	if ( ! options.style ) { options.style = inspectStyle.none ; }
+	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
+	
+	if ( ! stack ) { return ; }
+	
+	stack = stack.replace( /^[^\n]*\n/ , '' ) ;
+	stack = stack.replace(
+		/^\s*(at)\s+(?:([^\s:\(\)\[\]\n]+)\s)?(?:\[as ([^\s:\(\)\[\]\n]+)\]\s)?(?:\(?([^:\(\)\[\]\n]+):([0-9]+):([0-9]+)\)?)?$/mg ,
+		function( matches , at , method , as , file , line , column ) {	// jshint ignore:line
+			return options.style.errorStack( '    at ' ) +
+				( method ? options.style.errorStackMethod( method ) + ' ' : '' ) +
+				( as ? options.style.errorStack( '[as ' ) + options.style.errorStackMethodAs( as ) + options.style.errorStack( '] ' ) : '' ) +
+				options.style.errorStack( '(' ) +
+				( file ? options.style.errorStackFile( file ) : options.style.errorStack( 'unknown' ) ) +
+				( line ? options.style.errorStack( ':' ) + options.style.errorStackLine( line ) : '' ) +
+				( column ? options.style.errorStack( ':' ) + options.style.errorStackColumn( column ) : '' ) +
+				options.style.errorStack( ')' ) ;
+		}
+	) ;
+	
+	return stack ;
+}
+
+exports.inspectStack = inspectStack ;
+
+
+
+// Inspect's styles
+
+var inspectStyle = {} ;
+
+var inspectStyleNoop = function( str ) { return str ; } ;
+
+
+
+inspectStyle.none = {
+	tab: '    ' ,
+	nl: '\n' ,
+	limit: inspectStyleNoop ,
+	type: function( str ) { return '<' + str + '>' ; } ,
+	constant: inspectStyleNoop ,
+	funcName: inspectStyleNoop ,
+	constructorName: function( str ) { return '<' + str + '>' ; } ,
+	length: inspectStyleNoop ,
+	key: inspectStyleNoop ,
+	index: inspectStyleNoop ,
+	number: inspectStyleNoop ,
+	inspect: inspectStyleNoop ,
+	string: inspectStyleNoop ,
+	errorType: inspectStyleNoop ,
+	errorMessage: inspectStyleNoop ,
+	errorStack: inspectStyleNoop ,
+	errorStackMethod: inspectStyleNoop ,
+	errorStackMethodAs: inspectStyleNoop ,
+	errorStackFile: inspectStyleNoop ,
+	errorStackLine: inspectStyleNoop ,
+	errorStackColumn: inspectStyleNoop
+} ;
+
+
+
+inspectStyle.color = treeExtend( null , {} , inspectStyle.none , {
+	limit: function( str ) { return ansi.bold + ansi.brightRed + str + ansi.reset ; } ,
+	type: function( str ) { return ansi.italic + ansi.brightBlack + str + ansi.reset ; } ,
+	constant: function( str ) { return ansi.cyan + str + ansi.reset ; } ,
+	funcName: function( str ) { return ansi.italic + ansi.magenta + str + ansi.reset ; } ,
+	constructorName: function( str ) { return ansi.magenta + str + ansi.reset ; } ,
+	length: function( str ) { return ansi.italic + ansi.brightBlack + str + ansi.reset ; } ,
+	key: function( str ) { return ansi.green + str + ansi.reset ; } ,
+	index: function( str ) { return ansi.blue + str + ansi.reset ; } ,
+	number: function( str ) { return ansi.cyan + str + ansi.reset ; } ,
+	inspect: function( str ) { return ansi.cyan + str + ansi.reset ; } ,
+	string: function( str ) { return ansi.blue + str + ansi.reset ; } ,
+	errorType: function( str ) { return ansi.red + ansi.bold + str + ansi.reset ; } ,
+	errorMessage: function( str ) { return ansi.red + ansi.italic + str + ansi.reset ; } ,
+	errorStack: function( str ) { return ansi.brightBlack + str + ansi.reset ; } ,
+	errorStackMethod: function( str ) { return ansi.brightYellow + str + ansi.reset ; } ,
+	errorStackMethodAs: function( str ) { return ansi.yellow + str + ansi.reset ; } ,
+	errorStackFile: function( str ) { return ansi.brightCyan + str + ansi.reset ; } ,
+	errorStackLine: function( str ) { return ansi.blue + str + ansi.reset ; } ,
+	errorStackColumn: function( str ) { return ansi.magenta + str + ansi.reset ; }
+} ) ;
+
+
+
+inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
+	tab: '&nbsp;&nbsp;&nbsp;&nbsp;' ,
+	nl: '<br />' ,
+	limit: function( str ) { return '<span style="color:red">' + str + '</span>' ; } ,
+	type: function( str ) { return '<i style="color:gray">' + str + '</i>' ; } ,
+	constant: function( str ) { return '<span style="color:cyan">' + str + '</span>' ; } ,
+	funcName: function( str ) { return '<i style="color:magenta">' + str + '</i>' ; } ,
+	constructorName: function( str ) { return '<span style="color:magenta">' + str + '</span>' ; } ,
+	length: function( str ) { return '<i style="color:gray">' + str + '</i>' ; } ,
+	key: function( str ) { return '<span style="color:green">' + str + '</span>' ; } ,
+	index: function( str ) { return '<span style="color:blue">' + str + '</span>' ; } ,
+	number: function( str ) { return '<span style="color:cyan">' + str + '</span>' ; } ,
+	inspect: function( str ) { return '<span style="color:cyan">' + str + '</span>' ; } ,
+	string: function( str ) { return '<span style="color:blue">' + str + '</span>' ; } ,
+	errorType: function( str ) { return '<span style="color:red">' + str + '</span>' ; } ,
+	errorMessage: function( str ) { return '<span style="color:red">' + str + '</span>' ; } ,
+	errorStack: function( str ) { return '<span style="color:gray">' + str + '</span>' ; } ,
+	errorStackMethod: function( str ) { return '<span style="color:yellow">' + str + '</span>' ; } ,
+	errorStackMethodAs: function( str ) { return '<span style="color:yellow">' + str + '</span>' ; } ,
+	errorStackFile: function( str ) { return '<span style="color:cyan">' + str + '</span>' ; } ,
+	errorStackLine: function( str ) { return '<span style="color:blue">' + str + '</span>' ; } ,
+	errorStackColumn: function( str ) { return '<span style="color:gray">' + str + '</span>' ; }
+} ) ;
+
+
+
+}).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")})
+},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":9,"./ansi.js":27,"./escape.js":28,"tree-kit/lib/extend.js":30}],30:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK object tree toolbox
 
