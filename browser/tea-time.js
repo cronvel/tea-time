@@ -1335,7 +1335,7 @@ TeaTime.prototype.patchError = function patchError( error )
 	for ( i = 0 , iMax = stack.length ; i < iMax ; i ++ )
 	{
 		// This is a bit hacky, but well... 
-		if ( stack[ i ].match( /(^|\/)tea-time\.js/ ) )
+		if ( stack[ i ].match( /(^|\/)tea-time\.(min\.)?js/ ) )
 		{
 			stack = stack.slice( 0 , i ) ;
 			break ;
