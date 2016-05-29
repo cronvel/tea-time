@@ -27,6 +27,330 @@
 
 "use strict" ;
 
+/* global document */
+
+
+
+//var Report = require( './report.js' ) ;
+//var ErrorReport = require( './error-report.js' ) ;
+
+
+function Reporter( teaTime , self )
+{
+	if ( ! self )
+	{
+		self = Object.create( Reporter.prototype , {
+			teaTime: { value: teaTime , enumerable: true }
+		} ) ;
+	}
+	
+	document.querySelector( 'body' )
+		.insertAdjacentHTML( 'beforeend' ,
+			'<div class="tea-time-classic-reporter" style="background-color:black;color:white"></div>'
+		) ;
+	
+	self.container = document.querySelector( 'div.tea-time-classic-reporter' ) ;
+	
+	self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
+	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
+	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
+	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
+	self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
+	
+	return self ;
+}
+
+module.exports = Reporter ;
+
+
+
+function scrollDown()
+{
+	( document.querySelector( 'div.tea-time-classic-reporter p:last-child' ) ||
+		document.querySelector( 'div.tea-time-classic-reporter h4:last-child' ) ||
+		document.querySelector( 'div.tea-time-classic-reporter pre:last-child' ) )
+			.scrollIntoView() ;
+}
+
+
+
+function indentStyle( depth )
+{
+	return 'margin-left:' + ( 1 + 2 * depth ) + '%;' ;
+}
+
+
+
+var passingStyle = "color:green;" ;
+var failingStyle = "color:red;" ;
+var pendingStyle = "color:blue;" ;
+
+var fastStyle = "color:grey;" ;
+var slowStyle = "color:yellow;" ;
+var slowerStyle = "color:red;" ;
+
+var errorStyle = "color:red;font-weight:bold;" ;
+var hookErrorStyle = "background-color:red;color:white;font-weight:bold;" ;
+
+var expectedStyle = "background-color:green;color:white;font-weight:bold;" ;
+var actualStyle = "background-color:red;color:white;font-weight:bold;" ;
+
+
+
+
+Reporter.enterSuite = function enterSuite( suiteName , depth )
+{
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<h4 class="tea-time-classic-reporter" style="' + indentStyle( depth ) + '">' + suiteName + '</h4>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.ok = function ok( testName , depth , time , slow )
+{
+	var content = '✔ ' + testName ;
+	
+	if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
+	else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
+	else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<p class="tea-time-classic-reporter" style="' + passingStyle + indentStyle( depth ) + '">' + content + '</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.fail = function fail( testName , depth , time , slow , error )
+{
+	var content = '✘ ' + testName ;
+	
+	if ( time !== undefined )
+	{
+		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
+		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
+		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	}
+	
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<p class="tea-time-classic-reporter" style="' + failingStyle + indentStyle( depth ) + '">' + content + '</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.skip = function skip( testName , depth )
+{
+	var content = '· ' + testName ;
+	
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<p class="tea-time-classic-reporter" style="' + pendingStyle + indentStyle( depth ) + '">' + content + '</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.report = function report( ok , fail , skip )
+{
+	this.container.insertAdjacentHTML(
+		'beforeend' ,
+		'<hr />' +
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + ok + ' passing</p>' +
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + failingStyle + indentStyle( 1 ) + '">' + fail + ' failing</p>' +
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + skip + ' pending</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.errorReport = function errorReport( errors )
+{
+	var i , error , content = '' ;
+	
+	content += '<h4 class="tea-time-classic-reporter" style="' + errorStyle + indentStyle( 0 ) + '">== Errors ==</h4>' ;
+	
+	for ( i = 0 ; i < errors.length ; i ++ )
+	{
+		error = errors[ i ] ;
+		content += '<p class="tea-time-classic-reporter" style="' + errorStyle + indentStyle( 1 ) + '">' + ( i + 1 ) + ' ) ' ;
+		
+		switch ( error.type )
+		{
+			case 'test' :
+				break ;
+			case 'setup' :
+				content += '<span style="' + hookErrorStyle + '">SETUP HOOK</span>' ;
+				break ;
+			case 'teardown' :
+				content += '<span style="' + hookErrorStyle + '">TEARDOWN HOOK</span>' ;
+				break ;
+			case 'suiteSetup' :
+				content += '<span style="' + hookErrorStyle + '">SUITE SETUP HOOK</span>' ;
+				break ;
+			case 'suiteTeardown' :
+				content += '<span style="' + hookErrorStyle + '">SUITE TEARDOWN HOOK</span>' ;
+				break ;
+		}
+		
+		content += error.name ;
+		content += '</p>' ;
+		content += this.reportOneError( error.error ) ;
+	}
+	
+	this.container.insertAdjacentHTML( 'beforeend' , '<hr />' + content ) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.prototype.reportOneError = function reportOneError( error )
+{
+	var content = '' ;
+	
+	if ( error.expected && error.actual )
+	{
+		content += '<p class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
+			'<span style="' + expectedStyle + '">expected</span><span style="' + actualStyle + '">actual</span>' +
+			'</p>' ;
+		
+		content += '<pre class="tea-time-classic-reporter"; style="' + indentStyle( 2 ) + '">' ;
+		content += this.teaTime.htmlColorDiff( error.actual , error.expected ) ;
+		content += '</pre>' ;
+	}
+	
+	content += 
+		'<pre class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' + 
+		this.teaTime.inspect.inspectError( { style: 'html' } , error ) +
+		'</pre>' ;
+	
+	return content ;
+} ;
+
+
+
+},{}],2:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+function Reporter( teaTime , self )
+{
+	if ( ! self )
+	{
+		self = Object.create( Reporter.prototype , {
+			teaTime: { value: teaTime , enumerable: true }
+		} ) ;
+	}
+	
+	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
+	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
+	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
+	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
+	
+	return self ;
+}
+
+module.exports = Reporter ;
+
+
+
+Reporter.ok = function ok( testName , depth , time , slow )
+{
+	console.log( 'OK:' , testName , '(' + time + ')' ) ;
+} ;
+
+
+
+Reporter.fail = function fail( testName , depth , time , slow , error )
+{
+	console.log( 'Fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
+} ;
+
+
+
+Reporter.skip = function skip( testName , depth )
+{
+	console.log( 'Pending:' , testName ) ;
+} ;
+
+
+
+Reporter.report = function report( ok , fail , skip )
+{
+	console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' pending:' , skip ) ;
+} ;
+
+
+
+},{}],3:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
 /* global window */
 
 
@@ -35,6 +359,7 @@ var TeaTime = require( './tea-time.js' ) ;
 var diff = require( './diff.js' ) ;
 var htmlColorDiff = require( './htmlColorDiff.js' ) ;
 var inspect = require( 'string-kit/lib/inspect.js' ) ;
+var dom = require( 'dom-kit' ) ;
 var url = require( 'url' ) ;
 
 
@@ -68,13 +393,31 @@ function createTeaTime()
 	window.teaTime.htmlColorDiff = htmlColorDiff ;
 	window.teaTime.inspect = inspect ;
 	
+	window.teaTime.reporters = {
+		console: require( './browser-reporters/console.js' ) ,
+		classic: require( './browser-reporters/classic.js' )
+	} ;
+	
+	options.reporters.forEach( function( reporter ) {
+		window.teaTime.reporters[ reporter ]( window.teaTime ) ;
+	} ) ;
+	
 	return window.teaTime ;
 }
 
 module.exports = createTeaTime ;
 
 
-},{"./diff.js":2,"./htmlColorDiff.js":3,"./tea-time.js":4,"string-kit/lib/inspect.js":36,"url":16}],2:[function(require,module,exports){
+
+createTeaTime() ;
+
+dom.ready( function() {
+	window.teaTime.run() ;
+} ) ;
+
+
+
+},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./diff.js":4,"./htmlColorDiff.js":5,"./tea-time.js":6,"dom-kit":36,"string-kit/lib/inspect.js":41,"url":19}],4:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -166,7 +509,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":27,"string-kit/lib/inspect.js":36}],3:[function(require,module,exports){
+},{"diff":30,"string-kit/lib/inspect.js":41}],5:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -233,7 +576,7 @@ module.exports = function htmlColorDiff( oldValue , newValue )
 
 
 
-},{"./diff.js":2}],4:[function(require,module,exports){
+},{"./diff.js":4}],6:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -1005,7 +1348,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":5,"nextgen-events":33}],5:[function(require,module,exports){
+},{"async-kit":7,"nextgen-events":38}],7:[function(require,module,exports){
 /*
 	Copyright (c) 2016 Cédric Ronvel 
 	
@@ -1042,7 +1385,7 @@ async.exit = require( './exit.js' ) ;
 
 
 
-},{"./core.js":6,"./exit.js":7,"./wrapper.js":8}],6:[function(require,module,exports){
+},{"./core.js":8,"./exit.js":9,"./wrapper.js":10}],8:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
 	
@@ -3053,7 +3396,7 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"events":9,"tree-kit/lib/extend.js":37}],7:[function(require,module,exports){
+},{"events":12,"tree-kit/lib/extend.js":42}],9:[function(require,module,exports){
 (function (process){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
@@ -3143,7 +3486,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":5,"_process":11}],8:[function(require,module,exports){
+},{"./async.js":7,"_process":14}],10:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK Async lib
 	
@@ -3210,7 +3553,9 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 
 
-},{}],9:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
+
+},{}],12:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -3510,7 +3855,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],10:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /**
  * Determine if an object is Buffer
  *
@@ -3529,7 +3874,7 @@ module.exports = function (obj) {
     ))
 }
 
-},{}],11:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -3625,7 +3970,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],12:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -4162,7 +4507,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],13:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4248,7 +4593,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],14:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4335,13 +4680,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],15:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":13,"./encode":14}],16:[function(require,module,exports){
+},{"./decode":16,"./encode":17}],19:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5075,7 +5420,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":17,"punycode":12,"querystring":15}],17:[function(require,module,exports){
+},{"./util":20,"punycode":15,"querystring":18}],20:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -5093,7 +5438,7 @@ module.exports = {
   }
 };
 
-},{}],18:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -5119,7 +5464,7 @@ function convertChangesToDMP(changes) {
 }
 
 
-},{}],19:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5156,7 +5501,7 @@ function escapeHTML(s) {
 }
 
 
-},{}],20:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5385,7 +5730,7 @@ function clonePath(path) {
 }
 
 
-},{}],21:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5405,7 +5750,7 @@ function diffChars(oldStr, newStr, callback) {
 }
 
 
-},{"./base":20}],22:[function(require,module,exports){
+},{"./base":23}],25:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5429,7 +5774,7 @@ function diffCss(oldStr, newStr, callback) {
 }
 
 
-},{"./base":20}],23:[function(require,module,exports){
+},{"./base":23}],26:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5531,7 +5876,7 @@ function canonicalize(obj, stack, replacementStack) {
 }
 
 
-},{"./base":20,"./line":24}],24:[function(require,module,exports){
+},{"./base":23,"./line":27}],27:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5586,7 +5931,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":32,"./base":20}],25:[function(require,module,exports){
+},{"../util/params":35,"./base":23}],28:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5610,7 +5955,7 @@ function diffSentences(oldStr, newStr, callback) {
 }
 
 
-},{"./base":20}],26:[function(require,module,exports){
+},{"./base":23}],29:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5682,7 +6027,7 @@ function diffWordsWithSpace(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":32,"./base":20}],27:[function(require,module,exports){
+},{"../util/params":35,"./base":23}],30:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5755,7 +6100,7 @@ exports. /*istanbul ignore end*/Diff = _base2.default;
 /*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
 
 
-},{"./convert/dmp":18,"./convert/xml":19,"./diff/base":20,"./diff/character":21,"./diff/css":22,"./diff/json":23,"./diff/line":24,"./diff/sentence":25,"./diff/word":26,"./patch/apply":28,"./patch/create":29,"./patch/parse":30}],28:[function(require,module,exports){
+},{"./convert/dmp":21,"./convert/xml":22,"./diff/base":23,"./diff/character":24,"./diff/css":25,"./diff/json":26,"./diff/line":27,"./diff/sentence":28,"./diff/word":29,"./patch/apply":31,"./patch/create":32,"./patch/parse":33}],31:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5918,7 +6263,7 @@ function applyPatches(uniDiff, options) {
 }
 
 
-},{"../util/distance-iterator":31,"./parse":30}],29:[function(require,module,exports){
+},{"../util/distance-iterator":34,"./parse":33}],32:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6073,7 +6418,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 }
 
 
-},{"../diff/line":24}],30:[function(require,module,exports){
+},{"../diff/line":27}],33:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6209,7 +6554,7 @@ function parsePatch(uniDiff) {
 }
 
 
-},{}],31:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -6258,7 +6603,7 @@ exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
 };
 
 
-},{}],32:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6278,7 +6623,436 @@ function generateOptions(options, defaults) {
 }
 
 
-},{}],33:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
+/*
+	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
+
+	Copyright (c) 2015 - 2016 Cédric Ronvel 
+	
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+
+
+/* global NamedNodeMap */
+
+// Load modules
+//var string = require( 'string-kit' ) ;
+
+
+
+var dom = {} ;
+module.exports = dom ;
+
+
+
+// Load the svg submodule
+dom.svg = require( './svg.js' ) ;
+
+
+
+// Like jQuery's $(document).ready()
+dom.ready = function ready( callback )
+{
+	document.addEventListener( 'DOMContentLoaded' , function internalCallback() {
+		document.removeEventListener( 'DOMContentLoaded' , internalCallback , false ) ;
+		callback() ;
+	} , false ) ;
+} ;
+
+
+
+// Return a fragment from html code
+dom.fromHtml = function fromHtml( html )
+{
+	var i , doc , fragment ;
+	
+	// Fragment allow us to return a collection that... well... is not a collection,
+	// and that's fine because the html code may contains multiple top-level element
+	fragment = document.createDocumentFragment() ;
+	
+	doc = document.createElement( 'div' ) ;	// whatever type...
+	
+	// either .innerHTML or .insertAdjacentHTML()
+	//doc.innerHTML = html ;
+	doc.insertAdjacentHTML( 'beforeend' , html ) ;
+	
+	for ( i = 0 ; i < doc.children.length ; i ++ )
+	{
+		fragment.appendChild( doc.children[ i ] ) ;
+	}
+	
+	return fragment ;
+} ;
+
+
+
+// Batch processing, like array, HTMLCollection, and so on...
+dom.batch = function batch( method , elements )
+{
+	var i , args = Array.prototype.slice.call( arguments , 1 ) ;
+	
+	if ( elements instanceof Element )
+	{
+		args[ 0 ] = elements ;
+		method.apply( this , args ) ;
+	}
+	else if ( Array.isArray( elements ) )
+	{
+		for ( i = 0 ; i < elements.length ; i ++ )
+		{
+			args[ 0 ] = elements[ i ] ;
+			method.apply( this , args ) ;
+		}
+	}
+	else if ( elements instanceof NodeList || elements instanceof NamedNodeMap )
+	{
+		for ( i = 0 ; i < elements.length ; i ++ )
+		{
+			args[ 0 ] = elements[ i ] ;
+			method.apply( this , args ) ;
+		}
+	}
+} ;
+
+
+
+// Set a bunch of css properties given as an object
+dom.css = function css( element , object )	// , deb )
+{
+	var key ;
+	
+	//if ( deb ) { console.log( 'css: ' + string.inspect( object ) ) ; }
+	
+	for ( key in object )
+	{
+		element.style[ key ] = object[ key ] ;
+	}
+} ;
+
+
+
+// Set a bunch of attributes given as an object
+dom.attr = function attr( element , object )	// , deb )
+{
+	var key ;
+	
+	//if ( deb ) { console.log( 'css: ' + string.inspect( object ) ) ; }
+	
+	for ( key in object )
+	{
+		//element.attributes[ key ] = object[ key ] ;
+		if ( object[ key ] === null ) { element.removeAttribute( key ) ; }
+		else { element.setAttribute( key , object[ key ] ) ; }
+	}
+} ;
+
+
+
+// Remove an element. A little shortcut that ease life...
+dom.remove = function remove( element ) { element.parentNode.removeChild( element ) ; } ;
+
+
+
+// Remove all children of an element
+dom.empty = function empty( element )
+{
+	// element.innerHTML = '' ;	// According to jsPerf, it is 96% slower
+	while ( element.firstChild ) { element.removeChild( element.firstChild ); }
+} ;
+
+
+
+// Clone a source DOM tree and replace children of the destination
+dom.cloneInto = function cloneInto( destination , source )
+{
+	dom.empty( destination ) ;
+	destination.appendChild( source.cloneNode( true ) ) ;
+} ;
+
+
+
+// Same than cloneInto() without cloning anything
+dom.insertInto = function insertInto( destination , source )
+{
+	dom.empty( destination ) ;
+	destination.appendChild( source ) ;
+} ;
+
+
+
+// Children of this element get all their ID namespaced, any url(#id) references are patched accordingly
+dom.idNamespace = function idNamespace( element , namespace )
+{
+	var elements , replacement = {} ;
+	
+	elements = element.querySelectorAll( '*' ) ;
+	
+	dom.batch( dom.idNamespace.idAttributePass , elements , namespace , replacement ) ;
+	dom.batch( dom.idNamespace.otherAttributesPass , elements , replacement ) ;
+} ;
+
+// Callbacks for dom.idNamespace(), cleanly hidden behind its namespace
+
+dom.idNamespace.idAttributePass = function idAttributePass( element , namespace , replacement ) {
+	replacement[ element.id ] = namespace + '.' + element.id ;
+	element.id = replacement[ element.id ] ;
+} ;
+
+dom.idNamespace.otherAttributesPass = function otherAttributesPass( element , replacement ) {
+	dom.batch( dom.idNamespace.oneAttributeSubPass , element.attributes , replacement ) ;
+} ;
+
+dom.idNamespace.oneAttributeSubPass = function oneAttributeSubPass( attr , replacement ) {
+	
+	// We have to search all url(#id) like substring in the current attribute's value
+	attr.value = attr.value.replace( /url\(#([^)]+)\)/g , function( match , id ) {
+		
+		// No replacement? return the matched string
+		if ( ! replacement[ id ] ) { return match ; }
+		
+		// Or return the replacement ID
+		return 'url(#' + replacement[ id ] + ')' ;
+	} ) ;
+} ;
+
+
+
+		/* Function useful for .batch() as callback */
+		/* ... to avoid defining again and again the same callback function */
+
+// Change id
+dom.id = function id( element , id ) { element.id = id ; } ;
+
+// Like jQuery .text().
+dom.text = function text( element , text ) { element.textContent = text ; } ;
+
+// Like jQuery .html().
+dom.html = function html( element , html ) { element.innerHTML = html ; } ;
+
+
+
+
+
+},{"./svg.js":37}],37:[function(require,module,exports){
+/*
+	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
+
+	Copyright (c) 2015 - 2016 Cédric Ronvel 
+	
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+
+
+// Load modules
+var fs = require( 'fs' ) ;
+//var string = require( 'string-kit' ) ;
+var dom = require( './dom.js' ) ;
+
+
+
+var domSvg = {} ;
+module.exports = domSvg ;
+
+
+
+/*
+	load( container , url , [options] , callback )
+	
+	* container: the DOM element where the <svg> tag will be put
+	* url: the URL of the .svg file
+	* options: an optional object with optional options
+		* id: the id attribute of the <svg> tag (recommanded)
+		* class: the class attribute of the <svg> tag
+		* hidden: inject the svg but make it hidden (useful to apply modification before the show)
+	* callback: completion callback
+*/
+domSvg.load = function load( container , url , options , callback )
+{
+	if ( typeof options === 'function' ) { callback = options ; }
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	if ( url.substring( 0 , 7 ) === 'file://' )
+	{
+		// Use Node.js 'fs' module
+		
+		fs.readFile( url.slice( 7 ) , function( error , content ) {
+			
+			if ( error ) { callback( error ) ; return ; }
+			
+			var parser = new DOMParser() ;
+			var svg = parser.parseFromString( content.toString() , 'application/xml' ).documentElement ;
+			
+			try {
+				domSvg.attachXmlTo( container , svg , options ) ;
+			}
+			catch ( error ) {
+				callback( error ) ;
+				return ;
+			}
+			
+			callback( undefined , svg ) ;
+		} ) ;
+	}
+	else
+	{
+		// Use an AJAX HTTP Request
+		
+		domSvg.ajax( url , function( error , xmlDoc ) {
+			
+			var svg = xmlDoc.documentElement ;
+			
+			if ( error ) { callback( error ) ; return ; }
+			
+			try {
+				domSvg.attachXmlTo( container , svg , options ) ;
+			}
+			catch ( error ) {
+				callback( error ) ;
+				return ;
+			}
+			
+			callback( undefined , svg ) ;
+		} ) ;
+	}
+} ;
+
+
+
+// Dummy ATM...
+domSvg.attachXmlTo = function attachXmlTo( container , svg , options )
+{
+	domSvg.lightCleanup( svg ) ;
+	
+	// Fix id, if necessary
+	if ( options.id !== undefined )
+	{
+		if ( typeof options.id === 'string' ) { svg.setAttribute( 'id' , options.id ) ; }
+		else if ( ! options.id ) { svg.removeAttribute( 'id' ) ; }
+	}
+	
+	//if ( typeof options.class === 'string' ) { svg.classList.add( options.class ) ; }	// like jQuery .addClass()
+	if ( typeof options.class === 'string' ) { svg.setAttribute( 'class' , options.class ) ; }
+	
+	if ( options.idNamespace ) { dom.idNamespace( svg , options.idNamespace ) ; }
+	
+	if ( options.hidden ) { svg.style.visibility = 'hidden' ; }
+	
+	container.appendChild( svg ) ;
+} ;
+
+
+
+domSvg.lightCleanup = function lightCleanup( svgElement )
+{
+	removeAllTag( svgElement , 'metadata' ) ;
+	removeAllTag( svgElement , 'script' ) ;
+} ;
+
+
+
+// Should remove all tags and attributes that have non-registered namespace,
+// e.g.: sodipodi, inkscape, etc...
+//domSvg.heavyCleanup = function heavyCleanup( svgElement ) {} ;
+
+
+
+function removeAllTag( container , tag )
+{
+	var i , elements , element ;
+	
+	elements = container.getElementsByTagName( tag ) ;
+	
+	for ( i = 0 ; i < elements.length ; i ++ )
+	{
+		element = elements.item( i ) ;
+		element.parentNode.removeChild( element ) ;
+	}
+}
+
+
+
+
+
+
+domSvg.ajax = function ajax( url , callback )
+{
+	var xhr = new XMLHttpRequest() ;
+	
+	xhr.responseType = 'document' ;
+	xhr.onreadystatechange = domSvg.ajax.ajaxStatus.bind( xhr , callback ) ;
+	xhr.open( 'GET', url ) ;
+	xhr.send() ;
+} ;
+
+domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
+{
+	// From MDN: In the event of a communication error (such as the webserver going down),
+	// an exception will be thrown in the when attempting to access the 'status' property. 
+	
+	try {
+		if ( this.readyState === 4 )
+		{
+			if ( this.status === 200 )
+			{
+				callback( undefined , this.responseXML ) ;
+			}
+			else if ( this.status === 0 && this.responseXML )	// Yay, loading with file:// does not provide any status...
+			{
+				callback( undefined , this.responseXML ) ;
+			}
+			else
+			{
+				if ( this.status ) { callback( this.status ) ; }
+				else { callback( new Error( "[dom-kit.svg] ajaxStatus(): Error with falsy status" ) ) ; }
+			}
+		}
+	}
+	catch ( error ) {
+		callback( error ) ;
+	}
+} ;
+
+
+
+},{"./dom.js":36,"fs":11}],38:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK NextGen Events
 	
@@ -7003,7 +7777,7 @@ NextGenEvents.processQueue = function processQueue( contextName , isCompletionCa
 
 
 
-},{}],34:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -7063,7 +7837,7 @@ module.exports = {
 
 
 
-},{}],35:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -7162,7 +7936,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],36:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -7724,7 +8498,7 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")},require('_process'))
-},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":10,"./ansi.js":34,"./escape.js":35,"_process":11,"tree-kit/lib/extend.js":37}],37:[function(require,module,exports){
+},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":13,"./ansi.js":39,"./escape.js":40,"_process":14,"tree-kit/lib/extend.js":42}],42:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK object tree toolbox
 
@@ -8056,5 +8830,5 @@ module.exports = extend.bind( undefined , null ) ;
 
 
 
-},{}]},{},[1])(1)
+},{}]},{},[3])(3)
 });
