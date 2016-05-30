@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "0.3.25",
+  "version": "0.3.26",
   "engines": {
     "node": ">=4.0.0"
   },
@@ -13,15 +13,15 @@
     "test": "test"
   },
   "dependencies": {
-    "async-kit": "^1.0.0",
+    "async-kit": "^2.0.1",
     "browserify": "^13.0.1",
     "diff": "^2.2.2",
     "dom-kit": "^0.1.0",
     "glob": "^7.0.3",
     "minimist": "^1.2.0",
-    "nextgen-events": "^0.5.12",
+    "nextgen-events": "^0.5.13",
     "string-kit": "^0.5.4",
-    "terminal-kit": "^0.24.5",
+    "terminal-kit": "^0.24.6",
     "tree-kit": "^0.5.20"
   },
   "optionalDependencies": {
