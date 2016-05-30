@@ -417,7 +417,7 @@ dom.ready( function() {
 
 
 
-},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./diff.js":4,"./htmlColorDiff.js":5,"./tea-time.js":6,"dom-kit":36,"string-kit/lib/inspect.js":41,"url":19}],4:[function(require,module,exports){
+},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./diff.js":4,"./htmlColorDiff.js":5,"./tea-time.js":6,"dom-kit":35,"string-kit/lib/inspect.js":40,"url":18}],4:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -509,7 +509,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":30,"string-kit/lib/inspect.js":41}],5:[function(require,module,exports){
+},{"diff":29,"string-kit/lib/inspect.js":40}],5:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -1348,22 +1348,24 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":7,"nextgen-events":38}],7:[function(require,module,exports){
+},{"async-kit":7,"nextgen-events":37}],7:[function(require,module,exports){
 /*
-	Copyright (c) 2016 Cédric Ronvel 
+	Async Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
 	
 	The MIT License (MIT)
-
+	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-
+	
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-
+	
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -1387,11 +1389,11 @@ async.exit = require( './exit.js' ) ;
 
 },{"./core.js":8,"./exit.js":9,"./wrapper.js":10}],8:[function(require,module,exports){
 /*
-	The Cedric's Swiss Knife (CSK) - CSK Async lib
+	Async Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
 	
 	The MIT License (MIT)
-	
-	Copyright (c) 2009 - 2016 Cédric Ronvel 
 	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
@@ -1400,16 +1402,16 @@ async.exit = require( './exit.js' ) ;
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
 	
-	The above copyright notice and this permission notice shall be included in
-	all copies or substantial portions of the Software.
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
 	
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-	THE SOFTWARE.
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
 */
 
 
@@ -1450,7 +1452,7 @@ async.exit = require( './exit.js' ) ;
 
 
 // Load modules dependencies
-var events = require( 'events' ) ;
+var NextGenEvents = require( 'nextgen-events' ) ;
 var treeExtend = require( 'tree-kit/lib/extend.js' ) ;
 
 
@@ -1459,101 +1461,6 @@ var async = {} ;
 module.exports = async ;
 
 
-
-			/////////////////////////
-			// Async Event Emitter //
-			/////////////////////////
-
-
-
-// Extend EventEmitter, to allow asyncEmit
-async.EventEmitter = function EventEmitter( asyncNice )
-{
-	this.asyncNice = parseInt( asyncNice ) ;
-	this.recursion = 0 ;
-} ;
-
-async.EventEmitter.prototype = Object.create( events.EventEmitter.prototype ) ;
-async.EventEmitter.prototype.syncEmit = async.EventEmitter.prototype.emit ;
-async.EventEmitter.prototype.constructor = async.EventEmitter ;
-
-
-
-// Send an event, the async way
-async.EventEmitter.prototype.asyncEmit = function asyncEmit()
-{
-	var self = this , nice , args ;
-	
-	if ( typeof arguments[ 0 ] === 'number' )
-	{
-		nice = arguments[ 0 ] ;
-		args = Array.prototype.slice.call( arguments , 1 ) ;
-	}
-	else
-	{
-		nice = this.asyncNice ;
-		args = arguments ;
-	}
-	
-	if ( nice === undefined ) { nice = -1 ; }
-	
-	this.recursion = 1 + ( this.recursion || 0 ) ;
-	
-	try {
-		if ( nice < 0 )
-		{
-			if ( this.recursion > ( - 1 - nice ) * 10 )
-			{
-				setImmediate( function() { self.syncEmit.apply( self , args ) ; } ) ;
-			}
-			else
-			{
-				self.syncEmit.apply( self , args ) ;
-			}
-		}
-		else
-		{
-			setTimeout( function() { self.syncEmit.apply( self , args ) ; } , self.asyncNice * 10 ) ;
-		}
-	}
-	catch ( error ) {
-		// Catch error, just to decrement this.recursion, re-throw after that...
-		this.recursion -- ;
-		throw error ;
-	}
-	
-	this.recursion -- ;
-	
-	return this ;
-} ;
-
-
-
-// Set the nice value for this emitter
-async.EventEmitter.prototype.nice = function nice( asyncNice )
-{
-	this.asyncNice = Math.floor( +asyncNice || 0 ) ;
-	return this ;
-} ;
-
-
-
-// Set the default .emit() method:
-// - if true or undefined: .asyncEmit()
-// - if false: .syncEmit()
-async.EventEmitter.prototype.defaultEmitIsAsync = function defaultEmitIsAsync( isAsync )
-{
-	if ( isAsync === undefined || isAsync )
-	{
-		async.EventEmitter.prototype.emit = async.EventEmitter.prototype.asyncEmit ;
-	}
-	else
-	{
-		async.EventEmitter.prototype.emit = async.EventEmitter.prototype.syncEmit ;
-	}
-	
-	return this ;
-} ;
 
 
 
@@ -1567,7 +1474,7 @@ async.EventEmitter.prototype.defaultEmitIsAsync = function defaultEmitIsAsync( i
 async.AsyncError = function AsyncError( message )
 {
 	Error.call( this ) ;
-	Error.captureStackTrace( this , this.constructor ) ;
+	Error.captureStackTrace && Error.captureStackTrace( this , this.constructor ) ;	// jshint ignore:line
 	this.message = message ;
 } ;
 
@@ -1588,7 +1495,7 @@ async.Plan = function Plan()
 	throw new Error( "[async] Cannot create an async Plan object directly" ) ;
 } ;
 
-//async.Plan.prototype = Object.create( async.EventEmitter.prototype ) ;
+//async.Plan.prototype = Object.create( NextGenEvents.prototype ) ;
 async.Plan.prototype.constructor = async.Plan ;
 
 
@@ -2531,7 +2438,7 @@ async.Plan.prototype.execJob = function execJob( execContext , job , indexOfKey 
 	execContext.jobsStatus[ key ].tried ++ ;
 	
 	// Set up the nice value? For instance only syncEmit() are used
-	//jobContext.nice( this.asyncEventNice ) ;
+	//jobContext.setNice( this.asyncEventNice ) ;
 	
 	
 	if ( typeof this.jobsUsing === 'function' )
@@ -2642,7 +2549,7 @@ async.Plan.prototype.execJob = function execJob( execContext , job , indexOfKey 
 		execContext.jobsTimeoutTimers[ key ] = setTimeout( function() {
 			execContext.jobsTimeoutTimers[ key ] = undefined ;
 			execContext.jobsStatus[ key ].status = 'timeout' ;
-			jobContext.syncEmit( 'timeout' ) ;
+			jobContext.emit( 'timeout' ) ;
 			self.execCallback.call( self , jobContext , new async.AsyncError( 'jobTimeout' ) ) ;
 		} , this.jobsTimeout ) ;
 	}
@@ -2681,7 +2588,7 @@ async.JobContext = function JobContext()
 } ;
 
 // Extends it from EventEmitter
-async.JobContext.prototype = Object.create( async.EventEmitter.prototype ) ;
+async.JobContext.prototype = Object.create( NextGenEvents.prototype ) ;
 async.JobContext.prototype.constructor = async.JobContext ;
 
 
@@ -2718,7 +2625,7 @@ async.ExecContext = function ExecContext()
 } ;
 
 // Extends it from EventEmitter
-async.ExecContext.prototype = Object.create( async.EventEmitter.prototype ) ;
+async.ExecContext.prototype = Object.create( NextGenEvents.prototype ) ;
 async.ExecContext.prototype.constructor = async.ExecContext ;
 
 
@@ -2821,7 +2728,7 @@ function execDoInit( config , fromExecContext )
 	}
 	
 	// Set up the nice value
-	execContext.nice( this.asyncEventNice ) ;
+	execContext.setNice( this.asyncEventNice ) ;
 	
 	
 	// Initialize event listeners, only the first time
@@ -2853,7 +2760,7 @@ function execDoInit( config , fromExecContext )
 		if ( this.whileAction && this.whileActionBefore )
 		{
 			execContext.whileIterator = -1 ;
-			execContext.root.asyncEmit( 'while' , execContext.error , execContext.results , this.execLoopCallback.bind( this , execContext ) ) ;
+			execContext.root.emit( 'while' , execContext.error , execContext.results , this.execLoopCallback.bind( this , execContext ) , null ) ;
 			return this ;
 		}
 	}
@@ -2861,8 +2768,8 @@ function execDoInit( config , fromExecContext )
 	// If no jobs are provided, then exit right now
 	if ( execContext.jobsKeys.length <= 0 )
 	{
-		execContext.root.asyncEmit( 'resolved' , execContext.error , execContext.results ) ;
-		execContext.root.asyncEmit( 'progress' , {
+		execContext.root.emit( 'resolved' , execContext.error , execContext.results ) ;
+		execContext.root.emit( 'progress' , {
 				resolved: execContext.resolved ,
 				ok: execContext.ok ,
 				failed: execContext.failed ,
@@ -2872,15 +2779,15 @@ function execDoInit( config , fromExecContext )
 			} ,
 			execContext.error , execContext.results
 		) ;
-		execContext.root.asyncEmit( 'finish' , execContext.error , execContext.results ) ;
+		execContext.root.emit( 'finish' , execContext.error , execContext.results ) ;
 		return execContext.root ;
 	}
 	
 	// Run...
-	execContext.root.asyncEmit( 'next' , execContext ) ;
+	execContext.root.emit( 'next' , execContext ) ;
 	
 	// If uncommented, «if» will emit a «progress» event too, which we don't want
-	//execContext.root.asyncEmit( 'progress' , { resolved: execContext.resolved , pending: execContext.pending , waiting: execContext.waiting , loop: execContext.whileIterator } , execContext.results ) ;
+	//execContext.root.emit( 'progress' , { resolved: execContext.resolved , pending: execContext.pending , waiting: execContext.waiting , loop: execContext.whileIterator } , execContext.results ) ;
 	
 	return execContext.root ;
 }
@@ -3118,10 +3025,10 @@ function execDoCallback( jobContext , error )
 	}
 	
 	// Emit events, the order matter
-	if ( emitResolved ) { execContext.root.asyncEmit( 'resolved' , execContext.error , execContext.results ) ; }
-	if ( emitNext ) { execContext.root.asyncEmit( 'next' , execContext ) ; }
-	if ( emitWhile ) { execContext.root.asyncEmit( 'while' , execContext.error , execContext.results , this.execLoopCallback.bind( this , execContext ) ) ; }
-	execContext.root.asyncEmit( 'progress' , {
+	if ( emitResolved ) { execContext.root.emit( 'resolved' , execContext.error , execContext.results ) ; }
+	if ( emitNext ) { execContext.root.emit( 'next' , execContext ) ; }
+	if ( emitWhile ) { execContext.root.emit( 'while' , execContext.error , execContext.results , this.execLoopCallback.bind( this , execContext ) , null ) ; }
+	execContext.root.emit( 'progress' , {
 			resolved: execContext.resolved ,
 			ok: execContext.ok ,
 			failed: execContext.failed ,
@@ -3131,7 +3038,7 @@ function execDoCallback( jobContext , error )
 		} ,
 		execContext.error , execContext.results
 	) ;
-	if ( emitFinish ) { execContext.root.asyncEmit( 'finish' , execContext.error , execContext.results ) ; }
+	if ( emitFinish ) { execContext.root.emit( 'finish' , execContext.error , execContext.results ) ; }
 }
 
 
@@ -3167,9 +3074,9 @@ function execWhileCallback( execContext )
 	}
 	
 	// Emit events, the order is important
-	if ( emitResolved ) { execContext.root.asyncEmit( 'resolved' , execContext.error , execContext.results ) ; }
-	if ( emitNextLoop ) { execContext.root.asyncEmit( 'nextLoop' , execContext ) ; }
-	if ( emitFinish ) { execContext.root.asyncEmit( 'finish' , execContext.error , execContext.results ) ; }
+	if ( emitResolved ) { execContext.root.emit( 'resolved' , execContext.error , execContext.results ) ; }
+	if ( emitNextLoop ) { execContext.root.emit( 'nextLoop' , execContext ) ; }
+	if ( emitFinish ) { execContext.root.emit( 'finish' , execContext.error , execContext.results ) ; }
 	
 	execContext.whileChecked = true ;
 }
@@ -3358,10 +3265,10 @@ function execLogicCallback( jobContext )
 	}
 	
 	// Emit events, the order matter
-	if ( emitResolved ) { execContext.root.asyncEmit( 'resolved' , execContext.result ) ; }
-	if ( emitNext ) { execContext.root.asyncEmit( 'next' , execContext ) ; }
-	execContext.root.asyncEmit( 'progress' , { resolved: execContext.resolved , pending: execContext.pending , waiting: execContext.waiting , loop: execContext.whileIterator } , execContext.result ) ;
-	if ( emitFinish ) { execContext.root.asyncEmit( 'finish' , execContext.result ) ; }
+	if ( emitResolved ) { execContext.root.emit( 'resolved' , execContext.result ) ; }
+	if ( emitNext ) { execContext.root.emit( 'next' , execContext ) ; }
+	execContext.root.emit( 'progress' , { resolved: execContext.resolved , pending: execContext.pending , waiting: execContext.waiting , loop: execContext.whileIterator } , execContext.result ) ;
+	if ( emitFinish ) { execContext.root.emit( 'finish' , execContext.result ) ; }
 }
 
 
@@ -3396,14 +3303,14 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"events":12,"tree-kit/lib/extend.js":42}],9:[function(require,module,exports){
+},{"nextgen-events":37,"tree-kit/lib/extend.js":41}],9:[function(require,module,exports){
 (function (process){
 /*
-	The Cedric's Swiss Knife (CSK) - CSK Async lib
+	Async Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
 	
 	The MIT License (MIT)
-	
-	Copyright (c) 2009 - 2016 Cédric Ronvel 
 	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
@@ -3412,16 +3319,16 @@ function execLogicFinal( execContext , result )
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
 	
-	The above copyright notice and this permission notice shall be included in
-	all copies or substantial portions of the Software.
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
 	
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-	THE SOFTWARE.
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
 */
 
 "use strict" ;
@@ -3486,13 +3393,13 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":7,"_process":14}],10:[function(require,module,exports){
+},{"./async.js":7,"_process":13}],10:[function(require,module,exports){
 /*
-	The Cedric's Swiss Knife (CSK) - CSK Async lib
+	Async Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
 	
 	The MIT License (MIT)
-	
-	Copyright (c) 2009 - 2016 Cédric Ronvel 
 	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
@@ -3501,16 +3408,16 @@ module.exports = exit ;
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
 	
-	The above copyright notice and this permission notice shall be included in
-	all copies or substantial portions of the Software.
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
 	
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-	THE SOFTWARE.
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
 */
 
 "use strict" ;
@@ -3556,306 +3463,6 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 },{}],11:[function(require,module,exports){
 
 },{}],12:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-function EventEmitter() {
-  this._events = this._events || {};
-  this._maxListeners = this._maxListeners || undefined;
-}
-module.exports = EventEmitter;
-
-// Backwards-compat with node 0.10.x
-EventEmitter.EventEmitter = EventEmitter;
-
-EventEmitter.prototype._events = undefined;
-EventEmitter.prototype._maxListeners = undefined;
-
-// By default EventEmitters will print a warning if more than 10 listeners are
-// added to it. This is a useful default which helps finding memory leaks.
-EventEmitter.defaultMaxListeners = 10;
-
-// Obviously not all Emitters should be limited to 10. This function allows
-// that to be increased. Set to zero for unlimited.
-EventEmitter.prototype.setMaxListeners = function(n) {
-  if (!isNumber(n) || n < 0 || isNaN(n))
-    throw TypeError('n must be a positive number');
-  this._maxListeners = n;
-  return this;
-};
-
-EventEmitter.prototype.emit = function(type) {
-  var er, handler, len, args, i, listeners;
-
-  if (!this._events)
-    this._events = {};
-
-  // If there is no 'error' event listener then throw.
-  if (type === 'error') {
-    if (!this._events.error ||
-        (isObject(this._events.error) && !this._events.error.length)) {
-      er = arguments[1];
-      if (er instanceof Error) {
-        throw er; // Unhandled 'error' event
-      }
-      throw TypeError('Uncaught, unspecified "error" event.');
-    }
-  }
-
-  handler = this._events[type];
-
-  if (isUndefined(handler))
-    return false;
-
-  if (isFunction(handler)) {
-    switch (arguments.length) {
-      // fast cases
-      case 1:
-        handler.call(this);
-        break;
-      case 2:
-        handler.call(this, arguments[1]);
-        break;
-      case 3:
-        handler.call(this, arguments[1], arguments[2]);
-        break;
-      // slower
-      default:
-        args = Array.prototype.slice.call(arguments, 1);
-        handler.apply(this, args);
-    }
-  } else if (isObject(handler)) {
-    args = Array.prototype.slice.call(arguments, 1);
-    listeners = handler.slice();
-    len = listeners.length;
-    for (i = 0; i < len; i++)
-      listeners[i].apply(this, args);
-  }
-
-  return true;
-};
-
-EventEmitter.prototype.addListener = function(type, listener) {
-  var m;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events)
-    this._events = {};
-
-  // To avoid recursion in the case that type === "newListener"! Before
-  // adding it to the listeners, first emit "newListener".
-  if (this._events.newListener)
-    this.emit('newListener', type,
-              isFunction(listener.listener) ?
-              listener.listener : listener);
-
-  if (!this._events[type])
-    // Optimize the case of one listener. Don't need the extra array object.
-    this._events[type] = listener;
-  else if (isObject(this._events[type]))
-    // If we've already got an array, just append.
-    this._events[type].push(listener);
-  else
-    // Adding the second element, need to change to array.
-    this._events[type] = [this._events[type], listener];
-
-  // Check for listener leak
-  if (isObject(this._events[type]) && !this._events[type].warned) {
-    if (!isUndefined(this._maxListeners)) {
-      m = this._maxListeners;
-    } else {
-      m = EventEmitter.defaultMaxListeners;
-    }
-
-    if (m && m > 0 && this._events[type].length > m) {
-      this._events[type].warned = true;
-      console.error('(node) warning: possible EventEmitter memory ' +
-                    'leak detected. %d listeners added. ' +
-                    'Use emitter.setMaxListeners() to increase limit.',
-                    this._events[type].length);
-      if (typeof console.trace === 'function') {
-        // not supported in IE 10
-        console.trace();
-      }
-    }
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.once = function(type, listener) {
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  var fired = false;
-
-  function g() {
-    this.removeListener(type, g);
-
-    if (!fired) {
-      fired = true;
-      listener.apply(this, arguments);
-    }
-  }
-
-  g.listener = listener;
-  this.on(type, g);
-
-  return this;
-};
-
-// emits a 'removeListener' event iff the listener was removed
-EventEmitter.prototype.removeListener = function(type, listener) {
-  var list, position, length, i;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events || !this._events[type])
-    return this;
-
-  list = this._events[type];
-  length = list.length;
-  position = -1;
-
-  if (list === listener ||
-      (isFunction(list.listener) && list.listener === listener)) {
-    delete this._events[type];
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-
-  } else if (isObject(list)) {
-    for (i = length; i-- > 0;) {
-      if (list[i] === listener ||
-          (list[i].listener && list[i].listener === listener)) {
-        position = i;
-        break;
-      }
-    }
-
-    if (position < 0)
-      return this;
-
-    if (list.length === 1) {
-      list.length = 0;
-      delete this._events[type];
-    } else {
-      list.splice(position, 1);
-    }
-
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.removeAllListeners = function(type) {
-  var key, listeners;
-
-  if (!this._events)
-    return this;
-
-  // not listening for removeListener, no need to emit
-  if (!this._events.removeListener) {
-    if (arguments.length === 0)
-      this._events = {};
-    else if (this._events[type])
-      delete this._events[type];
-    return this;
-  }
-
-  // emit removeListener for all listeners on all events
-  if (arguments.length === 0) {
-    for (key in this._events) {
-      if (key === 'removeListener') continue;
-      this.removeAllListeners(key);
-    }
-    this.removeAllListeners('removeListener');
-    this._events = {};
-    return this;
-  }
-
-  listeners = this._events[type];
-
-  if (isFunction(listeners)) {
-    this.removeListener(type, listeners);
-  } else if (listeners) {
-    // LIFO order
-    while (listeners.length)
-      this.removeListener(type, listeners[listeners.length - 1]);
-  }
-  delete this._events[type];
-
-  return this;
-};
-
-EventEmitter.prototype.listeners = function(type) {
-  var ret;
-  if (!this._events || !this._events[type])
-    ret = [];
-  else if (isFunction(this._events[type]))
-    ret = [this._events[type]];
-  else
-    ret = this._events[type].slice();
-  return ret;
-};
-
-EventEmitter.prototype.listenerCount = function(type) {
-  if (this._events) {
-    var evlistener = this._events[type];
-
-    if (isFunction(evlistener))
-      return 1;
-    else if (evlistener)
-      return evlistener.length;
-  }
-  return 0;
-};
-
-EventEmitter.listenerCount = function(emitter, type) {
-  return emitter.listenerCount(type);
-};
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-
-},{}],13:[function(require,module,exports){
 /**
  * Determine if an object is Buffer
  *
@@ -3874,7 +3481,7 @@ module.exports = function (obj) {
     ))
 }
 
-},{}],14:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -3970,7 +3577,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],15:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -4507,7 +4114,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],16:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4593,7 +4200,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],17:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4680,13 +4287,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],18:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":16,"./encode":17}],19:[function(require,module,exports){
+},{"./decode":15,"./encode":16}],18:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5420,7 +5027,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":20,"punycode":15,"querystring":18}],20:[function(require,module,exports){
+},{"./util":19,"punycode":14,"querystring":17}],19:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -5438,7 +5045,7 @@ module.exports = {
   }
 };
 
-},{}],21:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -5464,7 +5071,7 @@ function convertChangesToDMP(changes) {
 }
 
 
-},{}],22:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5501,7 +5108,7 @@ function escapeHTML(s) {
 }
 
 
-},{}],23:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5730,7 +5337,7 @@ function clonePath(path) {
 }
 
 
-},{}],24:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5750,7 +5357,7 @@ function diffChars(oldStr, newStr, callback) {
 }
 
 
-},{"./base":23}],25:[function(require,module,exports){
+},{"./base":22}],24:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5774,7 +5381,7 @@ function diffCss(oldStr, newStr, callback) {
 }
 
 
-},{"./base":23}],26:[function(require,module,exports){
+},{"./base":22}],25:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5876,7 +5483,7 @@ function canonicalize(obj, stack, replacementStack) {
 }
 
 
-},{"./base":23,"./line":27}],27:[function(require,module,exports){
+},{"./base":22,"./line":26}],26:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5931,7 +5538,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":35,"./base":23}],28:[function(require,module,exports){
+},{"../util/params":34,"./base":22}],27:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5955,7 +5562,7 @@ function diffSentences(oldStr, newStr, callback) {
 }
 
 
-},{"./base":23}],29:[function(require,module,exports){
+},{"./base":22}],28:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6027,7 +5634,7 @@ function diffWordsWithSpace(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":35,"./base":23}],30:[function(require,module,exports){
+},{"../util/params":34,"./base":22}],29:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6100,7 +5707,7 @@ exports. /*istanbul ignore end*/Diff = _base2.default;
 /*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
 
 
-},{"./convert/dmp":21,"./convert/xml":22,"./diff/base":23,"./diff/character":24,"./diff/css":25,"./diff/json":26,"./diff/line":27,"./diff/sentence":28,"./diff/word":29,"./patch/apply":31,"./patch/create":32,"./patch/parse":33}],31:[function(require,module,exports){
+},{"./convert/dmp":20,"./convert/xml":21,"./diff/base":22,"./diff/character":23,"./diff/css":24,"./diff/json":25,"./diff/line":26,"./diff/sentence":27,"./diff/word":28,"./patch/apply":30,"./patch/create":31,"./patch/parse":32}],30:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6263,7 +5870,7 @@ function applyPatches(uniDiff, options) {
 }
 
 
-},{"../util/distance-iterator":34,"./parse":33}],32:[function(require,module,exports){
+},{"../util/distance-iterator":33,"./parse":32}],31:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6418,7 +6025,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 }
 
 
-},{"../diff/line":27}],33:[function(require,module,exports){
+},{"../diff/line":26}],32:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6554,7 +6161,7 @@ function parsePatch(uniDiff) {
 }
 
 
-},{}],34:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -6603,7 +6210,7 @@ exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
 };
 
 
-},{}],35:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6623,7 +6230,7 @@ function generateOptions(options, defaults) {
 }
 
 
-},{}],36:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -6852,7 +6459,7 @@ dom.html = function html( element , html ) { element.innerHTML = html ; } ;
 
 
 
-},{"./svg.js":37}],37:[function(require,module,exports){
+},{"./svg.js":36}],36:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -7052,7 +6659,7 @@ domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
 
 
 
-},{"./dom.js":36,"fs":11}],38:[function(require,module,exports){
+},{"./dom.js":35,"fs":11}],37:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK NextGen Events
 	
@@ -7078,6 +6685,8 @@ domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
 	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 	SOFTWARE.
 */
+
+"use strict" ;
 
 
 
@@ -7777,7 +7386,7 @@ NextGenEvents.processQueue = function processQueue( contextName , isCompletionCa
 
 
 
-},{}],39:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -7837,7 +7446,7 @@ module.exports = {
 
 
 
-},{}],40:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -7936,7 +7545,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],41:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -8498,7 +8107,7 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")},require('_process'))
-},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":13,"./ansi.js":39,"./escape.js":40,"_process":14,"tree-kit/lib/extend.js":42}],42:[function(require,module,exports){
+},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":12,"./ansi.js":38,"./escape.js":39,"_process":13,"tree-kit/lib/extend.js":41}],41:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK object tree toolbox
 
