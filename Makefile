@@ -51,7 +51,7 @@ UGLIFY=./node_modules/.bin/uglifyjs
 # Files rules
 
 # Build the browser lib
-browser/tea-time.js: lib/*.js
+browser/tea-time.js: lib/*.js lib/browser-reporters/*.js
 	${BROWSERIFY} lib/browser.js -s createTeaTime -o browser/tea-time.js
 
 # Build the browser minified lib

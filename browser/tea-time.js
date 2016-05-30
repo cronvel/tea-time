@@ -351,6 +351,116 @@ Reporter.report = function report( ok , fail , skip )
 
 "use strict" ;
 
+/* global document */
+
+
+
+function Reporter( teaTime , self )
+{
+	if ( ! self )
+	{
+		self = Object.create( Reporter.prototype , {
+			teaTime: { value: teaTime , enumerable: true }
+		} ) ;
+	}
+	
+	self.ws = new WebSocket( 'ws://127.0.0.1:7357/test' ) ;
+	
+	self.onopen = function onOpen()
+	{
+		console.log( "Websocket opened!" ) ;
+	}
+	
+	//self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
+	//self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
+	//self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	//self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
+	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
+	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
+	
+	return self ;
+}
+
+module.exports = Reporter ;
+
+
+
+Reporter.enterSuite = function enterSuite( suiteName , depth )
+{
+	this.ws.send( suiteName ) ;
+} ;
+
+
+
+Reporter.ok = function ok( testName , depth , time , slow )
+{
+	this.ws.send( "ok " + testName ) ;
+} ;
+
+
+
+Reporter.fail = function fail( testName , depth , time , slow , error )
+{
+	this.ws.send( "fail " + testName ) ;
+} ;
+
+
+
+Reporter.skip = function skip( testName , depth )
+{
+	this.ws.send( "skip " + testName ) ;
+} ;
+
+
+
+Reporter.report = function report( ok , fail , skip )
+{
+	this.ws.send( ok + '/' + fail + '/' + skip ) ;
+} ;
+
+
+
+Reporter.errorReport = function errorReport( errors )
+{
+} ;
+
+
+
+Reporter.prototype.reportOneError = function reportOneError( error )
+{
+} ;
+
+
+
+},{}],4:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
 /* global window */
 
 
@@ -395,12 +505,18 @@ function createTeaTime()
 	
 	window.teaTime.reporters = {
 		console: require( './browser-reporters/console.js' ) ,
-		classic: require( './browser-reporters/classic.js' )
+		classic: require( './browser-reporters/classic.js' ) ,
+		websocket: require( './browser-reporters/websocket.js' )
 	} ;
 	
 	options.reporters.forEach( function( reporter ) {
 		window.teaTime.reporters[ reporter ]( window.teaTime ) ;
 	} ) ;
+	
+	if ( options.ws )
+	{
+		window.teaTime.ws = true ;
+	}
 	
 	return window.teaTime ;
 }
@@ -417,7 +533,7 @@ dom.ready( function() {
 
 
 
-},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./diff.js":4,"./htmlColorDiff.js":5,"./tea-time.js":6,"dom-kit":35,"string-kit/lib/inspect.js":40,"url":18}],4:[function(require,module,exports){
+},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":36,"string-kit/lib/inspect.js":41,"url":19}],5:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -509,7 +625,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":29,"string-kit/lib/inspect.js":40}],5:[function(require,module,exports){
+},{"diff":30,"string-kit/lib/inspect.js":41}],6:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -576,7 +692,7 @@ module.exports = function htmlColorDiff( oldValue , newValue )
 
 
 
-},{"./diff.js":4}],6:[function(require,module,exports){
+},{"./diff.js":5}],7:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -1348,7 +1464,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":7,"nextgen-events":37}],7:[function(require,module,exports){
+},{"async-kit":8,"nextgen-events":38}],8:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -1387,7 +1503,7 @@ async.exit = require( './exit.js' ) ;
 
 
 
-},{"./core.js":8,"./exit.js":9,"./wrapper.js":10}],8:[function(require,module,exports){
+},{"./core.js":9,"./exit.js":10,"./wrapper.js":11}],9:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3303,7 +3419,7 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"nextgen-events":37,"tree-kit/lib/extend.js":41}],9:[function(require,module,exports){
+},{"nextgen-events":38,"tree-kit/lib/extend.js":42}],10:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -3393,7 +3509,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":7,"_process":13}],10:[function(require,module,exports){
+},{"./async.js":8,"_process":14}],11:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3460,9 +3576,9 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 
 
-},{}],11:[function(require,module,exports){
-
 },{}],12:[function(require,module,exports){
+
+},{}],13:[function(require,module,exports){
 /**
  * Determine if an object is Buffer
  *
@@ -3481,7 +3597,7 @@ module.exports = function (obj) {
     ))
 }
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -3577,7 +3693,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -4114,7 +4230,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4200,7 +4316,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4287,13 +4403,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":15,"./encode":16}],18:[function(require,module,exports){
+},{"./decode":16,"./encode":17}],19:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5027,7 +5143,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":19,"punycode":14,"querystring":17}],19:[function(require,module,exports){
+},{"./util":20,"punycode":15,"querystring":18}],20:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -5045,7 +5161,7 @@ module.exports = {
   }
 };
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -5071,7 +5187,7 @@ function convertChangesToDMP(changes) {
 }
 
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5108,7 +5224,7 @@ function escapeHTML(s) {
 }
 
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5337,7 +5453,7 @@ function clonePath(path) {
 }
 
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5357,7 +5473,7 @@ function diffChars(oldStr, newStr, callback) {
 }
 
 
-},{"./base":22}],24:[function(require,module,exports){
+},{"./base":23}],25:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5381,7 +5497,7 @@ function diffCss(oldStr, newStr, callback) {
 }
 
 
-},{"./base":22}],25:[function(require,module,exports){
+},{"./base":23}],26:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5483,7 +5599,7 @@ function canonicalize(obj, stack, replacementStack) {
 }
 
 
-},{"./base":22,"./line":26}],26:[function(require,module,exports){
+},{"./base":23,"./line":27}],27:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5538,7 +5654,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":34,"./base":22}],27:[function(require,module,exports){
+},{"../util/params":35,"./base":23}],28:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5562,7 +5678,7 @@ function diffSentences(oldStr, newStr, callback) {
 }
 
 
-},{"./base":22}],28:[function(require,module,exports){
+},{"./base":23}],29:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5634,7 +5750,7 @@ function diffWordsWithSpace(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":34,"./base":22}],29:[function(require,module,exports){
+},{"../util/params":35,"./base":23}],30:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5707,7 +5823,7 @@ exports. /*istanbul ignore end*/Diff = _base2.default;
 /*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
 
 
-},{"./convert/dmp":20,"./convert/xml":21,"./diff/base":22,"./diff/character":23,"./diff/css":24,"./diff/json":25,"./diff/line":26,"./diff/sentence":27,"./diff/word":28,"./patch/apply":30,"./patch/create":31,"./patch/parse":32}],30:[function(require,module,exports){
+},{"./convert/dmp":21,"./convert/xml":22,"./diff/base":23,"./diff/character":24,"./diff/css":25,"./diff/json":26,"./diff/line":27,"./diff/sentence":28,"./diff/word":29,"./patch/apply":31,"./patch/create":32,"./patch/parse":33}],31:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5870,7 +5986,7 @@ function applyPatches(uniDiff, options) {
 }
 
 
-},{"../util/distance-iterator":33,"./parse":32}],31:[function(require,module,exports){
+},{"../util/distance-iterator":34,"./parse":33}],32:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6025,7 +6141,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 }
 
 
-},{"../diff/line":26}],32:[function(require,module,exports){
+},{"../diff/line":27}],33:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6161,7 +6277,7 @@ function parsePatch(uniDiff) {
 }
 
 
-},{}],33:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -6210,7 +6326,7 @@ exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
 };
 
 
-},{}],34:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6230,7 +6346,7 @@ function generateOptions(options, defaults) {
 }
 
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -6459,7 +6575,7 @@ dom.html = function html( element , html ) { element.innerHTML = html ; } ;
 
 
 
-},{"./svg.js":36}],36:[function(require,module,exports){
+},{"./svg.js":37}],37:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -6659,7 +6775,7 @@ domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
 
 
 
-},{"./dom.js":35,"fs":11}],37:[function(require,module,exports){
+},{"./dom.js":36,"fs":12}],38:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK NextGen Events
 	
@@ -7386,7 +7502,7 @@ NextGenEvents.processQueue = function processQueue( contextName , isCompletionCa
 
 
 
-},{}],38:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -7446,7 +7562,7 @@ module.exports = {
 
 
 
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -7545,7 +7661,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],40:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -8107,7 +8223,7 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")},require('_process'))
-},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":12,"./ansi.js":38,"./escape.js":39,"_process":13,"tree-kit/lib/extend.js":41}],41:[function(require,module,exports){
+},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":13,"./ansi.js":39,"./escape.js":40,"_process":14,"tree-kit/lib/extend.js":42}],42:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK object tree toolbox
 
@@ -8439,5 +8555,5 @@ module.exports = extend.bind( undefined , null ) ;
 
 
 
-},{}]},{},[3])(3)
+},{}]},{},[4])(4)
 });

@@ -22,7 +22,8 @@
     "nextgen-events": "^0.5.13",
     "string-kit": "^0.5.4",
     "terminal-kit": "^0.24.7",
-    "tree-kit": "^0.5.20"
+    "tree-kit": "^0.5.20",
+    "ws": "^1.1.0"
   },
   "optionalDependencies": {
     "freedesktop-notifications": "^1.2.2"
