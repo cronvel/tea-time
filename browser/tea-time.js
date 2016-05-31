@@ -366,13 +366,17 @@ function Reporter( teaTime , self )
 	
 	self.teaTime.on( 'ready' , { fn: Reporter.ready.bind( self ) , async: true } ) ;
 	
+	self.teaTime.on( 'run' , Reporter.forward.bind( self , 'run' ) ) ;
 	self.teaTime.on( 'enterSuite' , Reporter.forward.bind( self , 'enterSuite' ) ) ;
+	self.teaTime.on( 'exitSuite' , Reporter.forward.bind( self , 'exitSuite' ) ) ;
+	self.teaTime.on( 'enterTest' , Reporter.forward.bind( self , 'enterTest' ) ) ;
+	self.teaTime.on( 'exitTest' , Reporter.forward.bind( self , 'exitTest' ) ) ;
 	self.teaTime.on( 'ok' , Reporter.forward.bind( self , 'ok' ) ) ;
 	self.teaTime.on( 'fail' , Reporter.forward.bind( self , 'fail' ) ) ;
 	self.teaTime.on( 'skip' , Reporter.forward.bind( self , 'skip' ) ) ;
 	self.teaTime.on( 'report' , Reporter.forward.bind( self , 'report' ) ) ;
-	self.teaTime.on( 'exit' , Reporter.forward.bind( self , 'exit' ) ) ;
-	//self.teaTime.on( 'errorReport' , Reporter.forward.bind( self , '' ) ) ;
+	self.teaTime.on( 'errorReport' , Reporter.forward.bind( self , 'errorReport' ) ) ;
+	self.teaTime.on( 'exit' , Reporter.exit.bind( self , 'exit' ) ) ;
 	
 	
 	//self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
@@ -391,13 +395,21 @@ module.exports = Reporter ;
 
 Reporter.ready = function ready( callback )
 {
+	var self = this ;
+	
 	console.log( "Ready event received!" ) ;
 	this.ws = new WebSocket( 'ws://127.0.0.1:7357/test' ) ;
 	
 	this.ws.onopen = function onOpen()
 	{
+		Reporter.forward.call( self , 'ready' ) ;
 		console.log( "Websocket opened!" ) ;
 		callback() ;
+	}
+	
+	this.ws.onclose = function onClose()
+	{
+		console.log( "Websocket closed!" ) ;
 	}
 } ;
 
@@ -405,60 +417,70 @@ Reporter.ready = function ready( callback )
 
 Reporter.forward = function forward( event )
 {
+	var args = Array.prototype.slice.call( arguments , 1 ) ;
+	
+	Reporter.prepareSerialize( args ) ;
+	
 	this.ws.send(
 		JSON.stringify( {
 			event: event ,
-			args: Array.prototype.slice.call( arguments , 1 )
+			args: args
 		} )
 	) ;
 } ;
 
 
 
-Reporter.enterSuite = function enterSuite( suiteName , depth )
+Reporter.prepareSerialize = function prepareSerialize( object )
 {
-	this.ws.send( suiteName ) ;
+	var i , iMax , keys , prototypeName ;
+	
+	if ( ! object || typeof object !== 'object' ) { return ; }
+	
+	
+	if ( Array.isArray( object ) )
+	{
+		for ( i = 0 , iMax = object.length ; i < iMax ; i ++ )
+		{
+			Reporter.prepareSerialize( object[ i ] ) ;
+		}
+		
+		return ;
+	}
+	
+	prototypeName = object.__proto__ && object.__proto__.constructor.name ;
+	
+	if ( prototypeName && prototypeName !== 'Object' ) { object.__prototype = prototypeName ; }
+	
+	if ( object instanceof Error )
+	{
+		// Make things enumerable, so JSON.stringify() will serialize them like it should
+		Object.defineProperties( object , {
+			__prototype: { value: object.constructor.name , enumerable: true , writable: true } ,
+			name: { value: object.name , enumerable: true , writable: true } ,
+			message: { value: object.message , enumerable: true , writable: true } ,
+			type: { value: object.type || object.constructor.name , enumerable: true , writable: true } ,
+			stack: { value: object.stack , enumerable: true , writable: true }
+		} ) ;
+	}
+	
+	keys = Object.keys( object ) ;
+	
+	for ( i = 0 , iMax = keys.length ; i < iMax ; i ++ )
+	{
+		Reporter.prepareSerialize( object[ keys[ i ] ] ) ;
+	}
 } ;
 
 
 
-Reporter.ok = function ok( testName , depth , time , slow )
+Reporter.exit = function exit( callback )
 {
-	this.ws.send( "ok " + testName ) ;
+	Reporter.forward.call( this , 'exit' ) ;
+	console.log( "Exit event received!" ) ;
+	this.ws.close() ;
 } ;
 
-
-
-Reporter.fail = function fail( testName , depth , time , slow , error )
-{
-	this.ws.send( "fail " + testName ) ;
-} ;
-
-
-
-Reporter.skip = function skip( testName , depth )
-{
-	this.ws.send( "skip " + testName ) ;
-} ;
-
-
-
-Reporter.report = function report( ok , fail , skip )
-{
-	this.ws.send( ok + '/' + fail + '/' + skip ) ;
-} ;
-
-
-
-Reporter.errorReport = function errorReport( errors )
-{
-} ;
-
-
-
-Reporter.prototype.reportOneError = function reportOneError( error )
-{
-} ;
 
 
 
@@ -955,7 +977,7 @@ TeaTime.prototype.run = function run( callback )
 	
 	this.emit( 'ready' , function() {
 	
-		self.emit( 'run' ) ;
+		self.emit( 'run' , self.testCount ) ;
 		
 		var triggerCallback = function() {
 			if ( callbackTriggered ) { return ; }
