@@ -15,7 +15,7 @@ Install it globally: `npm install -g tea-time`.
 
 ## Usage
 
-Usage is: tea-time [<test files>] [<option1>] [<option2>] [...]
+Usage is: tea-time [*test files*] [*option1*] [*option2*] [...]
 
 Available options:
 ```
