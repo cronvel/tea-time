@@ -364,24 +364,54 @@ function Reporter( teaTime , self )
 		} ) ;
 	}
 	
-	self.ws = new WebSocket( 'ws://127.0.0.1:7357/test' ) ;
+	self.teaTime.on( 'ready' , { fn: Reporter.ready.bind( self ) , async: true } ) ;
 	
-	self.onopen = function onOpen()
-	{
-		console.log( "Websocket opened!" ) ;
-	}
+	self.teaTime.on( 'enterSuite' , Reporter.forward.bind( self , 'enterSuite' ) ) ;
+	self.teaTime.on( 'ok' , Reporter.forward.bind( self , 'ok' ) ) ;
+	self.teaTime.on( 'fail' , Reporter.forward.bind( self , 'fail' ) ) ;
+	self.teaTime.on( 'skip' , Reporter.forward.bind( self , 'skip' ) ) ;
+	self.teaTime.on( 'report' , Reporter.forward.bind( self , 'report' ) ) ;
+	self.teaTime.on( 'exit' , Reporter.forward.bind( self , 'exit' ) ) ;
+	//self.teaTime.on( 'errorReport' , Reporter.forward.bind( self , '' ) ) ;
+	
 	
 	//self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
 	//self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
 	//self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
 	//self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
-	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
+	//self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
 	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
 	
 	return self ;
 }
 
 module.exports = Reporter ;
+
+
+
+Reporter.ready = function ready( callback )
+{
+	console.log( "Ready event received!" ) ;
+	this.ws = new WebSocket( 'ws://127.0.0.1:7357/test' ) ;
+	
+	this.ws.onopen = function onOpen()
+	{
+		console.log( "Websocket opened!" ) ;
+		callback() ;
+	}
+} ;
+
+
+
+Reporter.forward = function forward( event )
+{
+	this.ws.send(
+		JSON.stringify( {
+			event: event ,
+			args: Array.prototype.slice.call( arguments , 1 )
+		} )
+	) ;
+} ;
 
 
 
@@ -923,25 +953,28 @@ TeaTime.prototype.run = function run( callback )
 	
 	TeaTime.sortSuite( this.suite ) ;
 	
-	this.emit( 'run' ) ;
+	this.emit( 'ready' , function() {
 	
-	var triggerCallback = function() {
-		if ( callbackTriggered ) { return ; }
-		if ( typeof callback === 'function' ) { callback() ; }
-	} ;
-	
-	this.startTime = Date.now() ;
-	
-	this.runSuite( self.suite , 0 , function() {
+		self.emit( 'run' ) ;
 		
-		self.emit( 'report' , self.ok , self.fail , self.skip , Date.now() - self.startTime ) ;
+		var triggerCallback = function() {
+			if ( callbackTriggered ) { return ; }
+			if ( typeof callback === 'function' ) { callback() ; }
+		} ;
 		
-		if ( self.fail ) { self.emit( 'errorReport' , self.errors ) ; }
+		self.startTime = Date.now() ;
 		
-		self.emit( 'exit' , triggerCallback ) ;
-		
-		// Exit anyway after 10 seconds
-		setTimeout( triggerCallback , 10000 ) ;
+		self.runSuite( self.suite , 0 , function() {
+			
+			self.emit( 'report' , self.ok , self.fail , self.skip , Date.now() - self.startTime ) ;
+			
+			if ( self.fail ) { self.emit( 'errorReport' , self.errors ) ; }
+			
+			self.emit( 'exit' , triggerCallback ) ;
+			
+			// Exit anyway after 10 seconds
+			setTimeout( triggerCallback , 10000 ) ;
+		} ) ;
 	} ) ;
 } ;
 
