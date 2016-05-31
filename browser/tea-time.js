@@ -189,18 +189,19 @@ Reporter.errorReport = function errorReport( errors )
 		switch ( error.type )
 		{
 			case 'test' :
+				if ( error.error.testTimeout ) { content += '<span style="' + hookErrorStyle + '">TEST TIMEOUT</span> ' ; }
 				break ;
 			case 'setup' :
-				content += '<span style="' + hookErrorStyle + '">SETUP HOOK</span>' ;
+				content += '<span style="' + hookErrorStyle + '">SETUP HOOK</span> ' ;
 				break ;
 			case 'teardown' :
-				content += '<span style="' + hookErrorStyle + '">TEARDOWN HOOK</span>' ;
+				content += '<span style="' + hookErrorStyle + '">TEARDOWN HOOK</span> ' ;
 				break ;
 			case 'suiteSetup' :
-				content += '<span style="' + hookErrorStyle + '">SUITE SETUP HOOK</span>' ;
+				content += '<span style="' + hookErrorStyle + '">SUITE SETUP HOOK</span> ' ;
 				break ;
 			case 'suiteTeardown' :
-				content += '<span style="' + hookErrorStyle + '">SUITE TEARDOWN HOOK</span>' ;
+				content += '<span style="' + hookErrorStyle + '">SUITE TEARDOWN HOOK</span> ' ;
 				break ;
 		}
 		
@@ -1254,7 +1255,12 @@ TeaTime.syncTest = function syncTest( testFn , callback )
 TeaTime.asyncTest = function asyncTest( testFn , callback )
 {
 	var self = this ,
-		startTime , time , callbackTriggered = false , timer = null , slowTime = self.slowTime ;
+		startTime , time , callbackTriggered = false ,
+		timer = null , timeoutError ,
+		slowTime = self.slowTime ;
+	
+	timeoutError = new Error( 'Test timeout' ) ;
+	timeoutError.testTimeout = true ;
 	
 	// We need a fresh callstack after each test
 	callback = this.freshCallback( callback ) ;
@@ -1263,7 +1269,10 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		timeout: function( timeout ) {
 			if ( callbackTriggered ) { return ; }
 			if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
-			timer = setTimeout( triggerCallback.bind( undefined , new Error( 'Test timeout (local)' ) ) , timeout ) ;
+			
+			var timeoutError = new Error( 'Test timeout (local)' ) ;
+			timeoutError.testTimeout = true ;
+			timer = setTimeout( triggerCallback.bind( undefined , timeoutError ) , timeout ) ;
 		} ,
 		slow: function( slowTime_ ) { slowTime = slowTime_ ; }
 	} ;
@@ -1286,7 +1295,7 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 	//process.once( 'uncaughtException' , triggerCallback ) ;
 	
 	// Should come before running the test, or it would override the user-set timeout
-	timer = setTimeout( triggerCallback.bind( undefined , new Error( 'Test timeout' ) ) , self.timeout ) ;
+	timer = setTimeout( triggerCallback.bind( undefined , timeoutError ) , self.timeout ) ;
 	
 	try {
 		startTime = Date.now() ;
