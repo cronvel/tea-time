@@ -397,8 +397,8 @@ Reporter.ready = function ready( callback )
 {
 	var self = this ;
 	
-	console.log( "Ready event received!" ) ;
-	this.ws = new WebSocket( 'ws://127.0.0.1:7357/test' ) ;
+	//console.log( "Ready event received!" , this.teaTime.token ) ;
+	this.ws = new WebSocket( 'ws://127.0.0.1:7357/' + this.teaTime.token ) ;
 	
 	this.ws.onopen = function onOpen()
 	{
@@ -419,7 +419,7 @@ Reporter.forward = function forward( event )
 {
 	var args = Array.prototype.slice.call( arguments , 1 ) ;
 	
-	Reporter.prepareSerialize( args ) ;
+	this.teaTime.prepareSerialize( args ) ;
 	
 	this.ws.send(
 		JSON.stringify( {
@@ -431,53 +431,10 @@ Reporter.forward = function forward( event )
 
 
 
-Reporter.prepareSerialize = function prepareSerialize( object )
-{
-	var i , iMax , keys , prototypeName ;
-	
-	if ( ! object || typeof object !== 'object' ) { return ; }
-	
-	
-	if ( Array.isArray( object ) )
-	{
-		for ( i = 0 , iMax = object.length ; i < iMax ; i ++ )
-		{
-			Reporter.prepareSerialize( object[ i ] ) ;
-		}
-		
-		return ;
-	}
-	
-	prototypeName = object.__proto__ && object.__proto__.constructor.name ;
-	
-	if ( prototypeName && prototypeName !== 'Object' ) { object.__prototype = prototypeName ; }
-	
-	if ( object instanceof Error )
-	{
-		// Make things enumerable, so JSON.stringify() will serialize them like it should
-		Object.defineProperties( object , {
-			__prototype: { value: object.constructor.name , enumerable: true , writable: true } ,
-			name: { value: object.name , enumerable: true , writable: true } ,
-			message: { value: object.message , enumerable: true , writable: true } ,
-			type: { value: object.type || object.constructor.name , enumerable: true , writable: true } ,
-			stack: { value: object.stack , enumerable: true , writable: true }
-		} ) ;
-	}
-	
-	keys = Object.keys( object ) ;
-	
-	for ( i = 0 , iMax = keys.length ; i < iMax ; i ++ )
-	{
-		Reporter.prepareSerialize( object[ keys[ i ] ] ) ;
-	}
-} ;
-
-
-
 Reporter.exit = function exit( callback )
 {
 	Reporter.forward.call( this , 'exit' ) ;
-	console.log( "Exit event received!" ) ;
+	//console.log( "Exit event received!" ) ;
 	this.ws.close() ;
 } ;
 
@@ -554,6 +511,7 @@ function createTeaTime()
 	window.teaTime.diff = diff ;
 	window.teaTime.htmlColorDiff = htmlColorDiff ;
 	window.teaTime.inspect = inspect ;
+	window.teaTime.prepareSerialize = prepareSerialize ;
 	
 	window.teaTime.reporters = {
 		console: require( './browser-reporters/console.js' ) ,
@@ -577,11 +535,55 @@ module.exports = createTeaTime ;
 
 
 
+function prepareSerialize( object )
+{
+	var i , iMax , keys , prototypeName ;
+	
+	if ( ! object || typeof object !== 'object' ) { return ; }
+	
+	
+	if ( Array.isArray( object ) )
+	{
+		for ( i = 0 , iMax = object.length ; i < iMax ; i ++ )
+		{
+			prepareSerialize( object[ i ] ) ;
+		}
+		
+		return ;
+	}
+	
+	prototypeName = object.__proto__ && object.__proto__.constructor.name ; // jshint ignore:line
+	
+	if ( prototypeName && prototypeName !== 'Object' ) { object.__prototype = prototypeName ; }
+	
+	if ( object instanceof Error )
+	{
+		// Make things enumerable, so JSON.stringify() will serialize them like it should
+		Object.defineProperties( object , {
+			__prototype: { value: object.constructor.name , enumerable: true , writable: true } ,
+			name: { value: object.name , enumerable: true , writable: true } ,
+			message: { value: object.message , enumerable: true , writable: true } ,
+			type: { value: object.type || object.constructor.name , enumerable: true , writable: true } ,
+			stack: { value: object.stack , enumerable: true , writable: true }
+		} ) ;
+	}
+	
+	keys = Object.keys( object ) ;
+	
+	for ( i = 0 , iMax = keys.length ; i < iMax ; i ++ )
+	{
+		prepareSerialize( object[ keys[ i ] ] ) ;
+	}
+}
+
+
+
 createTeaTime() ;
 
 dom.ready( function() {
 	window.teaTime.run() ;
 } ) ;
+
 
 
 
@@ -800,6 +802,9 @@ TeaTime.create = function createTeaTime( options )
 		allowConsole: { value: !! options.allowConsole , writable: true , enumerable: true } ,
 		bail: { value: !! options.bail , writable: true , enumerable: true } ,
 		
+		token: { value: options.token || null , writable: true , enumerable: true } , // for slave instance
+		acceptTokens: { value: options.acceptTokens || null , writable: true , enumerable: true } , // for master instance
+		
 		startTime: { value: 0 , writable: true , enumerable: true } ,
 		testCount: { value: 0 , writable: true , enumerable: true } ,
 		done: { value: 0 , writable: true , enumerable: true } ,
@@ -828,6 +833,7 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	var i , iMax , v ;
 	
 	if ( ! options.reporters ) { options.reporters = [ 'classic' ] ; }
+	if ( ! options.clientReporters ) { options.clientReporters = [ 'classic' ] ; }
 	
 	if ( args.console !== undefined ) { options.allowConsole = args.console ; }
 	else if ( args.c !== undefined ) { options.allowConsole = args.c ; }
@@ -851,10 +857,6 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 			if ( ! Array.isArray( args.R ) ) { args.R = [ args.R ] ; }
 			options.reporters = args.reporter.concat( args.R ) ;
 		}
-		else
-		{
-			options.reporters = args.reporter ;
-		}
 	}
 	else if ( args.R )
 	{
@@ -863,8 +865,16 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	}
 	
 	
+	if ( args.clientReporter )
+	{
+		if ( ! Array.isArray( args.clientReporter ) ) { args.clientReporter = [ args.clientReporter ] ; }
+		options.clientReporters = args.clientReporter ;
+	}
+	
+	
 	// Turn string into regexp for the "grep" feature
 	options.grep = [] ;
+	options.sourceGrep = [] ;
 	if ( args.g )
 	{
 		if ( ! Array.isArray( args.g ) ) { args.g = [ args.g ] ; }
@@ -872,6 +882,7 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 		for ( i = 0 , iMax = args.g.length ; i < iMax ; i ++ )
 		{
 			options.grep.push( new RegExp( args.g[ i ] , 'i' ) ) ;
+			options.sourceGrep.push( args.g[ i ] ) ;
 		}
 	}
 	
@@ -882,8 +893,12 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 		for ( i = 0 , iMax = args.grep.length ; i < iMax ; i ++ )
 		{
 			options.grep.push( new RegExp( args.grep[ i ] , 'i' ) ) ;
+			options.sourceGrep.push( args.grep[ i ] ) ;
 		}
 	}
+	
+	
+	if ( args.token ) { options.token = args.token ; }
 } ;
 
 
