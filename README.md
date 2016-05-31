@@ -7,6 +7,21 @@ This is a [mocha-compatible](http://mochajs.org/) test framework.
 For the doc, start reading the [mocha documentation](http://mochajs.org/).
 
 
+
+## Specific *Tea Time!* features:
+
+* Many reporters can be used at once, just using multiple `--reporter` options in the CLI
+* Run browser tests directly from the CLI! So you can script browser tests as well! This example will grab all test in the
+  `test` directory and build a browser version of them using [Browserify](https://www.npmjs.com/package/browserify),
+  create a HTML target file, open it using Firefox, run the test in Firefox while reporting anything to Tea Time
+  (using websocket behind the scene).
+
+```
+tea-time test/*js --html test/all.html --browserify --browser firefox
+```
+
+
+
 ## Install
 
 Install it globally: `npm install -g tea-time`.
@@ -36,21 +51,7 @@ Available options:
 ```
 
 
-Specific *Tea Time!* features:
-
-* Many reporters can be used at once, just using multiple `--reporter` options in the CLI
-* Run browser tests directly from the CLI! So you can script browser tests as well! This example will grab all test in the
-  `test` directory and build a browser version of them using [Browserify](https://www.npmjs.com/package/browserify),
-  create a HTML target file, open it using Firefox, run the test in Firefox while reporting anything to Tea Time
-  (using websocket behind the scene).
-
-```
-tea-time test/*js --html test/all.html --browserify --browser firefox
-```
-
-
-
-Reporters:
+## Reporters
 
 * **classic**: *the default reporter*
 * **one-line**: *one line status*
