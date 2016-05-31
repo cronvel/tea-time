@@ -52,22 +52,22 @@ tea-time test/*js --html test/all.html --browserify --browser firefox
 
 Reporters:
 
-* classic *the default reporter*
-* one-line *one line status*
-* panel *a reporter that does not scroll (except on the final error report, if any)*
-* progress *a progress bar reporter*
-* tap *Test Anything Protocol*
-* dot *output colorful dots*
-* verbose *like classic, but more verbose*
-* report *use in conjunction with another reporter, only output the final status report*
-* error-report *use in conjunction with another reporter, only output the final error report*
-* notify *use in conjunction with another reporter, send a freedesktop.org notification with the final status report*
+* **classic**: *the default reporter*
+* **one-line**: *one line status*
+* **panel**: *a reporter that does not scroll (except on the final error report, if any)*
+* **progress**: *a progress bar reporter*
+* **tap**: *Test Anything Protocol*
+* **dot**: *output colorful dots*
+* **verbose**: *like classic, but more verbose*
+* **report**: *use in conjunction with another reporter, only output the final status report*
+* **error-report**: *use in conjunction with another reporter, only output the final error report*
+* **notify**: *use in conjunction with another reporter, send a freedesktop.org notification with the final status report*
 
 
 
 Browser reporters:
 
-* classic *the default reporter*
-* console *report everything in the browser console, using console.log()*
-* websocket *connect a local Tea Time instance, and send anything to it*
+* **classic**: *the default reporter*
+* **console**: *report everything in the browser console, using console.log()*
+* **websocket**: *connect a local Tea Time instance, and send anything to it*
 
