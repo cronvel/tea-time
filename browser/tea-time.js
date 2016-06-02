@@ -1271,7 +1271,7 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 				var timeoutError = new Error( 'Test timeout (local)' ) ;
 				timeoutError.testTimeout = true ;
 				triggerCallback( timeoutError ) ;
-			} , self.timeout ) ;
+			} , timeout ) ;
 		} ,
 		slow: function( slowTime_ ) { slowTime = slowTime_ ; }
 	} ;
