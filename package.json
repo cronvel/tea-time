@@ -23,6 +23,7 @@
     "nextgen-events": "^0.5.16",
     "string-kit": "^0.5.7",
     "terminal-kit": "^0.24.8",
+    "tmp": "0.0.28",
     "tree-kit": "^0.5.20",
     "ws": "^1.1.0"
   },
