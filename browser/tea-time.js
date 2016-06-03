@@ -491,9 +491,8 @@ function createTeaTime()
 			setTimeout( callback , 0 ) ;
 		} ,
 		onceUncaughtException: function( callback ) {
-			var triggered = false ;
 			window.onerror = function( message , source , lineno , colno , error ) {
-				if ( triggered ) { return ; }
+				window.onerror = function() {} ;
 				callback( error ) ;
 				return true ;	// prevent the event propagation
 			} ;
@@ -588,7 +587,7 @@ dom.ready( function() {
 
 
 
-},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":36,"string-kit/lib/inspect.js":41,"url":19}],5:[function(require,module,exports){
+},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":38,"string-kit/lib/inspect.js":43,"url":21}],5:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -680,7 +679,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":30,"string-kit/lib/inspect.js":41}],6:[function(require,module,exports){
+},{"diff":32,"string-kit/lib/inspect.js":43}],6:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -782,6 +781,7 @@ module.exports = function htmlColorDiff( oldValue , newValue )
 // Load modules
 var async = require( 'async-kit' ) ;
 var NGEvents = require( 'nextgen-events' ) ;
+var asyncTry = require( 'async-try-catch' ).try ;
 
 
 
@@ -1284,14 +1284,9 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		callbackTriggered = true ;
 		if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
 		
-		self.offUncaughtException( triggerCallback ) ;
-		//process.removeListener( 'uncaughtException' , triggerCallback ) ;
-		
 		callback( error , time , Math.floor( time / slowTime ) ) ;
 	} ;
 	
-	self.onceUncaughtException( triggerCallback ) ;
-	//process.once( 'uncaughtException' , triggerCallback ) ;
 	
 	// Should come before running the test, or it would override the user-set timeout
 	timer = setTimeout( function() {
@@ -1300,13 +1295,13 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		triggerCallback( timeoutError ) ;
 	} , self.timeout ) ;
 	
-	try {
+	asyncTry( function() {
 		startTime = Date.now() ;
 		testFn.call( context , triggerCallback ) ;
-	}
-	catch ( error ) {
+	} )
+	.catch( function( error ) {
 		triggerCallback( error ) ;
-	}
+	} ) ;
 } ;
 
 
@@ -1366,20 +1361,20 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 		callbackTriggered = true ;
 		
 		//process.removeListener( 'uncaughtException' , triggerCallback ) ;
-		self.offUncaughtException( triggerCallback ) ;
+		//self.offUncaughtException( triggerCallback ) ;
 		
 		callback( error ) ;
 	} ;
 	
 	//process.once( 'uncaughtException' , triggerCallback ) ;
-	this.onceUncaughtException( triggerCallback ) ;
+	//this.onceUncaughtException( triggerCallback ) ;
 	
-	try {
+	asyncTry( function() {
 		hookFn( triggerCallback ) ;
-	}
-	catch ( error ) {
+	} )
+	.catch( function( error ) {
 		triggerCallback( error ) ;
-	}
+	} ) ;
 } ;
 
 
@@ -1546,7 +1541,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":8,"nextgen-events":38}],8:[function(require,module,exports){
+},{"async-kit":8,"async-try-catch":12,"nextgen-events":40}],8:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3501,7 +3496,7 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"nextgen-events":38,"tree-kit/lib/extend.js":42}],10:[function(require,module,exports){
+},{"nextgen-events":40,"tree-kit/lib/extend.js":44}],10:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -3591,7 +3586,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":8,"_process":14}],11:[function(require,module,exports){
+},{"./async.js":8,"_process":16}],11:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3659,8 +3654,679 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 
 },{}],12:[function(require,module,exports){
+(function (process,global){
+/*
+	Async Try-Catch
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
 
-},{}],13:[function(require,module,exports){
+"use strict" ;
+
+
+
+function AsyncTryCatch() { throw new Error( "Use AsyncTryCatch.try() instead." ) ; }
+module.exports = AsyncTryCatch ;
+global.AsyncTryCatch = AsyncTryCatch ;
+
+
+
+if ( process.browser && ! global.setImmediate )
+{
+	global.setImmediate = function setImmediate( fn ) { return setTimeout( fn , 0 ) ; } ;
+	global.clearImmediate = function clearImmediate( timer ) { return clearTimeout( timer ) ; } ;
+}
+
+
+
+if ( ! global.Vanilla )
+{
+	global.Vanilla = {} ;
+	
+	if ( ! global.Vanilla.setTimeout ) { global.Vanilla.setTimeout = setTimeout ; }
+	if ( ! global.Vanilla.setImmediate ) { global.Vanilla.setImmediate = setImmediate ; }
+	if ( ! global.Vanilla.nextTick ) { global.Vanilla.nextTick = process.nextTick ; }
+	//if ( ! global.Vanilla.Error ) { global.Vanilla.Error = Error ; }
+}
+
+AsyncTryCatch.stack = [] ;
+AsyncTryCatch.substituted = false ;
+
+
+
+AsyncTryCatch.try = function try_( fn )
+{
+	var self = Object.create( AsyncTryCatch.prototype , {
+		fn: { value: fn , enumerable: true } ,
+		parent: { value: AsyncTryCatch.stack[ AsyncTryCatch.stack.length - 1 ] }
+	} ) ;
+	
+	return self ;
+} ;
+
+
+
+AsyncTryCatch.prototype.catch = function catch_( catchFn )
+{
+	Object.defineProperties( this , {
+		catchFn: { value: catchFn , enumerable: true }
+	} ) ;
+	
+	if ( ! AsyncTryCatch.substituted ) { AsyncTryCatch.substitute() ; }
+	
+	try {
+		AsyncTryCatch.stack.push( this ) ;
+		this.fn() ;
+		AsyncTryCatch.stack.pop() ;
+	}
+	catch ( error ) {
+		AsyncTryCatch.stack.pop() ;
+		this.callCatchFn( error ) ;
+	}
+	
+} ;
+
+
+
+// Handle the bubble up
+AsyncTryCatch.prototype.callCatchFn = function callCatchFn( error )
+{
+	if ( ! this.parent )
+	{
+		this.catchFn( error ) ;
+		return ;
+	}
+	
+	try {
+		AsyncTryCatch.stack.push( this.parent ) ;
+		this.catchFn( error ) ;
+		AsyncTryCatch.stack.pop() ;
+	}
+	catch ( error ) {
+		AsyncTryCatch.stack.pop() ;
+		this.parent.callCatchFn( error ) ;
+	}
+} ;
+
+
+
+// for setTimeout(), setImmediate(), process.nextTick()
+AsyncTryCatch.timerWrapper = function timerWrapper( originalMethod , fn )
+{
+	var fn , context , wrapperFn ,
+		args = Array.prototype.slice.call( arguments , 1 ) ;
+	
+	if ( typeof fn !== 'function' || ! AsyncTryCatch.stack.length )
+	{
+		return originalMethod.apply( this , args ) ;
+	}
+	
+	context = AsyncTryCatch.stack[ AsyncTryCatch.stack.length - 1 ] ;
+	
+	wrapperFn = function() {
+		try {
+			AsyncTryCatch.stack.push( context ) ;
+			fn.apply( this , arguments ) ;
+			AsyncTryCatch.stack.pop() ;
+		}
+		catch ( error ) {
+			AsyncTryCatch.stack.pop() ;
+			context.callCatchFn( error ) ;
+		}
+	} ;
+	
+	args[ 0 ] = wrapperFn ;
+	
+	return originalMethod.apply( this , args ) ;
+} ;
+
+
+
+// for Node-EventEmitter-compatible .addListener()
+AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod , eventName , fn , options )
+{
+	var fn , context , wrapperFn ;
+	
+	// NextGen event compatibility
+	if ( typeof fn === 'object' )
+	{
+		options = fn ;
+		fn = options.fn ;
+		delete options.fn ;
+	}
+	
+	if ( typeof fn !== 'function' || ! AsyncTryCatch.stack.length )
+	{
+		return originalMethod.call( this , eventName , fn , options ) ;
+	}
+	
+	context = AsyncTryCatch.stack[ AsyncTryCatch.stack.length - 1 ] ;
+	
+	// Assume that the function is only wrapped once per eventEmitter
+	if ( this.__fnToWrapperMap )
+	{
+		wrapperFn = this.__fnToWrapperMap.get( fn ) ;
+	}
+	else 
+	{
+		// Create the map, make it non-enumerable
+		Object.defineProperty( this , '__fnToWrapperMap', { value: new WeakMap() } ) ;
+	}
+	
+	if ( ! wrapperFn )
+	{
+		wrapperFn = function() {
+			try {
+				AsyncTryCatch.stack.push( context ) ;
+				fn.apply( this , arguments ) ;
+				AsyncTryCatch.stack.pop() ;
+			}
+			catch ( error ) {
+				AsyncTryCatch.stack.pop() ;
+				context.callCatchFn( error ) ;
+			}
+		} ;
+		
+		this.__fnToWrapperMap.set( fn , wrapperFn ) ;
+	}
+	
+	return originalMethod.call( this , eventName , wrapperFn , options ) ;
+} ;
+
+
+
+AsyncTryCatch.removeListenerWrapper = function removeListenerWrapper( originalMethod , eventName , fn )
+{
+	//console.log( 'fn:' , fn ) ;
+	
+	if ( typeof fn === 'function' && this.__fnToWrapperMap )
+	{
+		fn = this.__fnToWrapperMap.get( fn ) || fn ;
+	}
+	
+	return originalMethod.call( this , eventName , fn ) ;
+} ;
+
+
+
+AsyncTryCatch.setTimeout = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setTimeout ) ;
+AsyncTryCatch.setImmediate = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setImmediate ) ;
+AsyncTryCatch.nextTick = AsyncTryCatch.timerWrapper.bind( process , global.Vanilla.nextTick ) ;
+
+// NodeEvents on()/addListener() replacement
+AsyncTryCatch.addListener = function addListener( eventName , fn )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListener , eventName , fn ) ;
+} ;
+
+// NodeEvents once() replacement
+AsyncTryCatch.addListenerOnce = function addListenerOnce( eventName , fn )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListenerOnce , eventName , fn ) ;
+} ;
+
+// NodeEvents removeListener() replacement
+AsyncTryCatch.removeListener = function removeListener( eventName , fn )
+{
+	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__removeListener , eventName , fn ) ;
+} ;
+
+// NextGen Events on()/addListener() replacement
+AsyncTryCatch.ngevAddListener = function ngevAddListener( eventName , fn , options )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents.on , eventName , fn , options ) ;
+} ;
+
+// NextGen Events once() replacement
+AsyncTryCatch.ngevAddListenerOnce = function ngevAddListenerOnce( eventName , fn , options )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents.once , eventName , fn , options ) ;
+} ;
+
+// NextGen Events off()/removeListener() replacement
+AsyncTryCatch.ngevRemoveListener = function ngevRemoveListener( eventName , fn )
+{
+	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NextGenEvents.off , eventName , fn ) ;
+} ;
+
+
+
+AsyncTryCatch.substitute = function substitute()
+{
+	// This test should be done by the caller, because substitution could be incomplete
+	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
+	
+	//if ( AsyncTryCatch.substituted ) { return ; }
+	AsyncTryCatch.substituted = true ;
+	
+	global.setTimeout = AsyncTryCatch.setTimeout ;
+	global.setImmediate = AsyncTryCatch.setTimeout ;
+	process.nextTick = AsyncTryCatch.nextTick ;
+	
+	// Global is checked first, in case we are running into browsers
+	try {
+		AsyncTryCatch.NodeEvents = global.EventEmitter || require( 'events' ) ;
+	} catch ( error ) {}
+	
+	try {
+		AsyncTryCatch.NextGenEvents = global.NextGenEvents || require( 'nextgen-events' ) ;
+	} catch ( error ) {}
+	
+	if ( AsyncTryCatch.NodeEvents )
+	{
+		if ( ! AsyncTryCatch.NodeEvents.__addListener )
+		{
+			AsyncTryCatch.NodeEvents.__addListener = AsyncTryCatch.NodeEvents.prototype.on ;
+		}
+		
+		if ( ! AsyncTryCatch.NodeEvents.__addListenerOnce )
+		{
+			AsyncTryCatch.NodeEvents.__addListenerOnce = AsyncTryCatch.NodeEvents.prototype.addListenerOnce ;
+		}
+		
+		if ( ! AsyncTryCatch.NodeEvents.__removeListener )
+		{
+			AsyncTryCatch.NodeEvents.__removeListener = AsyncTryCatch.NodeEvents.prototype.removeListener ;
+		}
+		
+		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.addListener ;
+		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.addListener ;
+		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.addListenerOnce ;
+		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.removeListener ;
+	}
+	
+	//global.Error = AsyncTryCatch.Error ;
+	// Should do that for all error types, cause they will not inherit from the substituted constructor
+	
+	if ( AsyncTryCatch.NextGenEvents )
+	{
+		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.ngevAddListenerOnce ;
+		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.ngevRemoveListener ;
+		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.ngevRemoveListener ;
+	}
+} ;
+
+
+
+AsyncTryCatch.restore = function restore()
+{
+	// This test should be done by the caller, because substitution could be incomplete
+	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
+	
+	//if ( ! AsyncTryCatch.substituted ) { return ; }
+	AsyncTryCatch.substituted = false ;
+	
+	global.setTimeout = global.Vanilla.setTimeout ;
+	global.setImmediate = global.Vanilla.setImmediate ;
+	process.nextTick = global.Vanilla.nextTick ;
+	
+	if ( AsyncTryCatch.NodeEvents )
+	{
+		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.NodeEvents.__addListener ;
+		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.NodeEvents.__addListener ;
+		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.NodeEvents.__addListenerOnce ;
+		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.NodeEvents.__removeListener ;
+	}
+	
+	//global.Error = global.Vanilla.Error ;
+	
+	if ( AsyncTryCatch.NextGenEvents )
+	{
+		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.NextGenEvents.on ;
+		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.NextGenEvents.on ;
+		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.NextGenEvents.once ;
+		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.NextGenEvents.off ;
+		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.NextGenEvents.removeListener ;
+	}
+} ;
+
+
+
+/*
+AsyncTryCatch.Error = function Error( message )
+{
+	global.Vanilla.Error.call( this ) ;
+	global.Vanilla.Error.captureStackTrace && global.Vanilla.Error.captureStackTrace( this , this.constructor ) ; // jshint ignore:line
+	
+	Object.defineProperties( this , {
+		message: { value: message , writable: true } ,
+		id: { value: '' + Math.floor( Math.random( 1000000 ) ) }
+	} ) ;
+} ;
+
+AsyncTryCatch.Error.prototype = Object.create( global.Vanilla.Error.prototype ) ;
+AsyncTryCatch.Error.prototype.constructor = AsyncTryCatch.Error ;
+*/
+
+
+
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"_process":16,"events":14,"nextgen-events":40}],13:[function(require,module,exports){
+
+},{}],14:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+function EventEmitter() {
+  this._events = this._events || {};
+  this._maxListeners = this._maxListeners || undefined;
+}
+module.exports = EventEmitter;
+
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._maxListeners = undefined;
+
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+EventEmitter.defaultMaxListeners = 10;
+
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function(n) {
+  if (!isNumber(n) || n < 0 || isNaN(n))
+    throw TypeError('n must be a positive number');
+  this._maxListeners = n;
+  return this;
+};
+
+EventEmitter.prototype.emit = function(type) {
+  var er, handler, len, args, i, listeners;
+
+  if (!this._events)
+    this._events = {};
+
+  // If there is no 'error' event listener then throw.
+  if (type === 'error') {
+    if (!this._events.error ||
+        (isObject(this._events.error) && !this._events.error.length)) {
+      er = arguments[1];
+      if (er instanceof Error) {
+        throw er; // Unhandled 'error' event
+      }
+      throw TypeError('Uncaught, unspecified "error" event.');
+    }
+  }
+
+  handler = this._events[type];
+
+  if (isUndefined(handler))
+    return false;
+
+  if (isFunction(handler)) {
+    switch (arguments.length) {
+      // fast cases
+      case 1:
+        handler.call(this);
+        break;
+      case 2:
+        handler.call(this, arguments[1]);
+        break;
+      case 3:
+        handler.call(this, arguments[1], arguments[2]);
+        break;
+      // slower
+      default:
+        args = Array.prototype.slice.call(arguments, 1);
+        handler.apply(this, args);
+    }
+  } else if (isObject(handler)) {
+    args = Array.prototype.slice.call(arguments, 1);
+    listeners = handler.slice();
+    len = listeners.length;
+    for (i = 0; i < len; i++)
+      listeners[i].apply(this, args);
+  }
+
+  return true;
+};
+
+EventEmitter.prototype.addListener = function(type, listener) {
+  var m;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events)
+    this._events = {};
+
+  // To avoid recursion in the case that type === "newListener"! Before
+  // adding it to the listeners, first emit "newListener".
+  if (this._events.newListener)
+    this.emit('newListener', type,
+              isFunction(listener.listener) ?
+              listener.listener : listener);
+
+  if (!this._events[type])
+    // Optimize the case of one listener. Don't need the extra array object.
+    this._events[type] = listener;
+  else if (isObject(this._events[type]))
+    // If we've already got an array, just append.
+    this._events[type].push(listener);
+  else
+    // Adding the second element, need to change to array.
+    this._events[type] = [this._events[type], listener];
+
+  // Check for listener leak
+  if (isObject(this._events[type]) && !this._events[type].warned) {
+    if (!isUndefined(this._maxListeners)) {
+      m = this._maxListeners;
+    } else {
+      m = EventEmitter.defaultMaxListeners;
+    }
+
+    if (m && m > 0 && this._events[type].length > m) {
+      this._events[type].warned = true;
+      console.error('(node) warning: possible EventEmitter memory ' +
+                    'leak detected. %d listeners added. ' +
+                    'Use emitter.setMaxListeners() to increase limit.',
+                    this._events[type].length);
+      if (typeof console.trace === 'function') {
+        // not supported in IE 10
+        console.trace();
+      }
+    }
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.once = function(type, listener) {
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  var fired = false;
+
+  function g() {
+    this.removeListener(type, g);
+
+    if (!fired) {
+      fired = true;
+      listener.apply(this, arguments);
+    }
+  }
+
+  g.listener = listener;
+  this.on(type, g);
+
+  return this;
+};
+
+// emits a 'removeListener' event iff the listener was removed
+EventEmitter.prototype.removeListener = function(type, listener) {
+  var list, position, length, i;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events || !this._events[type])
+    return this;
+
+  list = this._events[type];
+  length = list.length;
+  position = -1;
+
+  if (list === listener ||
+      (isFunction(list.listener) && list.listener === listener)) {
+    delete this._events[type];
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+
+  } else if (isObject(list)) {
+    for (i = length; i-- > 0;) {
+      if (list[i] === listener ||
+          (list[i].listener && list[i].listener === listener)) {
+        position = i;
+        break;
+      }
+    }
+
+    if (position < 0)
+      return this;
+
+    if (list.length === 1) {
+      list.length = 0;
+      delete this._events[type];
+    } else {
+      list.splice(position, 1);
+    }
+
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.removeAllListeners = function(type) {
+  var key, listeners;
+
+  if (!this._events)
+    return this;
+
+  // not listening for removeListener, no need to emit
+  if (!this._events.removeListener) {
+    if (arguments.length === 0)
+      this._events = {};
+    else if (this._events[type])
+      delete this._events[type];
+    return this;
+  }
+
+  // emit removeListener for all listeners on all events
+  if (arguments.length === 0) {
+    for (key in this._events) {
+      if (key === 'removeListener') continue;
+      this.removeAllListeners(key);
+    }
+    this.removeAllListeners('removeListener');
+    this._events = {};
+    return this;
+  }
+
+  listeners = this._events[type];
+
+  if (isFunction(listeners)) {
+    this.removeListener(type, listeners);
+  } else if (listeners) {
+    // LIFO order
+    while (listeners.length)
+      this.removeListener(type, listeners[listeners.length - 1]);
+  }
+  delete this._events[type];
+
+  return this;
+};
+
+EventEmitter.prototype.listeners = function(type) {
+  var ret;
+  if (!this._events || !this._events[type])
+    ret = [];
+  else if (isFunction(this._events[type]))
+    ret = [this._events[type]];
+  else
+    ret = this._events[type].slice();
+  return ret;
+};
+
+EventEmitter.prototype.listenerCount = function(type) {
+  if (this._events) {
+    var evlistener = this._events[type];
+
+    if (isFunction(evlistener))
+      return 1;
+    else if (evlistener)
+      return evlistener.length;
+  }
+  return 0;
+};
+
+EventEmitter.listenerCount = function(emitter, type) {
+  return emitter.listenerCount(type);
+};
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+
+},{}],15:[function(require,module,exports){
 /**
  * Determine if an object is Buffer
  *
@@ -3679,7 +4345,7 @@ module.exports = function (obj) {
     ))
 }
 
-},{}],14:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -3775,7 +4441,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],15:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -4312,7 +4978,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],16:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4398,7 +5064,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],17:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4485,13 +5151,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],18:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":16,"./encode":17}],19:[function(require,module,exports){
+},{"./decode":18,"./encode":19}],21:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5225,7 +5891,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":20,"punycode":15,"querystring":18}],20:[function(require,module,exports){
+},{"./util":22,"punycode":17,"querystring":20}],22:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -5243,7 +5909,7 @@ module.exports = {
   }
 };
 
-},{}],21:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -5269,7 +5935,7 @@ function convertChangesToDMP(changes) {
 }
 
 
-},{}],22:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5306,7 +5972,7 @@ function escapeHTML(s) {
 }
 
 
-},{}],23:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5535,7 +6201,7 @@ function clonePath(path) {
 }
 
 
-},{}],24:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5555,7 +6221,7 @@ function diffChars(oldStr, newStr, callback) {
 }
 
 
-},{"./base":23}],25:[function(require,module,exports){
+},{"./base":25}],27:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5579,7 +6245,7 @@ function diffCss(oldStr, newStr, callback) {
 }
 
 
-},{"./base":23}],26:[function(require,module,exports){
+},{"./base":25}],28:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5681,7 +6347,7 @@ function canonicalize(obj, stack, replacementStack) {
 }
 
 
-},{"./base":23,"./line":27}],27:[function(require,module,exports){
+},{"./base":25,"./line":29}],29:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5736,7 +6402,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":35,"./base":23}],28:[function(require,module,exports){
+},{"../util/params":37,"./base":25}],30:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5760,7 +6426,7 @@ function diffSentences(oldStr, newStr, callback) {
 }
 
 
-},{"./base":23}],29:[function(require,module,exports){
+},{"./base":25}],31:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5832,7 +6498,7 @@ function diffWordsWithSpace(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":35,"./base":23}],30:[function(require,module,exports){
+},{"../util/params":37,"./base":25}],32:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5905,7 +6571,7 @@ exports. /*istanbul ignore end*/Diff = _base2.default;
 /*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
 
 
-},{"./convert/dmp":21,"./convert/xml":22,"./diff/base":23,"./diff/character":24,"./diff/css":25,"./diff/json":26,"./diff/line":27,"./diff/sentence":28,"./diff/word":29,"./patch/apply":31,"./patch/create":32,"./patch/parse":33}],31:[function(require,module,exports){
+},{"./convert/dmp":23,"./convert/xml":24,"./diff/base":25,"./diff/character":26,"./diff/css":27,"./diff/json":28,"./diff/line":29,"./diff/sentence":30,"./diff/word":31,"./patch/apply":33,"./patch/create":34,"./patch/parse":35}],33:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6004,6 +6670,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
   for (var _i = 0; _i < hunks.length; _i++) {
     var _hunk = hunks[_i],
         _toPos = _hunk.offset + _hunk.newStart - 1;
+    if (_hunk.newLines == 0) {
+      _toPos++;
+    }
 
     for (var j = 0; j < _hunk.lines.length; j++) {
       var line = _hunk.lines[j],
@@ -6068,7 +6737,7 @@ function applyPatches(uniDiff, options) {
 }
 
 
-},{"../util/distance-iterator":34,"./parse":33}],32:[function(require,module,exports){
+},{"../util/distance-iterator":36,"./parse":35}],34:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6223,7 +6892,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 }
 
 
-},{"../diff/line":27}],33:[function(require,module,exports){
+},{"../diff/line":29}],35:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6359,7 +7028,7 @@ function parsePatch(uniDiff) {
 }
 
 
-},{}],34:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -6408,7 +7077,7 @@ exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
 };
 
 
-},{}],35:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6428,7 +7097,7 @@ function generateOptions(options, defaults) {
 }
 
 
-},{}],36:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -6657,7 +7326,7 @@ dom.html = function html( element , html ) { element.innerHTML = html ; } ;
 
 
 
-},{"./svg.js":37}],37:[function(require,module,exports){
+},{"./svg.js":39}],39:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -6857,24 +7526,24 @@ domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
 
 
 
-},{"./dom.js":36,"fs":12}],38:[function(require,module,exports){
+},{"./dom.js":38,"fs":13}],40:[function(require,module,exports){
 /*
-	The Cedric's Swiss Knife (CSK) - CSK NextGen Events
+	Next Gen Events
 	
-	Copyright (c) 2015 Cédric Ronvel 
+	Copyright (c) 2015 - 2016 Cédric Ronvel
 	
 	The MIT License (MIT)
-
+	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-
+	
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-
+	
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -6982,29 +7651,18 @@ NextGenEvents.prototype.addListener = function addListener( eventName , fn , opt
 	return this ;
 } ;
 
-
-
 NextGenEvents.prototype.on = NextGenEvents.prototype.addListener ;
 
 
 
 // Shortcut
-NextGenEvents.prototype.once = function once( eventName , options )
+NextGenEvents.prototype.once = function once( eventName , fn , options )
 {
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".once(): argument #0 should be a non-empty string" ) ; }
+	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
+	else if ( options && typeof options === 'object' ) { options.once = true ; }
+	else { options = { once: true } ; }
 	
-	if ( typeof options === 'function' )
-	{
-		options = { id: options , fn: options } ;
-	}
-	else if ( ! options || typeof options !== 'object' || typeof options.fn !== 'function' )
-	{
-		throw new TypeError( ".once(): argument #1 should be a function or an object with a 'fn' property which value is a function" ) ;
-	}
-	
-	options.once = true ;
-	
-	return this.addListener( eventName , options ) ;
+	return this.addListener( eventName , fn , options ) ;
 } ;
 
 
@@ -7042,8 +7700,6 @@ NextGenEvents.prototype.removeListener = function removeListener( eventName , id
 	
 	return this ;
 } ;
-
-
 
 NextGenEvents.prototype.off = NextGenEvents.prototype.removeListener ;
 
@@ -7583,8 +8239,14 @@ NextGenEvents.processQueue = function processQueue( contextName , isCompletionCa
 
 
 
+// Backup for the AsyncTryCatch
+NextGenEvents.on = NextGenEvents.prototype.on ;
+NextGenEvents.once = NextGenEvents.prototype.once ;
+NextGenEvents.off = NextGenEvents.prototype.off ;
 
-},{}],39:[function(require,module,exports){
+
+
+},{}],41:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -7644,7 +8306,7 @@ module.exports = {
 
 
 
-},{}],40:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -7743,7 +8405,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],41:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -8307,7 +8969,7 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")},require('_process'))
-},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":13,"./ansi.js":39,"./escape.js":40,"_process":14,"tree-kit/lib/extend.js":42}],42:[function(require,module,exports){
+},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":15,"./ansi.js":41,"./escape.js":42,"_process":16,"tree-kit/lib/extend.js":44}],44:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK object tree toolbox
 
