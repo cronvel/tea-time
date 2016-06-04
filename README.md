@@ -39,6 +39,8 @@ describe( "Desync" , function() {
   create a HTML target file, open it using Firefox, run the test in Firefox while reporting anything to Tea Time
   (using websocket behind the scene).
 
+    tea-time test/*js --html test/all.html --browserify --browser firefox
+
 ```
 tea-time test/*js --html test/all.html --browserify --browser firefox
 ```
