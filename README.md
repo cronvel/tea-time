@@ -42,6 +42,11 @@ describe( "Desync" , function() {
 ```
 tea-time test/*js --html test/all.html --browserify --browser firefox
 ```
+  ... or use the shorthand:
+
+```
+tea-time test/*js --bb firefox
+```
 
 
 

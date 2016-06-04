@@ -352,7 +352,7 @@ Reporter.report = function report( ok , fail , skip )
 
 "use strict" ;
 
-/* global document */
+/* global document, WebSocket */
 
 
 
@@ -406,12 +406,12 @@ Reporter.ready = function ready( callback )
 		Reporter.forward.call( self , 'ready' ) ;
 		console.log( "Websocket opened!" ) ;
 		callback() ;
-	}
+	} ;
 	
 	this.ws.onclose = function onClose()
 	{
 		console.log( "Websocket closed!" ) ;
-	}
+	} ;
 } ;
 
 
@@ -1359,15 +1359,8 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 		if ( callbackTriggered ) { return ; }
 		
 		callbackTriggered = true ;
-		
-		//process.removeListener( 'uncaughtException' , triggerCallback ) ;
-		//self.offUncaughtException( triggerCallback ) ;
-		
 		callback( error ) ;
 	} ;
-	
-	//process.once( 'uncaughtException' , triggerCallback ) ;
-	//this.onceUncaughtException( triggerCallback ) ;
 	
 	asyncTry( function() {
 		hookFn( triggerCallback ) ;
