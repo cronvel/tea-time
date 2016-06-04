@@ -68,11 +68,13 @@ Available options:
   -R , --reporter <name>  Set/add the reporter (can be used multiple times)
  --clientReporter <name>  Set/add the client reporter (see --browser, can be used multiple times)
        --html <file>      Build one HTML file for all input test files, to run the test in browsers
+       --tmp-html         Like --html but create a temporary file in the OS temp folder
        --browserify       In conjunction with --html, call Browserify to build a browser version
                           for each input files
        --ws               Start a websocket server, endpoint to the browser websocket client reporter
   -B , --browser <exe>    Open the html with the <exe> browser, need --html <file>,
                           force --ws and the websocket client reporter
+       --bb <exe>         Shorthand for --tmp-html --ws --browserify --browser <exe>
 ```
 
 
