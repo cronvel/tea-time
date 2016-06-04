@@ -13,10 +13,10 @@ For the doc, start reading the [mocha documentation](http://mochajs.org/).
 * Many reporters can be used at once, just using multiple `--reporter` options in the CLI
 * Run browser tests directly from the CLI! So you can script browser tests as well! This example will grab all test in the
   `test` directory and build a browser version of them using [Browserify](https://www.npmjs.com/package/browserify),
-  create a HTML target file, open it using Firefox, run the test in Firefox while reporting anything to Tea Time
-  (using websocket behind the scene).
+  create a HTML target file in the OS tmp directory, open it using Firefox, run the test in Firefox while reporting
+  anything to Tea Time (using websocket behind the scene).
 
-    `tea-time test/*js --html test/all.html --browserify --browser firefox`
+    `tea-time test/*js --tmp-html --ws --browserify --browser firefox`
 
   ... or use the shorthand:
 
