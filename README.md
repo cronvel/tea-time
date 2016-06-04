@@ -13,26 +13,26 @@ For the doc, start reading the [mocha documentation](http://mochajs.org/).
 * Many reporters can be used at once, just using multiple `--reporter` options in the CLI
 * Better test isolation, mocha (v2.5.3 ATM) would fail to run this test properly:
 
-```
-describe( "Desync" , function() {
-    
-    it( "should timeout and fail after the timeout" , function( done ) {
+    ```
+    describe( "Desync" , function() {
         
-        this.timeout( 100 ) ;
+        it( "should timeout and fail after the timeout" , function( done ) {
+            
+            this.timeout( 100 ) ;
+            
+            setTimeout( function() {
+                throw new Error( "Delayed fail" ) ;
+            } , 200 ) ;
+        } ) ;
         
-        setTimeout( function() {
-            throw new Error( "Delayed fail" ) ;
-        } , 200 ) ;
+        it( "should pass without being affected by the previous test after-timeout failure" , function( done ) {
+            
+            setTimeout( function() {
+                done() ;
+            } , 500 ) ;
+        } ) ;
     } ) ;
-    
-    it( "should pass without being affected by the previous test after-timeout failure" , function( done ) {
-        
-        setTimeout( function() {
-            done() ;
-        } , 500 ) ;
-    } ) ;
-} ) ;
-```
+    ```
 
 * Run browser tests directly from the CLI! So you can script browser tests as well! This example will grab all test in the
   `test` directory and build a browser version of them using [Browserify](https://www.npmjs.com/package/browserify),
