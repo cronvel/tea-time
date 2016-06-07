@@ -587,7 +587,7 @@ dom.ready( function() {
 
 
 
-},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":38,"string-kit/lib/inspect.js":43,"url":21}],5:[function(require,module,exports){
+},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":39,"string-kit/lib/inspect.js":44,"url":22}],5:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -679,7 +679,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":32,"string-kit/lib/inspect.js":43}],6:[function(require,module,exports){
+},{"diff":33,"string-kit/lib/inspect.js":44}],6:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -1420,6 +1420,8 @@ TeaTime.registerTest = function registerTest( testName , fn )
 		throw new Error( "Usage is test( name , [fn] )" ) ;
 	}
 	
+// ---------------------------------- Test using 'this' context instead of a static stack ----------------------------------- 
+	
 	parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
 	
 	// Filter out tests that are not relevant,
@@ -1534,7 +1536,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":8,"async-try-catch":12,"nextgen-events":40}],8:[function(require,module,exports){
+},{"async-kit":8,"async-try-catch":12,"nextgen-events":41}],8:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3489,7 +3491,7 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"nextgen-events":40,"tree-kit/lib/extend.js":44}],10:[function(require,module,exports){
+},{"nextgen-events":41,"tree-kit/lib/extend.js":45}],10:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -3579,7 +3581,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":8,"_process":16}],11:[function(require,module,exports){
+},{"./async.js":8,"_process":17}],11:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3680,7 +3682,45 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 function AsyncTryCatch() { throw new Error( "Use AsyncTryCatch.try() instead." ) ; }
 module.exports = AsyncTryCatch ;
-global.AsyncTryCatch = AsyncTryCatch ;
+AsyncTryCatch.prototype.__prototypeUID__ = 'async-try-catch/AsyncTryCatch' ;
+AsyncTryCatch.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
+
+
+
+if ( global.AsyncTryCatch )
+{
+	if ( global.AsyncTryCatch.prototype.__prototypeUID__ === 'async-try-catch/AsyncTryCatch' )
+	{
+		//console.log( "Already installed:" , global.AsyncTryCatch.prototype.__prototypeVersion__ , "current:" , AsyncTryCatch.prototype.__prototypeVersion__ ) ;
+		
+		var currentVersions = AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
+		var installedVersions = global.AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
+		
+		// Basic semver comparison
+		if (
+			installedVersions[ 0 ] !== currentVersions[ 0 ] ||
+			( currentVersions[ 0 ] === "0" && installedVersions[ 1 ] !== currentVersions[ 1 ] )
+		)
+		{
+			throw new Error(
+				"Incompatible version of AsyncTryCatch already installed on global.AsyncTryCatch: " +
+				global.AsyncTryCatch.prototype.__prototypeVersion__ +
+				", current version: " + AsyncTryCatch.prototype.__prototypeVersion__
+			) ;
+		}
+		//global.AsyncTryCatch = AsyncTryCatch ;
+	}
+	else
+	{
+		throw new Error( "Incompatible module already installed on global.AsyncTryCatch" ) ;
+	}
+}
+else
+{
+	global.AsyncTryCatch = AsyncTryCatch ;
+	global.AsyncTryCatch.stack = [] ;
+	global.AsyncTryCatch.substituted = false ;
+}
 
 
 
@@ -3692,18 +3732,10 @@ if ( process.browser && ! global.setImmediate )
 
 
 
-if ( ! global.Vanilla )
-{
-	global.Vanilla = {} ;
-	
-	if ( ! global.Vanilla.setTimeout ) { global.Vanilla.setTimeout = setTimeout ; }
-	if ( ! global.Vanilla.setImmediate ) { global.Vanilla.setImmediate = setImmediate ; }
-	if ( ! global.Vanilla.nextTick ) { global.Vanilla.nextTick = process.nextTick ; }
-	//if ( ! global.Vanilla.Error ) { global.Vanilla.Error = Error ; }
-}
-
-AsyncTryCatch.stack = [] ;
-AsyncTryCatch.substituted = false ;
+if ( ! global.Vanilla ) { global.Vanilla = {} ; }
+if ( ! global.Vanilla.setTimeout ) { global.Vanilla.setTimeout = setTimeout ; }
+if ( ! global.Vanilla.setImmediate ) { global.Vanilla.setImmediate = setImmediate ; }
+if ( ! global.Vanilla.nextTick ) { global.Vanilla.nextTick = process.nextTick ; }
 
 
 
@@ -3711,7 +3743,7 @@ AsyncTryCatch.try = function try_( fn )
 {
 	var self = Object.create( AsyncTryCatch.prototype , {
 		fn: { value: fn , enumerable: true } ,
-		parent: { value: AsyncTryCatch.stack[ AsyncTryCatch.stack.length - 1 ] }
+		parent: { value: global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] }
 	} ) ;
 	
 	return self ;
@@ -3725,15 +3757,15 @@ AsyncTryCatch.prototype.catch = function catch_( catchFn )
 		catchFn: { value: catchFn , enumerable: true }
 	} ) ;
 	
-	if ( ! AsyncTryCatch.substituted ) { AsyncTryCatch.substitute() ; }
+	if ( ! global.AsyncTryCatch.substituted ) { AsyncTryCatch.substitute() ; }
 	
 	try {
-		AsyncTryCatch.stack.push( this ) ;
+		global.AsyncTryCatch.stack.push( this ) ;
 		this.fn() ;
-		AsyncTryCatch.stack.pop() ;
+		global.AsyncTryCatch.stack.pop() ;
 	}
 	catch ( error ) {
-		AsyncTryCatch.stack.pop() ;
+		global.AsyncTryCatch.stack.pop() ;
 		this.callCatchFn( error ) ;
 	}
 	
@@ -3751,12 +3783,12 @@ AsyncTryCatch.prototype.callCatchFn = function callCatchFn( error )
 	}
 	
 	try {
-		AsyncTryCatch.stack.push( this.parent ) ;
+		global.AsyncTryCatch.stack.push( this.parent ) ;
 		this.catchFn( error ) ;
-		AsyncTryCatch.stack.pop() ;
+		global.AsyncTryCatch.stack.pop() ;
 	}
 	catch ( error ) {
-		AsyncTryCatch.stack.pop() ;
+		global.AsyncTryCatch.stack.pop() ;
 		this.parent.callCatchFn( error ) ;
 	}
 } ;
@@ -3769,21 +3801,21 @@ AsyncTryCatch.timerWrapper = function timerWrapper( originalMethod , fn )
 	var fn , context , wrapperFn ,
 		args = Array.prototype.slice.call( arguments , 1 ) ;
 	
-	if ( typeof fn !== 'function' || ! AsyncTryCatch.stack.length )
+	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
 	{
 		return originalMethod.apply( this , args ) ;
 	}
 	
-	context = AsyncTryCatch.stack[ AsyncTryCatch.stack.length - 1 ] ;
+	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
 	
 	wrapperFn = function() {
 		try {
-			AsyncTryCatch.stack.push( context ) ;
+			global.AsyncTryCatch.stack.push( context ) ;
 			fn.apply( this , arguments ) ;
-			AsyncTryCatch.stack.pop() ;
+			global.AsyncTryCatch.stack.pop() ;
 		}
 		catch ( error ) {
-			AsyncTryCatch.stack.pop() ;
+			global.AsyncTryCatch.stack.pop() ;
 			context.callCatchFn( error ) ;
 		}
 	} ;
@@ -3808,12 +3840,12 @@ AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod ,
 		delete options.fn ;
 	}
 	
-	if ( typeof fn !== 'function' || ! AsyncTryCatch.stack.length )
+	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
 	{
 		return originalMethod.call( this , eventName , fn , options ) ;
 	}
 	
-	context = AsyncTryCatch.stack[ AsyncTryCatch.stack.length - 1 ] ;
+	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
 	
 	// Assume that the function is only wrapped once per eventEmitter
 	if ( this.__fnToWrapperMap )
@@ -3830,12 +3862,12 @@ AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod ,
 	{
 		wrapperFn = function() {
 			try {
-				AsyncTryCatch.stack.push( context ) ;
+				global.AsyncTryCatch.stack.push( context ) ;
 				fn.apply( this , arguments ) ;
-				AsyncTryCatch.stack.pop() ;
+				global.AsyncTryCatch.stack.pop() ;
 			}
 			catch ( error ) {
-				AsyncTryCatch.stack.pop() ;
+				global.AsyncTryCatch.stack.pop() ;
 				context.callCatchFn( error ) ;
 			}
 		} ;
@@ -3909,14 +3941,14 @@ AsyncTryCatch.substitute = function substitute()
 	// This test should be done by the caller, because substitution could be incomplete
 	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
 	
-	//if ( AsyncTryCatch.substituted ) { return ; }
-	AsyncTryCatch.substituted = true ;
+	//if ( global.AsyncTryCatch.substituted ) { return ; }
+	global.AsyncTryCatch.substituted = true ;
 	
 	global.setTimeout = AsyncTryCatch.setTimeout ;
 	global.setImmediate = AsyncTryCatch.setTimeout ;
 	process.nextTick = AsyncTryCatch.nextTick ;
 	
-	// Global is checked first, in case we are running into browsers
+	// Global is checked first, in case we are running inside a browser
 	try {
 		AsyncTryCatch.NodeEvents = global.EventEmitter || require( 'events' ) ;
 	} catch ( error ) {}
@@ -3934,7 +3966,7 @@ AsyncTryCatch.substitute = function substitute()
 		
 		if ( ! AsyncTryCatch.NodeEvents.__addListenerOnce )
 		{
-			AsyncTryCatch.NodeEvents.__addListenerOnce = AsyncTryCatch.NodeEvents.prototype.addListenerOnce ;
+			AsyncTryCatch.NodeEvents.__addListenerOnce = AsyncTryCatch.NodeEvents.prototype.once ;
 		}
 		
 		if ( ! AsyncTryCatch.NodeEvents.__removeListener )
@@ -3947,9 +3979,6 @@ AsyncTryCatch.substitute = function substitute()
 		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.addListenerOnce ;
 		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.removeListener ;
 	}
-	
-	//global.Error = AsyncTryCatch.Error ;
-	// Should do that for all error types, cause they will not inherit from the substituted constructor
 	
 	if ( AsyncTryCatch.NextGenEvents )
 	{
@@ -3968,8 +3997,8 @@ AsyncTryCatch.restore = function restore()
 	// This test should be done by the caller, because substitution could be incomplete
 	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
 	
-	//if ( ! AsyncTryCatch.substituted ) { return ; }
-	AsyncTryCatch.substituted = false ;
+	//if ( ! global.AsyncTryCatch.substituted ) { return ; }
+	global.AsyncTryCatch.substituted = false ;
 	
 	global.setTimeout = global.Vanilla.setTimeout ;
 	global.setImmediate = global.Vanilla.setImmediate ;
@@ -3983,8 +4012,6 @@ AsyncTryCatch.restore = function restore()
 		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.NodeEvents.__removeListener ;
 	}
 	
-	//global.Error = global.Vanilla.Error ;
-	
 	if ( AsyncTryCatch.NextGenEvents )
 	{
 		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.NextGenEvents.on ;
@@ -3997,29 +4024,64 @@ AsyncTryCatch.restore = function restore()
 
 
 
-/*
-AsyncTryCatch.Error = function Error( message )
-{
-	global.Vanilla.Error.call( this ) ;
-	global.Vanilla.Error.captureStackTrace && global.Vanilla.Error.captureStackTrace( this , this.constructor ) ; // jshint ignore:line
-	
-	Object.defineProperties( this , {
-		message: { value: message , writable: true } ,
-		id: { value: '' + Math.floor( Math.random( 1000000 ) ) }
-	} ) ;
-} ;
-
-AsyncTryCatch.Error.prototype = Object.create( global.Vanilla.Error.prototype ) ;
-AsyncTryCatch.Error.prototype.constructor = AsyncTryCatch.Error ;
-*/
-
-
-
-
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":16,"events":14,"nextgen-events":40}],13:[function(require,module,exports){
+},{"../package.json":13,"_process":17,"events":15,"nextgen-events":41}],13:[function(require,module,exports){
+module.exports={
+  "name": "async-try-catch",
+  "version": "0.2.1",
+  "description": "Async try catch",
+  "main": "lib/AsyncTryCatch.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "browserify": "^13.0.1",
+    "expect.js": "^0.3.1",
+    "jshint": "^2.9.2",
+    "mocha": "^2.5.3",
+    "nextgen-events": "^0.5.16",
+    "uglify-js": "^2.6.2"
+  },
+  "scripts": {
+    "test": "mocha -R dot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cronvel/async-try-catch.git"
+  },
+  "keywords": [
+    "async",
+    "try",
+    "catch"
+  ],
+  "author": {
+    "name": "Cédric Ronvel"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cronvel/async-try-catch/issues"
+  },
+  "copyright": {
+    "title": "Async Try-Catch",
+    "years": [
+      2015,
+      2016
+    ],
+    "owner": "Cédric Ronvel"
+  },
+  "readme": "\n\n# Async Try-Catch\n\nThe name says it all: it performs async try catch. \n\n* License: MIT\n* Current status: beta\n* Platform: Node.js only\n\n",
+  "readmeFilename": "README.md",
+  "gitHead": "f715512a5203b6610521981b071f4456b26d7c25",
+  "homepage": "https://github.com/cronvel/async-try-catch#readme",
+  "_id": "async-try-catch@0.2.1",
+  "_shasum": "7b5829b1c509223fd82ce9487286f9ac065c7606",
+  "_from": "async-try-catch@>=0.2.1 <0.3.0"
+}
 
 },{}],14:[function(require,module,exports){
+
+},{}],15:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4319,7 +4381,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /**
  * Determine if an object is Buffer
  *
@@ -4338,7 +4400,7 @@ module.exports = function (obj) {
     ))
 }
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -4434,7 +4496,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -4971,7 +5033,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5057,7 +5119,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5144,13 +5206,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":18,"./encode":19}],21:[function(require,module,exports){
+},{"./decode":19,"./encode":20}],22:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5884,7 +5946,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":22,"punycode":17,"querystring":20}],22:[function(require,module,exports){
+},{"./util":23,"punycode":18,"querystring":21}],23:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -5902,7 +5964,7 @@ module.exports = {
   }
 };
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -5928,7 +5990,7 @@ function convertChangesToDMP(changes) {
 }
 
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5965,7 +6027,7 @@ function escapeHTML(s) {
 }
 
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6194,7 +6256,7 @@ function clonePath(path) {
 }
 
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6214,7 +6276,7 @@ function diffChars(oldStr, newStr, callback) {
 }
 
 
-},{"./base":25}],27:[function(require,module,exports){
+},{"./base":26}],28:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6238,7 +6300,7 @@ function diffCss(oldStr, newStr, callback) {
 }
 
 
-},{"./base":25}],28:[function(require,module,exports){
+},{"./base":26}],29:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6340,7 +6402,7 @@ function canonicalize(obj, stack, replacementStack) {
 }
 
 
-},{"./base":25,"./line":29}],29:[function(require,module,exports){
+},{"./base":26,"./line":30}],30:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6395,7 +6457,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":37,"./base":25}],30:[function(require,module,exports){
+},{"../util/params":38,"./base":26}],31:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6419,7 +6481,7 @@ function diffSentences(oldStr, newStr, callback) {
 }
 
 
-},{"./base":25}],31:[function(require,module,exports){
+},{"./base":26}],32:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6491,7 +6553,7 @@ function diffWordsWithSpace(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":37,"./base":25}],32:[function(require,module,exports){
+},{"../util/params":38,"./base":26}],33:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6564,7 +6626,7 @@ exports. /*istanbul ignore end*/Diff = _base2.default;
 /*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
 
 
-},{"./convert/dmp":23,"./convert/xml":24,"./diff/base":25,"./diff/character":26,"./diff/css":27,"./diff/json":28,"./diff/line":29,"./diff/sentence":30,"./diff/word":31,"./patch/apply":33,"./patch/create":34,"./patch/parse":35}],33:[function(require,module,exports){
+},{"./convert/dmp":24,"./convert/xml":25,"./diff/base":26,"./diff/character":27,"./diff/css":28,"./diff/json":29,"./diff/line":30,"./diff/sentence":31,"./diff/word":32,"./patch/apply":34,"./patch/create":35,"./patch/parse":36}],34:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6730,7 +6792,7 @@ function applyPatches(uniDiff, options) {
 }
 
 
-},{"../util/distance-iterator":36,"./parse":35}],34:[function(require,module,exports){
+},{"../util/distance-iterator":37,"./parse":36}],35:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6885,7 +6947,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 }
 
 
-},{"../diff/line":29}],35:[function(require,module,exports){
+},{"../diff/line":30}],36:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -7021,7 +7083,7 @@ function parsePatch(uniDiff) {
 }
 
 
-},{}],36:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -7070,7 +7132,7 @@ exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
 };
 
 
-},{}],37:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -7090,7 +7152,7 @@ function generateOptions(options, defaults) {
 }
 
 
-},{}],38:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -7319,7 +7381,7 @@ dom.html = function html( element , html ) { element.innerHTML = html ; } ;
 
 
 
-},{"./svg.js":39}],39:[function(require,module,exports){
+},{"./svg.js":40}],40:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -7519,7 +7581,7 @@ domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
 
 
 
-},{"./dom.js":38,"fs":13}],40:[function(require,module,exports){
+},{"./dom.js":39,"fs":14}],41:[function(require,module,exports){
 /*
 	Next Gen Events
 	
@@ -8239,7 +8301,7 @@ NextGenEvents.off = NextGenEvents.prototype.off ;
 
 
 
-},{}],41:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -8299,7 +8361,7 @@ module.exports = {
 
 
 
-},{}],42:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -8398,7 +8460,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],43:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -8962,7 +9024,7 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")},require('_process'))
-},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":15,"./ansi.js":41,"./escape.js":42,"_process":16,"tree-kit/lib/extend.js":44}],44:[function(require,module,exports){
+},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":16,"./ansi.js":42,"./escape.js":43,"_process":17,"tree-kit/lib/extend.js":45}],45:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK object tree toolbox
 
