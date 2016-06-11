@@ -221,7 +221,7 @@ Reporter.prototype.reportOneError = function reportOneError( error )
 {
 	var content = '' ;
 	
-	if ( error.expected && error.actual )
+	if ( ( 'expected' in error ) && ( 'actual' in error ) )
 	{
 		content += '<p class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
 			'<span style="' + expectedStyle + '">expected</span><span style="' + actualStyle + '">actual</span>' +
