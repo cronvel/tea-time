@@ -24,7 +24,7 @@ For the doc, start reading the [mocha documentation](http://mochajs.org/).
 
 * Better test isolation, mocha (v2.5.3 ATM) would fail to run this test properly:
 
-    ```
+    ```js
     describe( "Desync" , function() {
         
         it( "should timeout and fail after the timeout" , function( done ) {
