@@ -1,4 +1,462 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.createTeaTime = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function (process,global){
+/*
+	Async Try-Catch
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+function AsyncTryCatch() { throw new Error( "Use AsyncTryCatch.try() instead." ) ; }
+module.exports = AsyncTryCatch ;
+AsyncTryCatch.prototype.__prototypeUID__ = 'async-try-catch/AsyncTryCatch' ;
+AsyncTryCatch.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
+
+
+
+if ( global.AsyncTryCatch )
+{
+	if ( global.AsyncTryCatch.prototype.__prototypeUID__ === 'async-try-catch/AsyncTryCatch' )
+	{
+		//console.log( "Already installed:" , global.AsyncTryCatch.prototype.__prototypeVersion__ , "current:" , AsyncTryCatch.prototype.__prototypeVersion__ ) ;
+		
+		var currentVersions = AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
+		var installedVersions = global.AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
+		
+		// Basic semver comparison
+		if (
+			installedVersions[ 0 ] !== currentVersions[ 0 ] ||
+			( currentVersions[ 0 ] === "0" && installedVersions[ 1 ] !== currentVersions[ 1 ] )
+		)
+		{
+			throw new Error(
+				"Incompatible version of AsyncTryCatch already installed on global.AsyncTryCatch: " +
+				global.AsyncTryCatch.prototype.__prototypeVersion__ +
+				", current version: " + AsyncTryCatch.prototype.__prototypeVersion__
+			) ;
+		}
+		//global.AsyncTryCatch = AsyncTryCatch ;
+	}
+	else
+	{
+		throw new Error( "Incompatible module already installed on global.AsyncTryCatch" ) ;
+	}
+}
+else
+{
+	global.AsyncTryCatch = AsyncTryCatch ;
+	global.AsyncTryCatch.stack = [] ;
+	global.AsyncTryCatch.substituted = false ;
+	global.AsyncTryCatch.NextGenEvents = [] ;
+}
+
+
+
+if ( process.browser && ! global.setImmediate )
+{
+	global.setImmediate = function setImmediate( fn ) { return setTimeout( fn , 0 ) ; } ;
+	global.clearImmediate = function clearImmediate( timer ) { return clearTimeout( timer ) ; } ;
+}
+
+
+
+if ( ! global.Vanilla ) { global.Vanilla = {} ; }
+if ( ! global.Vanilla.setTimeout ) { global.Vanilla.setTimeout = setTimeout ; }
+if ( ! global.Vanilla.setImmediate ) { global.Vanilla.setImmediate = setImmediate ; }
+if ( ! global.Vanilla.nextTick ) { global.Vanilla.nextTick = process.nextTick ; }
+
+
+
+AsyncTryCatch.try = function try_( fn )
+{
+	var self = Object.create( AsyncTryCatch.prototype , {
+		fn: { value: fn , enumerable: true } ,
+		parent: { value: global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] }
+	} ) ;
+	
+	return self ;
+} ;
+
+
+
+AsyncTryCatch.prototype.catch = function catch_( catchFn )
+{
+	Object.defineProperties( this , {
+		catchFn: { value: catchFn , enumerable: true }
+	} ) ;
+	
+	if ( ! global.AsyncTryCatch.substituted ) { AsyncTryCatch.substitute() ; }
+	
+	try {
+		global.AsyncTryCatch.stack.push( this ) ;
+		this.fn() ;
+		global.AsyncTryCatch.stack.pop() ;
+	}
+	catch ( error ) {
+		global.AsyncTryCatch.stack.pop() ;
+		this.callCatchFn( error ) ;
+	}
+	
+} ;
+
+
+
+// Handle the bubble up
+AsyncTryCatch.prototype.callCatchFn = function callCatchFn( error )
+{
+	if ( ! this.parent )
+	{
+		this.catchFn( error ) ;
+		return ;
+	}
+	
+	try {
+		global.AsyncTryCatch.stack.push( this.parent ) ;
+		this.catchFn( error ) ;
+		global.AsyncTryCatch.stack.pop() ;
+	}
+	catch ( error ) {
+		global.AsyncTryCatch.stack.pop() ;
+		this.parent.callCatchFn( error ) ;
+	}
+} ;
+
+
+
+// for setTimeout(), setImmediate(), process.nextTick()
+AsyncTryCatch.timerWrapper = function timerWrapper( originalMethod , fn )
+{
+	var fn , context , wrapperFn ,
+		args = Array.prototype.slice.call( arguments , 1 ) ;
+	
+	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
+	{
+		return originalMethod.apply( this , args ) ;
+	}
+	
+	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
+	
+	wrapperFn = function() {
+		try {
+			global.AsyncTryCatch.stack.push( context ) ;
+			fn.apply( this , arguments ) ;
+			global.AsyncTryCatch.stack.pop() ;
+		}
+		catch ( error ) {
+			global.AsyncTryCatch.stack.pop() ;
+			context.callCatchFn( error ) ;
+		}
+	} ;
+	
+	args[ 0 ] = wrapperFn ;
+	
+	return originalMethod.apply( this , args ) ;
+} ;
+
+
+
+// for Node-EventEmitter-compatible .addListener()
+AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod , eventName , fn , options )
+{
+	var fn , context , wrapperFn ;
+	
+	// NextGen event compatibility
+	if ( typeof fn === 'object' )
+	{
+		options = fn ;
+		fn = options.fn ;
+		delete options.fn ;
+	}
+	
+	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
+	{
+		return originalMethod.call( this , eventName , fn , options ) ;
+	}
+	
+	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
+	
+	// Assume that the function is only wrapped once per eventEmitter
+	if ( this.__fnToWrapperMap )
+	{
+		wrapperFn = this.__fnToWrapperMap.get( fn ) ;
+	}
+	else 
+	{
+		// Create the map, make it non-enumerable
+		Object.defineProperty( this , '__fnToWrapperMap', { value: new WeakMap() } ) ;
+	}
+	
+	if ( ! wrapperFn )
+	{
+		wrapperFn = function() {
+			try {
+				global.AsyncTryCatch.stack.push( context ) ;
+				fn.apply( this , arguments ) ;
+				global.AsyncTryCatch.stack.pop() ;
+			}
+			catch ( error ) {
+				global.AsyncTryCatch.stack.pop() ;
+				context.callCatchFn( error ) ;
+			}
+		} ;
+		
+		this.__fnToWrapperMap.set( fn , wrapperFn ) ;
+	}
+	
+	return originalMethod.call( this , eventName , wrapperFn , options ) ;
+} ;
+
+
+
+AsyncTryCatch.removeListenerWrapper = function removeListenerWrapper( originalMethod , eventName , fn )
+{
+	//console.log( 'fn:' , fn ) ;
+	
+	if ( typeof fn === 'function' && this.__fnToWrapperMap )
+	{
+		fn = this.__fnToWrapperMap.get( fn ) || fn ;
+	}
+	
+	return originalMethod.call( this , eventName , fn ) ;
+} ;
+
+
+
+AsyncTryCatch.setTimeout = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setTimeout ) ;
+AsyncTryCatch.setImmediate = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setImmediate ) ;
+AsyncTryCatch.nextTick = AsyncTryCatch.timerWrapper.bind( process , global.Vanilla.nextTick ) ;
+
+// NodeEvents on()/addListener() replacement
+AsyncTryCatch.addListener = function addListener( eventName , fn )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListener , eventName , fn ) ;
+} ;
+
+// NodeEvents once() replacement
+AsyncTryCatch.addListenerOnce = function addListenerOnce( eventName , fn )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListenerOnce , eventName , fn ) ;
+} ;
+
+// NodeEvents removeListener() replacement
+AsyncTryCatch.removeListener = function removeListener( eventName , fn )
+{
+	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__removeListener , eventName , fn ) ;
+} ;
+
+// NextGen Events on()/addListener() replacement
+AsyncTryCatch.ngevAddListener = function ngevAddListener( eventName , fn , options )
+{
+	/*
+	console.log( 'this:' , this ) ;
+	console.log( 'this.asyncTryCatchId:' , this.asyncTryCatchId ) ;
+	console.log( 'called with:' , Array.from( arguments ) ) ;
+	try {*/
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].on , eventName , fn , options ) ;
+	/*}
+	catch ( error ) {
+		console.error( error ) ;
+		console.log( index ) ;
+		throw error ;
+	}*/
+} ;
+
+// NextGen Events once() replacement
+AsyncTryCatch.ngevAddListenerOnce = function ngevAddListenerOnce( eventName , fn , options )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].once , eventName , fn , options ) ;
+} ;
+
+// NextGen Events off()/removeListener() replacement
+AsyncTryCatch.ngevRemoveListener = function ngevRemoveListener( eventName , fn )
+{
+	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].off , eventName , fn ) ;
+} ;
+
+
+
+AsyncTryCatch.substitute = function substitute()
+{
+	// This test should be done by the caller, because substitution could be incomplete
+	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
+	//if ( global.AsyncTryCatch.substituted ) { return ; }
+	
+	global.AsyncTryCatch.substituted = true ;
+	
+	global.setTimeout = AsyncTryCatch.setTimeout ;
+	global.setImmediate = AsyncTryCatch.setTimeout ;
+	process.nextTick = AsyncTryCatch.nextTick ;
+	
+	// Global is checked first, in case we are running inside a browser
+	try {
+		AsyncTryCatch.NodeEvents = global.EventEmitter || require( 'events' ) ;
+	} catch ( error ) {}
+	
+	/*
+	try {
+		AsyncTryCatch.NextGenEvents = global.NextGenEvents || require( 'nextgen-events' ) ;
+	} catch ( error ) {}
+	*/
+	
+	if ( AsyncTryCatch.NodeEvents )
+	{
+		if ( ! AsyncTryCatch.NodeEvents.__addListener )
+		{
+			AsyncTryCatch.NodeEvents.__addListener = AsyncTryCatch.NodeEvents.prototype.on ;
+		}
+		
+		if ( ! AsyncTryCatch.NodeEvents.__addListenerOnce )
+		{
+			AsyncTryCatch.NodeEvents.__addListenerOnce = AsyncTryCatch.NodeEvents.prototype.once ;
+		}
+		
+		if ( ! AsyncTryCatch.NodeEvents.__removeListener )
+		{
+			AsyncTryCatch.NodeEvents.__removeListener = AsyncTryCatch.NodeEvents.prototype.removeListener ;
+		}
+		
+		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.addListener ;
+		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.addListener ;
+		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.addListenerOnce ;
+		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.removeListener ;
+	}
+	
+	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ )
+	{
+		//console.log( 'substituting NextGenEvents' , i ) ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.on = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.addListener = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.once = AsyncTryCatch.ngevAddListenerOnce ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.off = AsyncTryCatch.ngevRemoveListener ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.removeListener = AsyncTryCatch.ngevRemoveListener ;
+	}
+	
+	/*
+	if ( AsyncTryCatch.NextGenEvents )
+	{
+		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.ngevAddListenerOnce ;
+		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.ngevRemoveListener ;
+		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.ngevRemoveListener ;
+	}
+	*/
+} ;
+
+
+
+AsyncTryCatch.restore = function restore()
+{
+	// This test should be done by the caller, because substitution could be incomplete
+	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
+	//if ( ! global.AsyncTryCatch.substituted ) { return ; }
+	
+	global.AsyncTryCatch.substituted = false ;
+	
+	global.setTimeout = global.Vanilla.setTimeout ;
+	global.setImmediate = global.Vanilla.setImmediate ;
+	process.nextTick = global.Vanilla.nextTick ;
+	
+	if ( AsyncTryCatch.NodeEvents )
+	{
+		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.NodeEvents.__addListener ;
+		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.NodeEvents.__addListener ;
+		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.NodeEvents.__addListenerOnce ;
+		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.NodeEvents.__removeListener ;
+	}
+	
+	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ )
+	{
+		AsyncTryCatch.NextGenEvents[ i ].prototype.on = AsyncTryCatch.NextGenEvents[ i ].on ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.addListener = AsyncTryCatch.NextGenEvents[ i ].on ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.once = AsyncTryCatch.NextGenEvents[ i ].once ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.off = AsyncTryCatch.NextGenEvents[ i ].off ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.removeListener = AsyncTryCatch.NextGenEvents[ i ].removeListener ;
+	}
+	
+	/*
+	if ( AsyncTryCatch.NextGenEvents )
+	{
+		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.NextGenEvents.on ;
+		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.NextGenEvents.on ;
+		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.NextGenEvents.once ;
+		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.NextGenEvents.off ;
+		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.NextGenEvents.removeListener ;
+	}
+	*/
+} ;
+
+
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../package.json":2,"_process":18,"events":16}],2:[function(require,module,exports){
+module.exports={
+  "name": "async-try-catch",
+  "version": "0.3.0",
+  "description": "Async try catch",
+  "main": "lib/AsyncTryCatch.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "browserify": "^13.0.1",
+    "expect.js": "^0.3.1",
+    "jshint": "^2.9.2",
+    "mocha": "^2.5.3",
+    "nextgen-events": "^0.9.5",
+    "uglify-js": "^2.6.2"
+  },
+  "scripts": {
+    "test": "mocha -R dot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cronvel/async-try-catch.git"
+  },
+  "keywords": [
+    "async",
+    "try",
+    "catch"
+  ],
+  "author": "Cédric Ronvel",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cronvel/async-try-catch/issues"
+  },
+  "copyright": {
+    "title": "Async Try-Catch",
+    "years": [
+      2015,
+      2016
+    ],
+    "owner": "Cédric Ronvel"
+  }
+}
+},{}],3:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -242,7 +700,7 @@ Reporter.prototype.reportOneError = function reportOneError( error )
 
 
 
-},{}],2:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -323,7 +781,7 @@ Reporter.report = function report( ok , fail , skip )
 
 
 
-},{}],3:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -442,7 +900,7 @@ Reporter.exit = function exit( callback )
 
 
 
-},{}],4:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -587,7 +1045,7 @@ dom.ready( function() {
 
 
 
-},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":39,"string-kit/lib/inspect.js":44,"url":22}],5:[function(require,module,exports){
+},{"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"./tea-time.js":9,"dom-kit":40,"string-kit/lib/inspect.js":47,"url":23}],7:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -679,7 +1137,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":33,"string-kit/lib/inspect.js":44}],6:[function(require,module,exports){
+},{"diff":34,"string-kit/lib/inspect.js":47}],8:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -746,7 +1204,7 @@ module.exports = function htmlColorDiff( oldValue , newValue )
 
 
 
-},{"./diff.js":5}],7:[function(require,module,exports){
+},{"./diff.js":7}],9:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -1278,6 +1736,7 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 	
 	var triggerCallback = function triggerCallback( error ) {
 		
+		self.offUncaughtException( triggerCallback ) ;
 		if ( callbackTriggered ) { return ; }
 		
 		time = Date.now() - startTime ;
@@ -1302,6 +1761,8 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 	.catch( function( error ) {
 		triggerCallback( error ) ;
 	} ) ;
+	
+	this.onceUncaughtException( triggerCallback ) ;
 } ;
 
 
@@ -1356,6 +1817,7 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 	
 	var triggerCallback = function triggerCallback( error ) {
 		
+		self.offUncaughtException( triggerCallback ) ;
 		if ( callbackTriggered ) { return ; }
 		
 		callbackTriggered = true ;
@@ -1368,6 +1830,8 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 	.catch( function( error ) {
 		triggerCallback( error ) ;
 	} ) ;
+	
+	this.onceUncaughtException( triggerCallback ) ;
 } ;
 
 
@@ -1419,8 +1883,6 @@ TeaTime.registerTest = function registerTest( testName , fn )
 	{
 		throw new Error( "Usage is test( name , [fn] )" ) ;
 	}
-	
-// ---------------------------------- Test using 'this' context instead of a static stack ----------------------------------- 
 	
 	parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
 	
@@ -1536,7 +1998,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":8,"async-try-catch":12,"nextgen-events":41}],8:[function(require,module,exports){
+},{"async-kit":10,"async-try-catch":1,"nextgen-events":42}],10:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -1573,9 +2035,13 @@ module.exports = async ;
 async.wrapper = require( './wrapper.js' ) ;
 async.exit = require( './exit.js' ) ;
 
+var safeTimeout = require( './safeTimeout.js' ) ;
+async.setSafeTimeout = safeTimeout.setSafeTimeout ;
+async.clearSafeTimeout = safeTimeout.clearSafeTimeout ;
 
 
-},{"./core.js":9,"./exit.js":10,"./wrapper.js":11}],9:[function(require,module,exports){
+
+},{"./core.js":11,"./exit.js":12,"./safeTimeout.js":13,"./wrapper.js":14}],11:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -1705,6 +2171,7 @@ var planCommonProperties = {
 	jobsKeys: { value: [] , writable: true , enumerable: true } ,
 	jobsUsing: { value: undefined , writable: true , enumerable: true } ,
 	jobsTimeout: { value: undefined , writable: true , enumerable: true } ,
+	useSafeTimeout: { value: false , writable: true , enumerable: true } ,
 	returnLastJobOnly: { value: false , writable: true , enumerable: true } ,
 	defaultAggregate: { value: undefined , writable: true , enumerable: true } ,
 	returnAggregate: { value: false , writable: true , enumerable: true } ,
@@ -2215,6 +2682,14 @@ async.Plan.prototype.timeout = function timeout( jobsTimeout )
 		else { this.jobsTimeout = undefined ; }
 	}
 	return this ;
+} ;
+
+
+
+// Set the 'safeTimeout' mode for all internal timeout
+async.Plan.prototype.safeTimeout = function safeTimeout( useSafeTimeout )
+{
+	if ( ! this.locked ) { this.useSafeTimeout = useSafeTimeout === undefined ? true : !! useSafeTimeout ; }
 } ;
 
 
@@ -2843,113 +3318,122 @@ async.ExecContext.prototype.getJobsStatus = function getJobsStatus()
 
 function execDoInit( config , fromExecContext )
 {
-	var i , isArray = Array.isArray( this.jobsData ) ;
+	var i , execContext , isArray = Array.isArray( this.jobsData ) ;
 	
-	// Create instanceof ExecContext
-	var execContext = Object.create( async.ExecContext.prototype , {
-		plan: { value: this } ,
-		aggregate: { value: ( 'aggregate' in config  ? config.aggregate : this.defaultAggregate ) , writable: true , enumerable: true } ,
-		results: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-		result: { value: undefined , writable: true , enumerable: true } , // Conditionnal version
-		jobsTimeoutTimers: { value: ( isArray ? [] : {} ) , writable: true } ,
-		jobsStatus: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-		retriesTimers: { value: ( isArray ? [] : {} ) , writable: true } ,
-		retriesCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-		tryUserResponseCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-		tryResponseCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-		iterator: { value: 0 , writable: true , enumerable: true } ,
-		pending: { value: 0 , writable: true , enumerable: true } ,
-		resolved: { value: 0 , writable: true , enumerable: true } ,
-		ok: { value: 0 , writable: true , enumerable: true } ,
-		failed: { value: 0 , writable: true , enumerable: true } ,
-		status: { value: undefined , writable: true , enumerable: true } ,
-		error: { value: undefined , writable: true , enumerable: true } ,
-		statusTriggerJobsKey: { value: undefined , writable: true , enumerable: true } ,
-		whileStatus: { value: undefined , writable: true } ,
-			// true if current execContext has looped in another execContext (one loop per execContext possible)
-			// false if this execContext will never loop, undefined if this isn't settled
-		whileChecked: { value: false , writable: true }
-	} ) ;
-	
-	// Add some properties depending on inherited ExecContext or not
-	if ( ! fromExecContext )
+	if ( fromExecContext && fromExecContext.whileIterator === -1 )
 	{
-		// This is the top-level/first ExecContext
-		Object.defineProperties( execContext , {
-			root: { value: execContext , enumerable: true } ,
-			jobsData: {
-				value: ( isArray ? this.jobsData.slice(0) : treeExtend( null , {} , this.jobsData ) ) ,
-				enumerable: true
-			} ,
-			jobsKeys: { value: this.jobsKeys.slice(0) , enumerable: true } ,
-			execInputs: { value: config.inputs , enumerable: true } ,
-			execCallbacks: { value: config.callbacks } ,
-			whileIterator: { value: 0 , enumerable: true , writable: true }
-		} ) ;
+		// This is a async.while().do() construct, reuse the parent context
+		execContext = fromExecContext ;
+		execContext.whileIterator = 0 ;
 	}
 	else
 	{
-		// This is a loop, and this ExecContext is derived from the first one
-		Object.defineProperties( execContext , {
-			root: { value: fromExecContext.root , enumerable: true } ,
-			jobsData: { value: fromExecContext.jobsData , enumerable: true } ,
-			jobsKeys: { value: fromExecContext.jobsKeys , enumerable: true } ,
-			execInputs: { value: fromExecContext.execInputs , enumerable: true } ,
-			execCallbacks: { value: fromExecContext.execCallbacks } ,
-			whileIterator: { value: fromExecContext.whileIterator + 1 , enumerable: true , writable: true }
+		// Create instanceof ExecContext
+		execContext = Object.create( async.ExecContext.prototype , {
+			plan: { value: this } ,
+			aggregate: { value: ( 'aggregate' in config  ? config.aggregate : this.defaultAggregate ) , writable: true , enumerable: true } ,
+			results: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
+			result: { value: undefined , writable: true , enumerable: true } , // Conditionnal version
+			jobsTimeoutTimers: { value: ( isArray ? [] : {} ) , writable: true } ,
+			jobsStatus: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
+			retriesTimers: { value: ( isArray ? [] : {} ) , writable: true } ,
+			retriesCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
+			tryUserResponseCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
+			tryResponseCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
+			iterator: { value: 0 , writable: true , enumerable: true } ,
+			pending: { value: 0 , writable: true , enumerable: true } ,
+			resolved: { value: 0 , writable: true , enumerable: true } ,
+			ok: { value: 0 , writable: true , enumerable: true } ,
+			failed: { value: 0 , writable: true , enumerable: true } ,
+			status: { value: undefined , writable: true , enumerable: true } ,
+			error: { value: undefined , writable: true , enumerable: true } ,
+			statusTriggerJobsKey: { value: undefined , writable: true , enumerable: true } ,
+			whileStatus: { value: undefined , writable: true } ,
+				// true if current execContext has looped in another execContext (one loop per execContext possible)
+				// false if this execContext will never loop, undefined if this isn't settled
+			whileChecked: { value: false , writable: true }
 		} ) ;
-	}
-	
-	// Add more properties depending on previous properties
-	Object.defineProperties( execContext , {
-		waiting: { value: execContext.jobsKeys.length , writable: true , enumerable: true }
-	} ) ;
-	
-	// Init the jobsStatus
-	for ( i = 0 ; i < execContext.jobsKeys.length ; i ++ )
-	{
-		execContext.jobsStatus[ execContext.jobsKeys[ i ] ] = {
-			status: 'waiting' ,
-			errors: [] ,
-			tried: 0
-		} ;
-	}
-	
-	// Set up the nice value
-	execContext.setNice( this.asyncEventNice ) ;
-	
-	
-	// Initialize event listeners, only the first time
-	if ( fromExecContext === undefined )
-	{
-		// Register execFinal to the 'resolved' event
-		execContext.root.on( 'resolved' , this.execFinal.bind( this , execContext ) ) ;
 		
-		
-		// Register whileAction to the 'while' event and exec to the 'nextLoop' event
-		// Here, simple callback is mandatory
-		if ( typeof this.whileAction === 'function' )
+		// Add some properties depending on inherited ExecContext or not
+		if ( ! fromExecContext )
 		{
-			execContext.root.on( 'while' , this.whileAction.bind( this ) ) ;
-			execContext.root.on( 'nextLoop' , this.execLoop.bind( this ) ) ;
+			// This is the top-level/first ExecContext
+			Object.defineProperties( execContext , {
+				root: { value: execContext , enumerable: true } ,
+				jobsData: {
+					value: ( isArray ? this.jobsData.slice(0) : treeExtend( null , {} , this.jobsData ) ) ,
+					enumerable: true
+				} ,
+				jobsKeys: { value: this.jobsKeys.slice(0) , enumerable: true } ,
+				execInputs: { value: config.inputs , enumerable: true } ,
+				execCallbacks: { value: config.callbacks } ,
+				whileIterator: { value: 0 , enumerable: true , writable: true }
+			} ) ;
 		}
 		else
 		{
-			this.whileAction = undefined ; // falsy value: do not trigger while code
-			execContext.whileStatus = false ; // settle while status to false
+			// This is a loop, and this ExecContext is derived from the first one
+			Object.defineProperties( execContext , {
+				root: { value: fromExecContext.root , enumerable: true } ,
+				jobsData: { value: fromExecContext.jobsData , enumerable: true } ,
+				jobsKeys: { value: fromExecContext.jobsKeys , enumerable: true } ,
+				execInputs: { value: fromExecContext.execInputs , enumerable: true } ,
+				execCallbacks: { value: fromExecContext.execCallbacks } ,
+				whileIterator: { value: fromExecContext.whileIterator + 1 , enumerable: true , writable: true }
+			} ) ;
 		}
 		
+		// Add more properties depending on previous properties
+		Object.defineProperties( execContext , {
+			waiting: { value: execContext.jobsKeys.length , writable: true , enumerable: true }
+		} ) ;
 		
-		// Register execNext to the next event
-		execContext.root.on( 'next' , this.execNext.bind( this ) ) ;
-		
-		
-		// If we are in a async.while().do() scheme, start whileAction before doing anything
-		if ( this.whileAction && this.whileActionBefore )
+		// Init the jobsStatus
+		for ( i = 0 ; i < execContext.jobsKeys.length ; i ++ )
 		{
-			execContext.whileIterator = -1 ;
-			execContext.root.emit( 'while' , execContext.error , execContext.results , this.execLoopCallback.bind( this , execContext ) , null ) ;
-			return this ;
+			execContext.jobsStatus[ execContext.jobsKeys[ i ] ] = {
+				status: 'waiting' ,
+				errors: [] ,
+				tried: 0
+			} ;
+		}
+		
+		// Set up the nice value
+		execContext.setNice( this.asyncEventNice ) ;
+		
+		
+		// Initialize event listeners, only the first time
+		if ( fromExecContext === undefined )
+		{
+			// Register execFinal to the 'resolved' event
+			execContext.root.on( 'resolved' , this.execFinal.bind( this , execContext ) ) ;
+			
+			
+			// Register whileAction to the 'while' event and exec to the 'nextLoop' event
+			// Here, simple callback is mandatory
+			if ( typeof this.whileAction === 'function' )
+			{
+				execContext.root.on( 'while' , this.whileAction.bind( this ) ) ;
+				execContext.root.on( 'nextLoop' , this.execLoop.bind( this ) ) ;
+			}
+			else
+			{
+				this.whileAction = undefined ; // falsy value: do not trigger while code
+				execContext.whileStatus = false ; // settle while status to false
+			}
+			
+			
+			// Register execNext to the next event
+			execContext.root.on( 'next' , this.execNext.bind( this ) ) ;
+			
+			
+			// If we are in a async.while().do() scheme, start whileAction before doing anything
+			if ( this.whileAction && this.whileActionBefore )
+			{
+				execContext.whileIterator = -1 ;
+				execContext.root.emit( 'while' , execContext.error , execContext.results , this.execLoopCallback.bind( this , execContext ) , null ) ;
+				return this ;
+			}
 		}
 	}
 	
@@ -3491,7 +3975,7 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"nextgen-events":41,"tree-kit/lib/extend.js":45}],10:[function(require,module,exports){
+},{"nextgen-events":42,"tree-kit/lib/extend.js":48}],12:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -3581,7 +4065,75 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":8,"_process":17}],11:[function(require,module,exports){
+},{"./async.js":10,"_process":18}],13:[function(require,module,exports){
+/*
+	Async Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+/*
+	Safe Timeout.
+	
+	A timeout that ensure a task get the time to perform its action.
+*/
+
+exports.setSafeTimeout = function setSafeTimeout( fn , timeout )
+{
+	var timer = { isSafeTimeout: true } ;
+	
+	timer.timer = setTimeout( function() {
+		timer.timer = setTimeout( function() {
+			timer.timer = setTimeout( function() {
+				timer.timer = setTimeout( fn , 0 ) ;
+			} , timeout / 2 ) ;
+		} , timeout / 2 ) ;
+	} , 0 ) ;
+	
+	return timer ;
+} ;
+
+
+
+exports.clearSafeTimeout = function clearSafeTimeout( timer )
+{
+	if ( timer && typeof timer === 'object' && timer.isSafeTimeout )
+	{
+		clearTimeout( timer.timer ) ;
+	}
+	else
+	{
+		clearTimeout( timer ) ;
+	}
+} ;
+
+
+
+},{}],14:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3648,440 +4200,9 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 
 
-},{}],12:[function(require,module,exports){
-(function (process,global){
-/*
-	Async Try-Catch
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-function AsyncTryCatch() { throw new Error( "Use AsyncTryCatch.try() instead." ) ; }
-module.exports = AsyncTryCatch ;
-AsyncTryCatch.prototype.__prototypeUID__ = 'async-try-catch/AsyncTryCatch' ;
-AsyncTryCatch.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
-
-
-
-if ( global.AsyncTryCatch )
-{
-	if ( global.AsyncTryCatch.prototype.__prototypeUID__ === 'async-try-catch/AsyncTryCatch' )
-	{
-		//console.log( "Already installed:" , global.AsyncTryCatch.prototype.__prototypeVersion__ , "current:" , AsyncTryCatch.prototype.__prototypeVersion__ ) ;
-		
-		var currentVersions = AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
-		var installedVersions = global.AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
-		
-		// Basic semver comparison
-		if (
-			installedVersions[ 0 ] !== currentVersions[ 0 ] ||
-			( currentVersions[ 0 ] === "0" && installedVersions[ 1 ] !== currentVersions[ 1 ] )
-		)
-		{
-			throw new Error(
-				"Incompatible version of AsyncTryCatch already installed on global.AsyncTryCatch: " +
-				global.AsyncTryCatch.prototype.__prototypeVersion__ +
-				", current version: " + AsyncTryCatch.prototype.__prototypeVersion__
-			) ;
-		}
-		//global.AsyncTryCatch = AsyncTryCatch ;
-	}
-	else
-	{
-		throw new Error( "Incompatible module already installed on global.AsyncTryCatch" ) ;
-	}
-}
-else
-{
-	global.AsyncTryCatch = AsyncTryCatch ;
-	global.AsyncTryCatch.stack = [] ;
-	global.AsyncTryCatch.substituted = false ;
-}
-
-
-
-if ( process.browser && ! global.setImmediate )
-{
-	global.setImmediate = function setImmediate( fn ) { return setTimeout( fn , 0 ) ; } ;
-	global.clearImmediate = function clearImmediate( timer ) { return clearTimeout( timer ) ; } ;
-}
-
-
-
-if ( ! global.Vanilla ) { global.Vanilla = {} ; }
-if ( ! global.Vanilla.setTimeout ) { global.Vanilla.setTimeout = setTimeout ; }
-if ( ! global.Vanilla.setImmediate ) { global.Vanilla.setImmediate = setImmediate ; }
-if ( ! global.Vanilla.nextTick ) { global.Vanilla.nextTick = process.nextTick ; }
-
-
-
-AsyncTryCatch.try = function try_( fn )
-{
-	var self = Object.create( AsyncTryCatch.prototype , {
-		fn: { value: fn , enumerable: true } ,
-		parent: { value: global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] }
-	} ) ;
-	
-	return self ;
-} ;
-
-
-
-AsyncTryCatch.prototype.catch = function catch_( catchFn )
-{
-	Object.defineProperties( this , {
-		catchFn: { value: catchFn , enumerable: true }
-	} ) ;
-	
-	if ( ! global.AsyncTryCatch.substituted ) { AsyncTryCatch.substitute() ; }
-	
-	try {
-		global.AsyncTryCatch.stack.push( this ) ;
-		this.fn() ;
-		global.AsyncTryCatch.stack.pop() ;
-	}
-	catch ( error ) {
-		global.AsyncTryCatch.stack.pop() ;
-		this.callCatchFn( error ) ;
-	}
-	
-} ;
-
-
-
-// Handle the bubble up
-AsyncTryCatch.prototype.callCatchFn = function callCatchFn( error )
-{
-	if ( ! this.parent )
-	{
-		this.catchFn( error ) ;
-		return ;
-	}
-	
-	try {
-		global.AsyncTryCatch.stack.push( this.parent ) ;
-		this.catchFn( error ) ;
-		global.AsyncTryCatch.stack.pop() ;
-	}
-	catch ( error ) {
-		global.AsyncTryCatch.stack.pop() ;
-		this.parent.callCatchFn( error ) ;
-	}
-} ;
-
-
-
-// for setTimeout(), setImmediate(), process.nextTick()
-AsyncTryCatch.timerWrapper = function timerWrapper( originalMethod , fn )
-{
-	var fn , context , wrapperFn ,
-		args = Array.prototype.slice.call( arguments , 1 ) ;
-	
-	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
-	{
-		return originalMethod.apply( this , args ) ;
-	}
-	
-	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
-	
-	wrapperFn = function() {
-		try {
-			global.AsyncTryCatch.stack.push( context ) ;
-			fn.apply( this , arguments ) ;
-			global.AsyncTryCatch.stack.pop() ;
-		}
-		catch ( error ) {
-			global.AsyncTryCatch.stack.pop() ;
-			context.callCatchFn( error ) ;
-		}
-	} ;
-	
-	args[ 0 ] = wrapperFn ;
-	
-	return originalMethod.apply( this , args ) ;
-} ;
-
-
-
-// for Node-EventEmitter-compatible .addListener()
-AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod , eventName , fn , options )
-{
-	var fn , context , wrapperFn ;
-	
-	// NextGen event compatibility
-	if ( typeof fn === 'object' )
-	{
-		options = fn ;
-		fn = options.fn ;
-		delete options.fn ;
-	}
-	
-	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
-	{
-		return originalMethod.call( this , eventName , fn , options ) ;
-	}
-	
-	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
-	
-	// Assume that the function is only wrapped once per eventEmitter
-	if ( this.__fnToWrapperMap )
-	{
-		wrapperFn = this.__fnToWrapperMap.get( fn ) ;
-	}
-	else 
-	{
-		// Create the map, make it non-enumerable
-		Object.defineProperty( this , '__fnToWrapperMap', { value: new WeakMap() } ) ;
-	}
-	
-	if ( ! wrapperFn )
-	{
-		wrapperFn = function() {
-			try {
-				global.AsyncTryCatch.stack.push( context ) ;
-				fn.apply( this , arguments ) ;
-				global.AsyncTryCatch.stack.pop() ;
-			}
-			catch ( error ) {
-				global.AsyncTryCatch.stack.pop() ;
-				context.callCatchFn( error ) ;
-			}
-		} ;
-		
-		this.__fnToWrapperMap.set( fn , wrapperFn ) ;
-	}
-	
-	return originalMethod.call( this , eventName , wrapperFn , options ) ;
-} ;
-
-
-
-AsyncTryCatch.removeListenerWrapper = function removeListenerWrapper( originalMethod , eventName , fn )
-{
-	//console.log( 'fn:' , fn ) ;
-	
-	if ( typeof fn === 'function' && this.__fnToWrapperMap )
-	{
-		fn = this.__fnToWrapperMap.get( fn ) || fn ;
-	}
-	
-	return originalMethod.call( this , eventName , fn ) ;
-} ;
-
-
-
-AsyncTryCatch.setTimeout = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setTimeout ) ;
-AsyncTryCatch.setImmediate = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setImmediate ) ;
-AsyncTryCatch.nextTick = AsyncTryCatch.timerWrapper.bind( process , global.Vanilla.nextTick ) ;
-
-// NodeEvents on()/addListener() replacement
-AsyncTryCatch.addListener = function addListener( eventName , fn )
-{
-	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListener , eventName , fn ) ;
-} ;
-
-// NodeEvents once() replacement
-AsyncTryCatch.addListenerOnce = function addListenerOnce( eventName , fn )
-{
-	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListenerOnce , eventName , fn ) ;
-} ;
-
-// NodeEvents removeListener() replacement
-AsyncTryCatch.removeListener = function removeListener( eventName , fn )
-{
-	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__removeListener , eventName , fn ) ;
-} ;
-
-// NextGen Events on()/addListener() replacement
-AsyncTryCatch.ngevAddListener = function ngevAddListener( eventName , fn , options )
-{
-	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents.on , eventName , fn , options ) ;
-} ;
-
-// NextGen Events once() replacement
-AsyncTryCatch.ngevAddListenerOnce = function ngevAddListenerOnce( eventName , fn , options )
-{
-	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents.once , eventName , fn , options ) ;
-} ;
-
-// NextGen Events off()/removeListener() replacement
-AsyncTryCatch.ngevRemoveListener = function ngevRemoveListener( eventName , fn )
-{
-	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NextGenEvents.off , eventName , fn ) ;
-} ;
-
-
-
-AsyncTryCatch.substitute = function substitute()
-{
-	// This test should be done by the caller, because substitution could be incomplete
-	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
-	
-	//if ( global.AsyncTryCatch.substituted ) { return ; }
-	global.AsyncTryCatch.substituted = true ;
-	
-	global.setTimeout = AsyncTryCatch.setTimeout ;
-	global.setImmediate = AsyncTryCatch.setTimeout ;
-	process.nextTick = AsyncTryCatch.nextTick ;
-	
-	// Global is checked first, in case we are running inside a browser
-	try {
-		AsyncTryCatch.NodeEvents = global.EventEmitter || require( 'events' ) ;
-	} catch ( error ) {}
-	
-	try {
-		AsyncTryCatch.NextGenEvents = global.NextGenEvents || require( 'nextgen-events' ) ;
-	} catch ( error ) {}
-	
-	if ( AsyncTryCatch.NodeEvents )
-	{
-		if ( ! AsyncTryCatch.NodeEvents.__addListener )
-		{
-			AsyncTryCatch.NodeEvents.__addListener = AsyncTryCatch.NodeEvents.prototype.on ;
-		}
-		
-		if ( ! AsyncTryCatch.NodeEvents.__addListenerOnce )
-		{
-			AsyncTryCatch.NodeEvents.__addListenerOnce = AsyncTryCatch.NodeEvents.prototype.once ;
-		}
-		
-		if ( ! AsyncTryCatch.NodeEvents.__removeListener )
-		{
-			AsyncTryCatch.NodeEvents.__removeListener = AsyncTryCatch.NodeEvents.prototype.removeListener ;
-		}
-		
-		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.addListener ;
-		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.addListener ;
-		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.addListenerOnce ;
-		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.removeListener ;
-	}
-	
-	if ( AsyncTryCatch.NextGenEvents )
-	{
-		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.ngevAddListener ;
-		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.ngevAddListener ;
-		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.ngevAddListenerOnce ;
-		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.ngevRemoveListener ;
-		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.ngevRemoveListener ;
-	}
-} ;
-
-
-
-AsyncTryCatch.restore = function restore()
-{
-	// This test should be done by the caller, because substitution could be incomplete
-	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
-	
-	//if ( ! global.AsyncTryCatch.substituted ) { return ; }
-	global.AsyncTryCatch.substituted = false ;
-	
-	global.setTimeout = global.Vanilla.setTimeout ;
-	global.setImmediate = global.Vanilla.setImmediate ;
-	process.nextTick = global.Vanilla.nextTick ;
-	
-	if ( AsyncTryCatch.NodeEvents )
-	{
-		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.NodeEvents.__addListener ;
-		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.NodeEvents.__addListener ;
-		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.NodeEvents.__addListenerOnce ;
-		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.NodeEvents.__removeListener ;
-	}
-	
-	if ( AsyncTryCatch.NextGenEvents )
-	{
-		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.NextGenEvents.on ;
-		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.NextGenEvents.on ;
-		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.NextGenEvents.once ;
-		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.NextGenEvents.off ;
-		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.NextGenEvents.removeListener ;
-	}
-} ;
-
-
-
-}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":13,"_process":17,"events":15,"nextgen-events":41}],13:[function(require,module,exports){
-module.exports={
-  "name": "async-try-catch",
-  "version": "0.2.1",
-  "description": "Async try catch",
-  "main": "lib/AsyncTryCatch.js",
-  "directories": {
-    "test": "test"
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "browserify": "^13.0.1",
-    "expect.js": "^0.3.1",
-    "jshint": "^2.9.2",
-    "mocha": "^2.5.3",
-    "nextgen-events": "^0.5.16",
-    "uglify-js": "^2.6.2"
-  },
-  "scripts": {
-    "test": "mocha -R dot"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/cronvel/async-try-catch.git"
-  },
-  "keywords": [
-    "async",
-    "try",
-    "catch"
-  ],
-  "author": {
-    "name": "Cédric Ronvel"
-  },
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/cronvel/async-try-catch/issues"
-  },
-  "copyright": {
-    "title": "Async Try-Catch",
-    "years": [
-      2015,
-      2016
-    ],
-    "owner": "Cédric Ronvel"
-  },
-  "readme": "\n\n# Async Try-Catch\n\nThe name says it all: it performs async try catch. \n\n* License: MIT\n* Current status: beta\n* Platform: Node.js only\n\n",
-  "readmeFilename": "README.md",
-  "gitHead": "f715512a5203b6610521981b071f4456b26d7c25",
-  "homepage": "https://github.com/cronvel/async-try-catch#readme",
-  "_id": "async-try-catch@0.2.1",
-  "_shasum": "7b5829b1c509223fd82ce9487286f9ac065c7606",
-  "_from": "async-try-catch@>=0.2.1 <0.3.0"
-}
-
-},{}],14:[function(require,module,exports){
-
 },{}],15:[function(require,module,exports){
+
+},{}],16:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4141,8 +4262,12 @@ EventEmitter.prototype.emit = function(type) {
       er = arguments[1];
       if (er instanceof Error) {
         throw er; // Unhandled 'error' event
+      } else {
+        // At least give some kind of context to the user
+        var err = new Error('Uncaught, unspecified "error" event. (' + er + ')');
+        err.context = er;
+        throw err;
       }
-      throw TypeError('Uncaught, unspecified "error" event.');
     }
   }
 
@@ -4381,7 +4506,7 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /**
  * Determine if an object is Buffer
  *
@@ -4400,10 +4525,35 @@ module.exports = function (obj) {
     ))
 }
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+(function () {
+  try {
+    cachedSetTimeout = setTimeout;
+  } catch (e) {
+    cachedSetTimeout = function () {
+      throw new Error('setTimeout is not defined');
+    }
+  }
+  try {
+    cachedClearTimeout = clearTimeout;
+  } catch (e) {
+    cachedClearTimeout = function () {
+      throw new Error('clearTimeout is not defined');
+    }
+  }
+} ())
 var queue = [];
 var draining = false;
 var currentQueue;
@@ -4428,7 +4578,7 @@ function drainQueue() {
     if (draining) {
         return;
     }
-    var timeout = setTimeout(cleanUpNextTick);
+    var timeout = cachedSetTimeout.call(null, cleanUpNextTick);
     draining = true;
 
     var len = queue.length;
@@ -4445,7 +4595,7 @@ function drainQueue() {
     }
     currentQueue = null;
     draining = false;
-    clearTimeout(timeout);
+    cachedClearTimeout.call(null, timeout);
 }
 
 process.nextTick = function (fun) {
@@ -4457,7 +4607,7 @@ process.nextTick = function (fun) {
     }
     queue.push(new Item(fun, args));
     if (queue.length === 1 && !draining) {
-        setTimeout(drainQueue, 0);
+        cachedSetTimeout.call(null, drainQueue, 0);
     }
 };
 
@@ -4496,7 +4646,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -5033,7 +5183,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5119,7 +5269,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5206,13 +5356,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":19,"./encode":20}],22:[function(require,module,exports){
+},{"./decode":20,"./encode":21}],23:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5946,7 +6096,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":23,"punycode":18,"querystring":21}],23:[function(require,module,exports){
+},{"./util":24,"punycode":19,"querystring":22}],24:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -5964,7 +6114,7 @@ module.exports = {
   }
 };
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -5990,7 +6140,7 @@ function convertChangesToDMP(changes) {
 }
 
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6027,7 +6177,7 @@ function escapeHTML(s) {
 }
 
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6256,7 +6406,7 @@ function clonePath(path) {
 }
 
 
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6276,7 +6426,7 @@ function diffChars(oldStr, newStr, callback) {
 }
 
 
-},{"./base":26}],28:[function(require,module,exports){
+},{"./base":27}],29:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6300,7 +6450,7 @@ function diffCss(oldStr, newStr, callback) {
 }
 
 
-},{"./base":26}],29:[function(require,module,exports){
+},{"./base":27}],30:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6402,7 +6552,7 @@ function canonicalize(obj, stack, replacementStack) {
 }
 
 
-},{"./base":26,"./line":30}],30:[function(require,module,exports){
+},{"./base":27,"./line":31}],31:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6457,7 +6607,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":38,"./base":26}],31:[function(require,module,exports){
+},{"../util/params":39,"./base":27}],32:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6481,7 +6631,7 @@ function diffSentences(oldStr, newStr, callback) {
 }
 
 
-},{"./base":26}],32:[function(require,module,exports){
+},{"./base":27}],33:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6553,7 +6703,7 @@ function diffWordsWithSpace(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":38,"./base":26}],33:[function(require,module,exports){
+},{"../util/params":39,"./base":27}],34:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6626,7 +6776,7 @@ exports. /*istanbul ignore end*/Diff = _base2.default;
 /*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
 
 
-},{"./convert/dmp":24,"./convert/xml":25,"./diff/base":26,"./diff/character":27,"./diff/css":28,"./diff/json":29,"./diff/line":30,"./diff/sentence":31,"./diff/word":32,"./patch/apply":34,"./patch/create":35,"./patch/parse":36}],34:[function(require,module,exports){
+},{"./convert/dmp":25,"./convert/xml":26,"./diff/base":27,"./diff/character":28,"./diff/css":29,"./diff/json":30,"./diff/line":31,"./diff/sentence":32,"./diff/word":33,"./patch/apply":35,"./patch/create":36,"./patch/parse":37}],35:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6783,16 +6933,20 @@ function applyPatches(uniDiff, options) {
       }
 
       var updatedContent = applyPatch(data, index, options);
-      options.patched(index, updatedContent);
+      options.patched(index, updatedContent, function (err) {
+        if (err) {
+          return options.complete(err);
+        }
 
-      setTimeout(processIndex, 0);
+        processIndex();
+      });
     });
   }
   processIndex();
 }
 
 
-},{"../util/distance-iterator":37,"./parse":36}],35:[function(require,module,exports){
+},{"../util/distance-iterator":38,"./parse":37}],36:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -6947,7 +7101,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 }
 
 
-},{"../diff/line":30}],36:[function(require,module,exports){
+},{"../diff/line":31}],37:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -7008,7 +7162,8 @@ function parsePatch(uniDiff) {
   // Parses the --- and +++ headers, if none are found, no lines
   // are consumed.
   function parseFileHeader(index) {
-    var fileHeader = /^(\-\-\-|\+\+\+)\s+(\S*)\s?(.*?)\s*$/.exec(diffstr[i]);
+    var headerPattern = /^(---|\+\+\+)\s+([\S ]*)(?:\t(.*?)\s*)?$/;
+    var fileHeader = headerPattern.exec(diffstr[i]);
     if (fileHeader) {
       var keyPrefix = fileHeader[1] === '---' ? 'old' : 'new';
       index[keyPrefix + 'FileName'] = fileHeader[2];
@@ -7083,7 +7238,7 @@ function parsePatch(uniDiff) {
 }
 
 
-},{}],37:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -7119,7 +7274,7 @@ exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
       // Check if trying to fit before text beginning, and if not, check it fits
       // before offset location
       if (minLine <= start - localOffset) {
-        return - localOffset++;
+        return -localOffset++;
       }
 
       backwardExhausted = true;
@@ -7132,7 +7287,7 @@ exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
 };
 
 
-},{}],38:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -7152,7 +7307,7 @@ function generateOptions(options, defaults) {
 }
 
 
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -7381,7 +7536,7 @@ dom.html = function html( element , html ) { element.innerHTML = html ; } ;
 
 
 
-},{"./svg.js":40}],40:[function(require,module,exports){
+},{"./svg.js":41}],41:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -7581,7 +7736,8 @@ domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
 
 
 
-},{"./dom.js":39,"fs":14}],41:[function(require,module,exports){
+},{"./dom.js":40,"fs":15}],42:[function(require,module,exports){
+(function (global){
 /*
 	Next Gen Events
 	
@@ -7612,13 +7768,10 @@ domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
 
 
 
-// Create the object && export it
 function NextGenEvents() { return Object.create( NextGenEvents.prototype ) ; }
 module.exports = NextGenEvents ;
-
-
-
-
+NextGenEvents.prototype.__prototypeUID__ = 'nextgen-events/NextGenEvents' ;
+NextGenEvents.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
 
 			/* Basic features, more or less compatible with Node.js */
 
@@ -7630,19 +7783,30 @@ NextGenEvents.SYNC = -Infinity ;
 // It has an eventEmitter as 'this' anyway (always called using call()).
 NextGenEvents.init = function init()
 {
-	Object.defineProperty( this , '__ngev' , { value: {
-		nice: NextGenEvents.SYNC ,
-		interruptible: false ,
-		recursion: 0 ,
-		contexts: {} ,
-		events: {
-			// Special events
-			error: [] ,
-			interrupt: [] ,
-			newListener: [] ,
-			removeListener: []
+	Object.defineProperty( this , '__ngev' , {
+		configurable: true ,
+		value: {
+			nice: NextGenEvents.SYNC ,
+			interruptible: false ,
+			recursion: 0 ,
+			contexts: {} ,
+			
+			// States by events
+			states: {} ,
+			
+			// State groups by events
+			stateGroups: {} ,
+			
+			// Listeners by events
+			listeners: {
+				// Special events
+				error: [] ,
+				interrupt: [] ,
+				newListener: [] ,
+				removeListener: []
+			}
 		}
-	} } ) ;
+	} ) ;
 } ;
 
 
@@ -7655,25 +7819,20 @@ NextGenEvents.filterOutCallback = function( what , currentElement ) { return wha
 // .addListener( eventName , [fn] , [options] )
 NextGenEvents.prototype.addListener = function addListener( eventName , fn , options )
 {
-	var listener = {} ;
+	var listener = {} , newListenerListeners ;
 	
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.events[ eventName ] ) { this.__ngev.events[ eventName ] = [] ; }
+	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
 	
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".addListener(): argument #0 should be a non-empty string" ) ; }
-	
-	if ( typeof fn !== 'function' )
-	{
-		options = fn ;
-		fn = undefined ;
-	}
-	
+	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
 	
 	listener.fn = fn || options.fn ;
-	listener.id = typeof options.id === 'string' ? options.id : listener.fn ;
+	listener.id = options.id !== undefined ? options.id : listener.fn ;
 	listener.once = !! options.once ;
 	listener.async = !! options.async ;
+	listener.eventObject = !! options.eventObject ;
 	listener.nice = options.nice !== undefined ? Math.floor( options.nice ) : NextGenEvents.SYNC ;
 	listener.context = typeof options.context === 'string' ? options.context : null ;
 	
@@ -7692,16 +7851,32 @@ NextGenEvents.prototype.addListener = function addListener( eventName , fn , opt
 	// So the event's name can be retrieved in the listener itself.
 	listener.event = eventName ;
 	
-	// We should emit 'newListener' first, before adding it to the listeners,
-	// to avoid recursion in the case that eventName === 'newListener'
-	if ( this.__ngev.events.newListener.length )
+	if ( this.__ngev.listeners.newListener.length )
 	{
-		// Return an array, because .addListener() may support multiple event addition at once
+		// Extra care should be taken with the 'newListener' event, we should avoid recursion
+		// in the case that eventName === 'newListener', but inside a 'newListener' listener,
+		// .listenerCount() should report correctly
+		newListenerListeners = this.__ngev.listeners.newListener.slice() ;
+		
+		this.__ngev.listeners[ eventName ].push( listener ) ;
+		
+		// Return an array, because one day, .addListener() may support multiple event addition at once,
 		// e.g.: .addListener( { request: onRequest, close: onClose, error: onError } ) ;
-		this.emit( 'newListener' , [ listener ] ) ;
+		NextGenEvents.emitEvent( {
+			emitter: this ,
+			name: 'newListener' ,
+			args: [ [ listener ] ] ,
+			listeners: newListenerListeners
+		} ) ;
+		
+		if ( this.__ngev.states[ eventName ] ) { NextGenEvents.emitToOneListener( this.__ngev.states[ eventName ] , listener ) ; }
+		
+		return this ;
 	}
 	
-	this.__ngev.events[ eventName ].push( listener ) ;
+	this.__ngev.listeners[ eventName ].push( listener ) ;
+	
+	if ( this.__ngev.states[ eventName ] ) { NextGenEvents.emitToOneListener( this.__ngev.states[ eventName ] , listener ) ; }
 	
 	return this ;
 } ;
@@ -7711,6 +7886,7 @@ NextGenEvents.prototype.on = NextGenEvents.prototype.addListener ;
 
 
 // Shortcut
+// .once( eventName , [fn] , [options] )
 NextGenEvents.prototype.once = function once( eventName , fn , options )
 {
 	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
@@ -7729,26 +7905,26 @@ NextGenEvents.prototype.removeListener = function removeListener( eventName , id
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeListener(): argument #0 should be a non-empty string" ) ; }
 	
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.events[ eventName ] ) { this.__ngev.events[ eventName ] = [] ; }
+	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
 	
-	length = this.__ngev.events[ eventName ].length ;
+	length = this.__ngev.listeners[ eventName ].length ;
 	
 	// It's probably faster to create a new array of listeners
 	for ( i = 0 ; i < length ; i ++ )
 	{
-		if ( this.__ngev.events[ eventName ][ i ].id === id )
+		if ( this.__ngev.listeners[ eventName ][ i ].id === id )
 		{
-			removedListeners.push( this.__ngev.events[ eventName ][ i ] ) ;
+			removedListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
 		}
 		else
 		{
-			newListeners.push( this.__ngev.events[ eventName ][ i ] ) ;
+			newListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
 		}
 	}
 	
-	this.__ngev.events[ eventName ] = newListeners ;
+	this.__ngev.listeners[ eventName ] = newListeners ;
 	
-	if ( removedListeners.length && this.__ngev.events.removeListener.length )
+	if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
 	{
 		this.emit( 'removeListener' , removedListeners ) ;
 	}
@@ -7770,14 +7946,14 @@ NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventN
 	{
 		// Remove all listeners for a particular event
 		
-		if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeAllListener(): argument #0 should be undefined or a non-empty string" ) ; }
+		if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeAllListeners(): argument #0 should be undefined or a non-empty string" ) ; }
 		
-		if ( ! this.__ngev.events[ eventName ] ) { this.__ngev.events[ eventName ] = [] ; }
+		if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
 		
-		removedListeners = this.__ngev.events[ eventName ] ;
-		this.__ngev.events[ eventName ] = [] ;
+		removedListeners = this.__ngev.listeners[ eventName ] ;
+		this.__ngev.listeners[ eventName ] = [] ;
 		
-		if ( removedListeners.length && this.__ngev.events.removeListener.length )
+		if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
 		{
 			this.emit( 'removeListener' , removedListeners ) ;
 		}
@@ -7786,7 +7962,7 @@ NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventN
 	{
 		// Remove all listeners for any events
 		// 'removeListener' listeners cannot be triggered: they are already deleted
-		this.__ngev.events = {} ;
+		this.__ngev.listeners = {} ;
 	}
 	
 	return this ;
@@ -7796,7 +7972,7 @@ NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventN
 
 NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , context )
 {
-	var returnValue , serial ;
+	var returnValue , serial , listenerCallback ;
 	
 	if ( event.interrupt ) { return ; }
 	
@@ -7809,7 +7985,7 @@ NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , con
 			context.ready = ! serial ;
 		}
 		
-		returnValue = listener.fn.apply( undefined , event.args.concat( function( arg ) {
+		listenerCallback = function( arg ) {
 			
 			event.listenersDone ++ ;
 			
@@ -7826,7 +8002,7 @@ NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , con
 				
 				event.emitter.emit( 'interrupt' , event.interrupt ) ;
 			}
-			else if ( event.listenersDone >= event.listeners && event.callback )
+			else if ( event.listenersDone >= event.listeners.length && event.callback )
 			{
 				event.callback( undefined , event ) ;
 				delete event.callback ;
@@ -7835,11 +8011,16 @@ NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , con
 			// Process the queue if serialized
 			if ( serial ) { NextGenEvents.processQueue.call( event.emitter , listener.context , true ) ; }
 			
-		} ) ) ;
+		} ;
+		
+		if ( listener.eventObject ) { listener.fn( event , listenerCallback ) ; }
+		else { returnValue = listener.fn.apply( undefined , event.args.concat( listenerCallback ) ) ; }
 	}
 	else
 	{
-		returnValue = listener.fn.apply( undefined , event.args ) ;
+		if ( listener.eventObject ) { listener.fn( event ) ; }
+		else { returnValue = listener.fn.apply( undefined , event.args ) ; }
+		
 		event.listenersDone ++ ;
 	}
 	
@@ -7857,7 +8038,7 @@ NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , con
 		
 		event.emitter.emit( 'interrupt' , event.interrupt ) ;
 	}
-	else if ( event.listenersDone >= event.listeners && event.callback )
+	else if ( event.listenersDone >= event.listeners.length && event.callback )
 	{
 		event.callback( undefined , event ) ;
 		delete event.callback ;
@@ -7876,23 +8057,9 @@ var nextEventId = 0 ;
 */
 NextGenEvents.prototype.emit = function emit()
 {
-	var i , iMax , count = 0 ,
-		event , listener , context , currentNice ,
-		listeners , removedListeners = [] ;
+	var event ;
 	
-	event = {
-		emitter: this ,
-		id: nextEventId ++ ,
-		name: null ,
-		args: null ,
-		nice: null ,
-		interrupt: null ,
-		listeners: null ,
-		listenersDone: 0 ,
-		callback: null ,
-	} ;
-	
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
+	event = { emitter: this } ;
 	
 	// Arguments handling
 	if ( typeof arguments[ 0 ] === 'number' )
@@ -7913,7 +8080,7 @@ NextGenEvents.prototype.emit = function emit()
 	}
 	else
 	{
-		event.nice = this.__ngev.nice ;
+		//event.nice = this.__ngev.nice ;
 		event.name = arguments[ 0 ] ;
 		if ( ! event.name || typeof event.name !== 'string' ) { throw new TypeError( ".emit(): argument #0 should be an number or a non-empty string" ) ; }
 		event.args = Array.prototype.slice.call( arguments , 1 ) ;
@@ -7929,81 +8096,78 @@ NextGenEvents.prototype.emit = function emit()
 		}
 	}
 	
+	return NextGenEvents.emitEvent( event ) ;
+} ;
+
+
+
+/*
+	At this stage, 'event' should be an object having those properties:
+		* emitter: the event emitter
+		* name: the event name
+		* args: array, the arguments of the event
+		* nice: (optional) nice value
+		* callback: (optional) a callback for emit
+		* listeners: (optional) override the listeners array stored in __ngev
+*/
+NextGenEvents.emitEvent = function emitEvent( event )
+{
+	var self = event.emitter ,
+		i , iMax , count = 0 , state , removedListeners ;
 	
-	if ( ! this.__ngev.events[ event.name ] ) { this.__ngev.events[ event.name ] = [] ; }
+	if ( ! self.__ngev ) { NextGenEvents.init.call( self ) ; }
 	
-	// Increment this.__ngev.recursion
-	event.listeners = this.__ngev.events[ event.name ].length ;
-	this.__ngev.recursion ++ ;
+	state = self.__ngev.states[ event.name ] ;
+	
+	// This is a state event, register it now!
+	if ( state !== undefined )
+	{
+		
+		if ( state && event.args.length === state.args.length &&
+			event.args.every( function( arg , index ) { return arg === state.args[ index ] ; } ) )
+		{
+			// The emitter is already in this exact state, skip it now!
+			return ;
+		}
+		
+		// Unset all states of that group
+		self.__ngev.stateGroups[ event.name ].forEach( function( eventName ) {
+			self.__ngev.states[ eventName ] = null ;
+		} ) ;
+		
+		self.__ngev.states[ event.name ] = event ;
+	}
+	
+	if ( ! self.__ngev.listeners[ event.name ] ) { self.__ngev.listeners[ event.name ] = [] ; }
+	
+	event.id = nextEventId ++ ;
+	event.listenersDone = 0 ;
+	event.once = !! event.once ;
+	
+	if ( event.nice === undefined || event.nice === null ) { event.nice = self.__ngev.nice ; }
 	
 	// Trouble arise when a listener is removed from another listener, while we are still in the loop.
 	// So we have to COPY the listener array right now!
-	listeners = this.__ngev.events[ event.name ].slice() ;
+	if ( ! event.listeners ) { event.listeners = self.__ngev.listeners[ event.name ].slice() ; }
 	
-	for ( i = 0 , iMax = listeners.length ; i < iMax ; i ++ )
+	// Increment self.__ngev.recursion
+	self.__ngev.recursion ++ ;
+	removedListeners = [] ;
+	
+	// Emit the event to all listeners!
+	for ( i = 0 , iMax = event.listeners.length ; i < iMax ; i ++ )
 	{
 		count ++ ;
-		listener = listeners[ i ] ;
-		context = listener.context && this.__ngev.contexts[ listener.context ] ;
-		
-		// If the listener context is disabled...
-		if ( context && context.status === NextGenEvents.CONTEXT_DISABLED ) { continue ; }
-		
-		// The nice value for this listener...
-		if ( context ) { currentNice = Math.max( event.nice , listener.nice , context.nice ) ; }
-		else { currentNice = Math.max( event.nice , listener.nice ) ; }
-		
-		
-		if ( listener.once )
-		{
-			// We should remove the current listener RIGHT NOW because of recursive .emit() issues:
-			// one listener may eventually fire this very same event synchronously during the current loop.
-			this.__ngev.events[ event.name ] = this.__ngev.events[ event.name ].filter(
-				NextGenEvents.filterOutCallback.bind( undefined , listener )
-			) ;
-			
-			removedListeners.push( listener ) ;
-		}
-		
-		if ( context && ( context.status === NextGenEvents.CONTEXT_QUEUED || ! context.ready ) )
-		{
-			// Almost all works should be done by .emit(), and little few should be done by .processQueue()
-			context.queue.push( { event: event , listener: listener , nice: currentNice } ) ;
-		}
-		else
-		{
-			try {
-				if ( currentNice < 0 )
-				{
-					if ( this.__ngev.recursion >= - currentNice )
-					{
-						setImmediate( NextGenEvents.listenerWrapper.bind( this , listener , event , context ) ) ;
-					}
-					else
-					{
-						NextGenEvents.listenerWrapper.call( this , listener , event , context ) ;
-					}
-				}
-				else
-				{
-					setTimeout( NextGenEvents.listenerWrapper.bind( this , listener , event , context ) , currentNice ) ;
-				}
-			}
-			catch ( error ) {
-				// Catch error, just to decrement this.__ngev.recursion, re-throw after that...
-				this.__ngev.recursion -- ;
-				throw error ;
-			}
-		}
+		NextGenEvents.emitToOneListener( event , event.listeners[ i ] , removedListeners ) ;
 	}
 	
 	// Decrement recursion
-	this.__ngev.recursion -- ;
+	self.__ngev.recursion -- ;
 	
 	// Emit 'removeListener' after calling listeners
-	if ( removedListeners.length && this.__ngev.events.removeListener.length )
+	if ( removedListeners.length && self.__ngev.listeners.removeListener.length )
 	{
-		this.emit( 'removeListener' , removedListeners ) ;
+		self.emit( 'removeListener' , removedListeners ) ;
 	}
 	
 	
@@ -8012,7 +8176,7 @@ NextGenEvents.prototype.emit = function emit()
 	{
 		if ( event.name === 'error' )
 		{
-			if ( arguments[ 1 ] ) { throw arguments[ 1 ] ; }
+			if ( event.args[ 0 ] ) { throw event.args[ 0 ] ; }
 			else { throw Error( "Uncaught, unspecified 'error' event." ) ; }
 		}
 		
@@ -8028,15 +8192,84 @@ NextGenEvents.prototype.emit = function emit()
 
 
 
+// If removedListeners is not given, then one-time listener emit the 'removeListener' event,
+// if given: that's the caller business to do it
+NextGenEvents.emitToOneListener = function emitToOneListener( event , listener , removedListeners )
+{	
+	var self = event.emitter ,
+		context , currentNice , emitRemoveListener = false ;
+	
+	context = listener.context && self.__ngev.contexts[ listener.context ] ;
+	
+	// If the listener context is disabled...
+	if ( context && context.status === NextGenEvents.CONTEXT_DISABLED ) { return ; }
+	
+	// The nice value for this listener...
+	if ( context ) { currentNice = Math.max( event.nice , listener.nice , context.nice ) ; }
+	else { currentNice = Math.max( event.nice , listener.nice ) ; }
+	
+	
+	if ( listener.once )
+	{
+		// We should remove the current listener RIGHT NOW because of recursive .emit() issues:
+		// one listener may eventually fire this very same event synchronously during the current loop.
+		self.__ngev.listeners[ event.name ] = self.__ngev.listeners[ event.name ].filter(
+			NextGenEvents.filterOutCallback.bind( undefined , listener )
+		) ;
+		
+		if ( removedListeners ) { removedListeners.push( listener ) ; }
+		else { emitRemoveListener = true ; }
+	}
+	
+	if ( context && ( context.status === NextGenEvents.CONTEXT_QUEUED || ! context.ready ) )
+	{
+		// Almost all works should be done by .emit(), and little few should be done by .processQueue()
+		context.queue.push( { event: event , listener: listener , nice: currentNice } ) ;
+	}
+	else
+	{
+		try {
+			if ( currentNice < 0 )
+			{
+				if ( self.__ngev.recursion >= - currentNice )
+				{
+					setImmediate( NextGenEvents.listenerWrapper.bind( self , listener , event , context ) ) ;
+				}
+				else
+				{
+					NextGenEvents.listenerWrapper.call( self , listener , event , context ) ;
+				}
+			}
+			else
+			{
+				setTimeout( NextGenEvents.listenerWrapper.bind( self , listener , event , context ) , currentNice ) ;
+			}
+		}
+		catch ( error ) {
+			// Catch error, just to decrement self.__ngev.recursion, re-throw after that...
+			self.__ngev.recursion -- ;
+			throw error ;
+		}
+	}
+	
+	// Emit 'removeListener' after calling the listener
+	if ( emitRemoveListener && self.__ngev.listeners.removeListener.length )
+	{
+		self.emit( 'removeListener' , [ listener ] ) ;
+	}
+} ;
+
+
+
 NextGenEvents.prototype.listeners = function listeners( eventName )
 {
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listeners(): argument #0 should be a non-empty string" ) ; }
 	
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.events[ eventName ] ) { this.__ngev.events[ eventName ] = [] ; }
+	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
 	
 	// Do not return the array, shallow copy it
-	return this.__ngev.events[ eventName ].slice() ;
+	return this.__ngev.listeners[ eventName ].slice() ;
 } ;
 
 
@@ -8054,9 +8287,9 @@ NextGenEvents.prototype.listenerCount = function( eventName )
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listenerCount(): argument #1 should be a non-empty string" ) ; }
 	
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.events[ eventName ] ) { this.__ngev.events[ eventName ] = [] ; }
+	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
 	
-	return this.__ngev.events[ eventName ].length ;
+	return this.__ngev.listeners[ eventName ].length ;
 } ;
 
 
@@ -8081,11 +8314,258 @@ NextGenEvents.prototype.setInterruptible = function setInterruptible( value )
 
 
 
+// Make two objects sharing the same event bus
+NextGenEvents.share = function( source , target )
+{
+	if ( ! ( source instanceof NextGenEvents ) || ! ( target instanceof NextGenEvents ) )
+	{
+		throw new TypeError( 'NextGenEvents.share() arguments should be instances of NextGenEvents' ) ;
+	}
+	
+	if ( ! source.__ngev ) { NextGenEvents.init.call( source ) ; }
+	
+	Object.defineProperty( target , '__ngev' , {
+		configurable: true ,
+		value: source.__ngev
+	} ) ;
+} ;
+
+
+
+NextGenEvents.reset = function reset( emitter )
+{
+	Object.defineProperty( emitter , '__ngev' , {
+        configurable: true ,
+        value: null
+	} ) ;
+} ;
+
+
+
 // There is no such thing in NextGenEvents, however, we need to be compatible with node.js events at best
 NextGenEvents.prototype.setMaxListeners = function() {} ;
 
 // Sometime useful as a no-op callback...
 NextGenEvents.noop = function() {} ;
+
+
+
+
+
+			/* Next Gen feature: states! */
+
+
+
+// .defineStates( exclusiveState1 , [exclusiveState2] , [exclusiveState3] , ... )
+NextGenEvents.prototype.defineStates = function defineStates()
+{
+	var self = this ,
+		states = Array.prototype.slice.call( arguments ) ;
+	
+	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
+	
+	states.forEach( function( state ) {
+		self.__ngev.states[ state ] = null ;
+		self.__ngev.stateGroups[ state ] = states ;
+	} ) ;
+} ;
+
+
+
+NextGenEvents.prototype.hasState = function hasState( state )
+{
+	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
+	return !! this.__ngev.states[ state ] ;
+} ;
+
+
+
+NextGenEvents.prototype.getAllStates = function getAllStates()
+{
+	var self = this ;
+	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
+	return Object.keys( this.__ngev.states ).filter( function( e ) { return self.__ngev.states[ e ] ; } ) ;
+} ;
+
+
+
+
+
+			/* Next Gen feature: groups! */
+
+
+
+NextGenEvents.groupAddListener = function groupAddListener( emitters , eventName , fn , options )
+{
+	// Manage arguments
+	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	fn = fn || options.fn ;
+	delete options.fn ;
+	
+	// Preserve the listener ID, so groupRemoveListener() will work as expected
+	options.id = options.id || fn ;
+	
+	emitters.forEach( function( emitter ) {
+		emitter.addListener( eventName , fn.bind( undefined , emitter ) , options ) ;
+	} ) ;
+} ;
+
+NextGenEvents.groupOn = NextGenEvents.groupAddListener ;
+
+
+
+// Once per emitter
+NextGenEvents.groupOnce = function groupOnce( emitters , eventName , fn , options )
+{
+	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
+	else if ( options && typeof options === 'object' ) { options.once = true ; }
+	else { options = { once: true } ; }
+	
+	return this.groupAddListener( emitters , eventName , fn , options ) ;
+} ;
+
+
+
+// Globally once, only one event could be emitted, by the first emitter to emit
+NextGenEvents.groupGlobalOnce = function groupGlobalOnce( emitters , eventName , fn , options )
+{
+	var fnWrapper , triggered = false ;
+	
+	// Manage arguments
+	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	fn = fn || options.fn ;
+	delete options.fn ;
+	
+	// Preserve the listener ID, so groupRemoveListener() will work as expected
+	options.id = options.id || fn ;
+	
+	fnWrapper = function() {
+		if ( triggered ) { return ; }
+		triggered = true ;
+		NextGenEvents.groupRemoveListener( emitters , eventName , options.id ) ;
+		fn.apply( undefined , arguments ) ;
+	} ;
+	
+	emitters.forEach( function( emitter ) {
+		emitter.once( eventName , fnWrapper.bind( undefined , emitter ) , options ) ;
+	} ) ;
+} ;
+
+
+
+// Globally once, only one event could be emitted, by the last emitter to emit
+NextGenEvents.groupGlobalOnceAll = function groupGlobalOnceAll( emitters , eventName , fn , options )
+{
+	var fnWrapper , triggered = false , count = emitters.length ;
+	
+	// Manage arguments
+	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	fn = fn || options.fn ;
+	delete options.fn ;
+	
+	// Preserve the listener ID, so groupRemoveListener() will work as expected
+	options.id = options.id || fn ;
+	
+	fnWrapper = function() {
+		if ( triggered ) { return ; }
+		if ( -- count ) { return ; }
+		
+		// So this is the last emitter...
+		
+		triggered = true ;
+		// No need to remove listeners: there are already removed anyway
+		//NextGenEvents.groupRemoveListener( emitters , eventName , options.id ) ;
+		fn.apply( undefined , arguments ) ;
+	} ;
+	
+	emitters.forEach( function( emitter ) {
+		emitter.once( eventName , fnWrapper.bind( undefined , emitter ) , options ) ;
+	} ) ;
+} ;
+
+
+
+NextGenEvents.groupRemoveListener = function groupRemoveListener( emitters , eventName , id )
+{
+	emitters.forEach( function( emitter ) {
+		emitter.removeListener( eventName , id ) ;
+	} ) ;
+} ;
+
+NextGenEvents.groupOff = NextGenEvents.groupRemoveListener ;
+
+
+
+NextGenEvents.groupRemoveAllListeners = function groupRemoveAllListeners( emitters , eventName )
+{
+	emitters.forEach( function( emitter ) {
+		emitter.removeAllListeners( eventName ) ;
+	} ) ;
+} ;
+
+
+
+NextGenEvents.groupEmit = function groupEmit( emitters )
+{
+	var eventName , nice , argStart = 2 , argEnd , args , count = emitters.length ,
+		callback , callbackWrapper , callbackTriggered = false ;
+	
+	if ( typeof arguments[ arguments.length - 1 ] === 'function' )
+	{
+		argEnd = -1 ;
+		callback = arguments[ arguments.length - 1 ] ;
+		
+		callbackWrapper = function( interruption ) {
+			if ( callbackTriggered ) { return ; }
+			
+			if ( interruption )
+			{
+				callbackTriggered = true ;
+				callback( interruption ) ;
+			}
+			else if ( ! -- count )
+			{
+				callbackTriggered = true ;
+				callback() ;
+			}
+		} ;
+	}
+	
+	if ( typeof arguments[ 1 ] === 'number' )
+	{
+		argStart = 3 ;
+		nice = typeof arguments[ 1 ] ;
+	}
+	
+	eventName = arguments[ argStart - 1 ] ;
+	args = Array.prototype.slice.call( arguments , argStart , argEnd ) ;
+	
+	emitters.forEach( function( emitter ) {
+		NextGenEvents.emitEvent( {
+			emitter: emitter ,
+			name: eventName ,
+			args: args ,
+			callback: callbackWrapper
+		} ) ;
+	} ) ;
+} ;
+
+
+
+NextGenEvents.groupDefineStates = function groupDefineStates( emitters )
+{
+	var args = Array.prototype.slice.call( arguments , 1 ) ;
+	
+	emitters.forEach( function( emitter ) {
+		emitter.defineStates.apply( emitter , args ) ;
+	} ) ;
+} ;
 
 
 
@@ -8205,30 +8685,30 @@ NextGenEvents.prototype.destroyListenerContext = function destroyListenerContext
 	
 	// We don't care if a context actually exists, all listeners tied to that contextName will be removed
 	
-	for ( eventName in this.__ngev.events )
+	for ( eventName in this.__ngev.listeners )
 	{
 		newListeners = null ;
-		length = this.__ngev.events[ eventName ].length ;
+		length = this.__ngev.listeners[ eventName ].length ;
 		
 		for ( i = 0 ; i < length ; i ++ )
 		{
-			if ( this.__ngev.events[ eventName ][ i ].context === contextName )
+			if ( this.__ngev.listeners[ eventName ][ i ].context === contextName )
 			{
 				newListeners = [] ;
-				removedListeners.push( this.__ngev.events[ eventName ][ i ] ) ;
+				removedListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
 			}
 			else if ( newListeners )
 			{
-				newListeners.push( this.__ngev.events[ eventName ][ i ] ) ;
+				newListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
 			}
 		}
 		
-		if ( newListeners ) { this.__ngev.events[ eventName ] = newListeners ; }
+		if ( newListeners ) { this.__ngev.listeners[ eventName ] = newListeners ; }
 	}
 	
 	if ( this.__ngev.contexts[ contextName ] ) { delete this.__ngev.contexts[ contextName ] ; }
 	
-	if ( removedListeners.length && this.__ngev.events.removeListener.length )
+	if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
 	{
 		this.emit( 'removeListener' , removedListeners ) ;
 	}
@@ -8301,7 +8781,690 @@ NextGenEvents.off = NextGenEvents.prototype.off ;
 
 
 
-},{}],42:[function(require,module,exports){
+if ( global.AsyncTryCatch )
+{
+	NextGenEvents.prototype.asyncTryCatchId = global.AsyncTryCatch.NextGenEvents.length ;
+	global.AsyncTryCatch.NextGenEvents.push( NextGenEvents ) ;
+	
+	if ( global.AsyncTryCatch.substituted )
+	{
+		//console.log( 'live subsitute' ) ;
+		global.AsyncTryCatch.substitute() ;
+	}
+}
+
+
+
+// Load Proxy AT THE END (circular require)
+NextGenEvents.Proxy = require( './Proxy.js' ) ;
+
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../package.json":44,"./Proxy.js":43}],43:[function(require,module,exports){
+/*
+	Next Gen Events
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+// Create the object && export it
+function Proxy() { return Proxy.create() ; }
+module.exports = Proxy ;
+
+var NextGenEvents = require( './NextGenEvents.js' ) ;
+var MESSAGE_TYPE = 'NextGenEvents/message' ;
+
+function noop() {}
+
+
+
+Proxy.create = function create()
+{
+	var self = Object.create( Proxy.prototype , {
+		localServices: { value: {} , enumerable: true } ,
+		remoteServices: { value: {} , enumerable: true } ,
+		nextAckId: { value: 1 , writable: true , enumerable: true } ,
+	} ) ;
+	
+	return self ;
+} ;
+
+
+
+// Add a local service accessible remotely
+Proxy.prototype.addLocalService = function addLocalService( id , emitter , options )
+{
+	this.localServices[ id ] = LocalService.create( this , id , emitter , options ) ;
+	return this.localServices[ id ] ;
+} ;
+
+
+
+// Add a remote service accessible locally
+Proxy.prototype.addRemoteService = function addRemoteService( id )
+{
+	this.remoteServices[ id ] = RemoteService.create( this , id ) ;
+	return this.remoteServices[ id ] ;
+} ;
+
+
+
+// Destroy the proxy
+Proxy.prototype.destroy = function destroy()
+{
+	var self = this ;
+	
+	Object.keys( this.localServices ).forEach( function( id ) {
+		self.localServices[ id ].destroy() ;
+		delete self.localServices[ id ] ;
+	} ) ;
+	
+	Object.keys( this.remoteServices ).forEach( function( id ) {
+		self.remoteServices[ id ].destroy() ;
+		delete self.remoteServices[ id ] ;
+	} ) ;
+	
+	this.receive = this.send = noop ;
+} ;
+
+
+
+// Push an event message.
+Proxy.prototype.push = function push( message )
+{
+	if (
+		message.__type !== MESSAGE_TYPE ||
+		! message.service || typeof message.service !== 'string' ||
+		! message.event || typeof message.event !== 'string' ||
+		! message.method
+	)
+	{
+		return ;
+	}
+	
+	switch ( message.method )
+	{
+		// Those methods target a remote service
+		case 'event' :
+			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveEvent( message ) ;
+		case 'ackEmit' :
+			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveAckEmit( message ) ;
+			
+		// Those methods target a local service
+		case 'emit' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveEmit( message ) ;
+		case 'listen' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveListen( message ) ;
+		case 'ignore' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveIgnore( message ) ;
+		case 'ackEvent' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveAckEvent( message ) ;
+			
+		default:
+		 	return ;
+	}
+} ;
+
+
+
+// This is the method to receive and decode data from the other side of the communication channel, most of time another proxy.
+// In most case, this should be overwritten.
+Proxy.prototype.receive = function receive( raw )
+{
+	this.push( raw ) ;
+} ;
+
+
+
+// This is the method used to send data to the other side of the communication channel, most of time another proxy.
+// This MUST be overwritten in any case.
+Proxy.prototype.send = function send()
+{
+	throw new Error( 'The send() method of the Proxy MUST be extended/overwritten' ) ;
+} ;
+
+
+
+			/* Local Service */
+
+
+
+function LocalService( proxy , id , emitter , options ) { return LocalService.create( proxy , id , emitter , options ) ; }
+Proxy.LocalService = LocalService ;
+
+
+
+LocalService.create = function create( proxy , id , emitter , options )
+{
+	var self = Object.create( LocalService.prototype , {
+		proxy: { value: proxy , enumerable: true } ,
+		id: { value: id , enumerable: true } ,
+		emitter: { value: emitter , writable: true , enumerable: true } ,
+		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		events: { value: {} , enumerable: true } ,
+		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
+		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
+		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
+		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
+		destroyed: { value: false , writable: true , enumerable: true } ,
+	} ) ;
+	
+	return self ;
+} ;
+
+
+
+// Destroy a service
+LocalService.prototype.destroy = function destroy()
+{
+	var self = this ;
+	
+	Object.keys( this.events ).forEach( function( eventName ) {
+		self.emitter.off( eventName , self.events[ eventName ] ) ;
+		delete self.events[ eventName ] ;
+	} ) ;
+	
+	this.emitter = null ;
+	this.destroyed = true ;
+} ;
+
+
+
+// Remote want to emit on the local service
+LocalService.prototype.receiveEmit = function receiveEmit( message )
+{
+	if ( this.destroyed || ! this.canEmit || ( message.ack && ! this.canAck ) ) { return ; }
+	
+	var self = this ;
+	
+	var event = {
+		emitter: this.emitter ,
+		name: message.event ,
+		args: message.args || [] 
+	} ;
+	
+	if ( message.ack )
+	{
+		event.callback = function ack( interruption ) {
+			
+			self.proxy.send( {
+				__type: MESSAGE_TYPE ,
+				service: self.id ,
+				method: 'ackEmit' ,
+				ack: message.ack ,
+				event: message.event ,
+				interruption: interruption
+			} ) ;
+		} ;
+	}
+	
+	NextGenEvents.emitEvent( event ) ;
+} ;
+
+
+
+// Remote want to listen to an event of the local service
+LocalService.prototype.receiveListen = function receiveListen( message )
+{
+	if ( this.destroyed || ! this.canListen || ( message.ack && ! this.canAck ) ) { return ; }
+	
+	if ( message.ack )
+	{
+		if ( this.events[ message.event ] )
+		{
+			if ( this.events[ message.event ].ack ) { return ; }
+			
+			// There is already an event, but not featuring ack, remove that listener now
+			this.emitter.off( message.event , this.events[ message.event ] ) ;
+		}
+		
+		this.events[ message.event ] = LocalService.forwardWithAck.bind( this ) ;
+		this.events[ message.event ].ack = true ;
+		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true , async: true } ) ;
+	}
+	else
+	{
+		if ( this.events[ message.event ] )
+		{
+			if ( ! this.events[ message.event ].ack ) { return ; }
+			
+			// Remote want to downgrade:
+			// there is already an event, but featuring ack so we remove that listener now
+			this.emitter.off( message.event , this.events[ message.event ] ) ;
+		}
+		
+		this.events[ message.event ] = LocalService.forward.bind( this ) ;
+		this.events[ message.event ].ack = false ;
+		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true } ) ;
+	}
+} ;
+
+
+
+// Remote do not want to listen to that event of the local service anymore
+LocalService.prototype.receiveIgnore = function receiveIgnore( message )
+{
+	if ( this.destroyed || ! this.canListen ) { return ; }
+	
+	if ( ! this.events[ message.event ] ) { return ; }
+	
+	this.emitter.off( message.event , this.events[ message.event ] ) ;
+	this.events[ message.event ] = null ;
+} ;
+
+
+
+// 
+LocalService.prototype.receiveAckEvent = function receiveAckEvent( message )
+{
+	if (
+		this.destroyed || ! this.canListen || ! this.canAck || ! message.ack ||
+		! this.events[ message.event ] || ! this.events[ message.event ].ack
+	)
+	{
+		return ;
+	}
+	
+	this.internalEvents.emit( 'ack' , message ) ;
+} ;
+
+
+
+// Send an event from the local service to remote
+LocalService.forward = function forward( event )
+{
+	if ( this.destroyed ) { return ; }
+	
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'event' ,
+		event: event.name ,
+		args: event.args
+	} ) ;
+} ;
+
+LocalService.forward.ack = false ;
+
+
+
+// Send an event from the local service to remote, with ACK
+LocalService.forwardWithAck = function forwardWithAck( event , callback )
+{
+	if ( this.destroyed ) { return ; }
+	
+	var self = this ;
+	
+	if ( ! event.callback )
+	{
+		// There is no emit callback, no need to ack this one
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'event' ,
+			event: event.name ,
+			args: event.args
+		} ) ;
+		
+		callback() ;
+		return ;
+	}
+	
+	var triggered = false ;
+	var ackId = this.proxy.nextAckId ++ ;
+	
+	var onAck = function onAck( message ) {
+		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
+		//if ( message.event !== event ) { return ; }	// Do we care?
+		triggered = true ;
+		self.internalEvents.off( 'ack' , onAck ) ;
+		callback() ;
+	} ;
+	
+	this.internalEvents.on( 'ack' , onAck ) ;
+	
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'event' ,
+		event: event.name ,
+		ack: ackId ,
+		args: event.args
+	} ) ;
+} ;
+
+LocalService.forwardWithAck.ack = true ;
+
+
+
+			/* Remote Service */
+
+
+
+function RemoteService( proxy , id ) { return RemoteService.create( proxy , id ) ; }
+//RemoteService.prototype = Object.create( NextGenEvents.prototype ) ;
+//RemoteService.prototype.constructor = RemoteService ;
+Proxy.RemoteService = RemoteService ;
+
+
+
+var EVENT_NO_ACK = 1 ;
+var EVENT_ACK = 2 ;
+
+
+
+RemoteService.create = function create( proxy , id )
+{
+	var self = Object.create( RemoteService.prototype , {
+		proxy: { value: proxy , enumerable: true } ,
+		id: { value: id , enumerable: true } ,
+		// This is the emitter where everything is routed to
+		emitter: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		events: { value: {} , enumerable: true } ,
+		destroyed: { value: false , writable: true , enumerable: true } ,
+		
+		/*	Useless for instance, unless some kind of service capabilities discovery mechanism exists
+		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
+		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
+		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
+		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
+		*/
+	} ) ;
+	
+	return self ;
+} ;
+
+
+
+// Destroy a service
+RemoteService.prototype.destroy = function destroy()
+{
+	var self = this ;
+	this.emitter.removeAllListeners() ;
+	this.emitter = null ;
+	Object.keys( this.events ).forEach( function( eventName ) { delete self.events[ eventName ] ; } ) ;
+	this.destroyed = true ;
+} ;
+
+
+
+// Local code want to emit to remote service
+RemoteService.prototype.emit = function emit( eventName )
+{
+	if ( this.destroyed ) { return ; }
+	
+	var self = this , args , callback , ackId , triggered ;
+	
+	if ( typeof eventName === 'number' ) { throw new TypeError( 'Cannot emit with a nice value on a remote service' ) ; }
+	
+	if ( typeof arguments[ arguments.length - 1 ] !== 'function' )
+	{
+		args = Array.prototype.slice.call( arguments , 1 ) ;
+		
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'emit' ,
+			event: eventName ,
+			args: args
+		} ) ;
+		
+		return ;
+	}
+	
+	args = Array.prototype.slice.call( arguments , 1 , -1 ) ;
+	callback = arguments[ arguments.length - 1 ] ;
+	ackId = this.proxy.nextAckId ++ ;
+	triggered = false ;
+	
+	var onAck = function onAck( message ) {
+		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
+		//if ( message.event !== event ) { return ; }	// Do we care?
+		triggered = true ;
+		self.internalEvents.off( 'ack' , onAck ) ;
+		callback( message.interruption ) ;
+	} ;
+	
+	this.internalEvents.on( 'ack' , onAck ) ;
+	
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'emit' ,
+		ack: ackId ,
+		event: eventName ,
+		args: args
+	} ) ;
+} ;
+
+
+
+// Local code want to listen to an event of remote service
+RemoteService.prototype.addListener = function addListener( eventName , fn , options )
+{
+	if ( this.destroyed ) { return ; }
+	
+	// Manage arguments the same way NextGenEvents#addListener() does
+	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	options.fn = fn || options.fn ;
+	
+	this.emitter.addListener( eventName , options ) ;
+	
+	// No event was added...
+	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) { return ; }
+	
+	// If the event is successfully listened to and was not remotely listened...
+	if ( options.async && this.events[ eventName ] !== EVENT_ACK )
+	{
+		// We need to listen to or upgrade this event
+		this.events[ eventName ] = EVENT_ACK ;
+		
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'listen' ,
+			ack: true ,
+			event: eventName
+		} ) ;
+	}
+	else if ( ! options.async && ! this.events[ eventName ] )
+	{
+		// We need to listen to this event
+		this.events[ eventName ] = EVENT_NO_ACK ;
+		
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'listen' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+RemoteService.prototype.on = RemoteService.prototype.addListener ;
+
+// This is a shortcut to this.addListener()
+RemoteService.prototype.once = NextGenEvents.prototype.once ;
+
+
+
+// Local code want to ignore an event of remote service
+RemoteService.prototype.removeListener = function removeListener( eventName , id )
+{
+	if ( this.destroyed ) { return ; }
+	
+	this.emitter.removeListener( eventName , id ) ;
+	
+	// If no more listener are locally tied to with event and the event was remotely listened...
+	if (
+		( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) &&
+		this.events[ eventName ]
+	)
+	{
+		this.events[ eventName ] = 0 ;
+		
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'ignore' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+RemoteService.prototype.off = RemoteService.prototype.removeListener ;
+
+
+
+// A remote service sent an event we are listening to, emit on the service representing the remote
+RemoteService.prototype.receiveEvent = function receiveEvent( message )
+{
+	var self = this ;
+	
+	if ( this.destroyed || ! this.events[ message.event ] ) { return ; }
+	
+	var event = {
+		emitter: this.emitter ,
+		name: message.event ,
+		args: message.args || [] 
+	} ;
+	
+	if ( message.ack )
+	{
+		event.callback = function ack() {
+			
+			self.proxy.send( {
+				__type: MESSAGE_TYPE ,
+				service: self.id ,
+				method: 'ackEvent' ,
+				ack: message.ack ,
+				event: message.event
+			} ) ;
+		} ;
+	}
+	
+	NextGenEvents.emitEvent( event ) ;
+	
+	var eventName = event.name ;
+	
+	// Here we should catch if the event is still listened to ('once' type listeners)
+	//if ( this.events[ eventName ]	) // not needed, already checked at the begining of the function
+	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length )
+	{
+		this.events[ eventName ] = 0 ;
+		
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'ignore' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+
+
+// 
+RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message )
+{
+	if ( this.destroyed || ! message.ack || this.events[ message.event ] !== EVENT_ACK )
+	{
+		return ;
+	}
+	
+	this.internalEvents.emit( 'ack' , message ) ;
+} ;
+
+
+
+},{"./NextGenEvents.js":42}],44:[function(require,module,exports){
+module.exports={
+  "name": "nextgen-events",
+  "version": "0.9.5",
+  "description": "The next generation of events handling for javascript! New: abstract away the network!",
+  "main": "lib/NextGenEvents.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "browserify": "^13.0.1",
+    "expect.js": "^0.3.1",
+    "jshint": "^2.9.2",
+    "mocha": "^2.5.3",
+    "uglify-js": "^2.6.2",
+    "ws": "^1.1.1"
+  },
+  "scripts": {
+    "test": "mocha -R dot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cronvel/nextgen-events.git"
+  },
+  "keywords": [
+    "events",
+    "async",
+    "emit",
+    "listener",
+    "context",
+    "series",
+    "serialize",
+    "namespace",
+    "proxy",
+    "network"
+  ],
+  "author": {
+    "name": "Cédric Ronvel"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cronvel/nextgen-events/issues"
+  },
+  "copyright": {
+    "title": "Next-Gen Events",
+    "years": [
+      2015,
+      2016
+    ],
+    "owner": "Cédric Ronvel"
+  },
+  "readme": "\n\n# NextGen Events\n\nNext generation of events handling for node.js\n\n* License: MIT\n* Current status: close to release\n* Platform: Node.js and browsers\n\n*NextGen Events* solves common trouble that one may encounter when dealing with events and listeners.\n\n## Feature highlights:\n\n* Standard event-handling almost compatible with Node.js built-in events\n* .emit() support a completion callback\n* Support for asynchronous event-handling\n* Multiple listeners can be tied to a single context\n* A context can be temporarly *disabled*\n* A context can be in *queue* mode: events for its listeners are stored, they will be *resumed* when the context is enabled again\n* Context serialization: async listeners can be run one after the other is fully completed\n* **NEW: proxy services!** Abstract away your network: emit and listen to emitter on the other side of the plug!\n\nEmitting events asynchronously or registering a listener that will be triggered asynchronously because it performs\nnon-critical tasks has some virtues: it gives some breath to the event-loop, so important I/O can be processed as soon as possible.\n\nContexts are really useful, it handles a collection of listeners.\nAt first glance, it looks like a sort of namespace for listeners.\nBut it can do more than that: you can turn a context off, so every listener tied to this context will not be triggered anymore,\nthen turn it on and they will be available again. \n\nYou can even switch a context into queue mode: the listeners tied to it will not be triggered, but events for those\nlisteners will be stored in the context. When the context is resumed, all retained events will trigger their listeners.\nThis allow one to postpone some operations, while performing some other high priority tasks, but be careful:\ndepending on your application nature, the queue may grow fast and consumes a lot of memory very quickly.\n\nOne of the top feature of this lib is the context serialization: it greatly eases the flow of the code!\nWhen differents events can fire at the same time, there are use cases when one does not want that async listener run concurrently.\nThe context serialization feature will ensure you that no concurrency will happen for listeners tied to it.\nYou do not have to code fancy or complicated tests to cover all cases anymore: just let *NextGen Events* do it for you!\n\n**Proxy services are awesome.** They abstract away the network so we can emit and listen to emitter on the other side of the plug!\nBoth side of the channel create a Proxy, and add to it local and remote *services*, i.e. event emitters, and that's all.\nA remote service looks like a normal (i.e. local) emitter, and share the same API (with few limitations).\nIt's totally protocol agnostic, you just define two methods for your proxy: one to read from the network and one to send to it\n(e.g. for Web Socket, this is a one-liner).\n\n\n\n# Install\n\nUse npm:\n\n```\nnpm install nextgen-events\n```\n\n\n# Getting started\n\nBy the way you can create an event emitter simply by creating a new object, this way:\n\n```js\nvar NGEmitter = require( 'nextgen-events' ) ;\nvar emitter = new NGEmitter() ;\n```\n\nYou can use `var emitter = Object.create( NGEmitter.prototype )` as well, the object does not need the constructor.\n\nBut in real life, you would make your own objects inherit it:\n\n```js\nvar NGEmitter = require( 'nextgen-events' ) ;\n\nfunction myClass()\n{\n\t// myClass constructor code here\n}\n\nmyClass.prototype = Object.create( NGEmitter.prototype ) ;\nmyClass.prototype.constructor = myClass ;\t// restore the constructor\n\n// define other methods for myClass...\n```\n\nThe basis of the event emitter works like Node.js built-in events:\n\n```js\nvar NGEmitter = require( 'nextgen-events' ) ;\nvar emitter = new NGEmitter() ;\n\n// Normal listener\nemitter.on( 'message' , function( message ) {\n\tconsole.log( 'Message received: ' , message ) ;\n} ) ;\n\n// One time listener:\nemitter.once( 'close' , function() {\n\tconsole.log( 'Connection closed!' ) ;\n} ) ;\n\n// The error listener: if it is not defined, the error event will throw an exception\nemitter.on( 'error' , function( error ) {\n\tconsole.log( 'Shit happens: ' , error ) ;\n} ) ;\n\nemitter.emit( 'message' , 'Hello world!' ) ;\n// ...\n```\n\n\n\n# References\n\nNode.js documentation:\n\n> When an EventEmitter instance experiences an error, the typical action is to emit an 'error' event.\n> Error events are treated as a special case in node. If there is no listener for it,\n> then the default action is to print a stack trace and exit the program.\n\n> All EventEmitters emit the event 'newListener' when new listeners are added and 'removeListener' when a listener is removed. \n\nFor the 'newListener' and 'removeListener' events, see the section about [incompatibilities](#incompatibilities), since there\nare few differences with the built-in Node.js EventEmitter.\n\n\n\n## Table of Content\n\n* [Events](#ref.events)\n\t* [.addListener() / .on()](#ref.events.addListener)\n\t* [.once()](#ref.events.once)\n\t* [.removeListener() / .off()](#ref.events.removeListener)\n\t* [.removeAllListeners()](#ref.events.removeAllListeners)\n\t* [.setMaxListeners()](#ref.events.setMaxListeners)\n\t* [.listeners()](#ref.events.listeners)\n\t* [.listenerCount()](#ref.events.listenerCount)\n\t* [.setNice()](#ref.events.setNice)\n\t* [.emit()](#ref.events.emit)\n\t* [.addListenerContext()](#ref.events.addListenerContext)\n\t* [.disableListenerContext()](#ref.events.disableListenerContext)\n\t* [.queueListenerContext()](#ref.events.queueListenerContext)\n\t* [.enableListenerContext()](#ref.events.enableListenerContext)\n\t* [.setListenerContextNice()](#ref.events.setListenerContextNice)\n\t* [.serializeListenerContext()](#ref.events.serializeListenerContext)\n\t* [.destroyListenerContext()](#ref.events.destroyListenerContext)\n\t* [the *nice feature*](#ref.note.nice)\n\t* [incompatibilities](#incompatibilities)\n* [Proxy Services](#ref.proxy)\n\n\n\n<a name=\"ref.events\"></a>\n## Events\n\n<a name=\"ref.events.addListener\"></a>\n### .addListener( eventName , [fn] , [options] )   *or*   .on( eventName , [fn] , [options] )\n\n* eventName `string` the name of the event to bind to\n* fn `Function` the callback function for this event, this argument is optional: it can be passed to the `fn` property of `options`\n* options `Object` where:\n\t* fn `Function` (mandatory if no `fn` argument provided) the listener function\n\t* id `any type` (default to the provided *fn* function) the identifier of the listener, useful if we have to remove it later\n\t* once `boolean` (default: false) *true* if this is a one-time-listener\n\t* context `string` (default: undefined - no context) a non-empty string identifying a context, if defined the listener\n\t  will be tied to this context, if this context is unexistant, it will be implicitly defined with default behaviour\n\t* nice `integer` (default: -Infinity) see [the nice feature](#ref.note.nice) for details\n\t* async `boolean` (default: false) set it to *true* if the listener is async by nature and a context serialization is wanted,\n\t  when *async* is set for a listener, it **MUST** accept a completion callback as its last argument.\n\t* eventObject `boolean` (default: false) if set, the listener will be passed an unique argument: the very same event object\n\t  that is returned by `.emit()`, if the listener is async, a second argument is passed as the callback\n\nNode.js documentation:\n\n> Adds a listener to the end of the listeners array for the specified event.\n> No checks are made to see if the listener has already been added.\n> Multiple calls passing the same combination of event and listener will result in the listener being added multiple times.\n\n```js\nserver.on( 'connection' , function( stream ) {\n\tconsole.log( 'someone connected!' ) ;\n} ) ;\n```\n\n> Returns emitter, so calls can be chained.\n\nExample, creating implicitly a context the listeners will be tied to:\n\n```js\nserver.on( 'connection' , {\n\tcontext: 'ctx' ,\n\tfn: function( stream ) {\n\t\tconsole.log( 'someone connected!' ) ;\n\t}\n} ) ;\n\nserver.on( 'close' , {\n\tcontext: 'ctx' ,\n\tfn: function() {\n\t\tconsole.log( 'connection closed!' ) ;\n\t\t\n\t\t// Destroy the context and all listeners tied to it:\n\t\tserver.destroyListenerContext( 'ctx' ) ;\n\t}\n} ) ;\n\nserver.on( 'error' , {\n\tcontext: 'ctx' ,\n\tfn: function() {\n\t\t// some error handling code\n\t\t\n\t\t// Destroy the context and all listeners tied to it:\n\t\tserver.destroyListenerContext( 'ctx' ) ;\n\t}\n} ) ;\n```\n\nWhen an async listener is defined, the completion callback is automatically added at the end of the arguments \nsupplied to [.emit()](#ref.events.emit) for any listeners with *async = true*.\n\n\n\n<a name=\"ref.events.once\"></a>\n### .once( eventName , listener )\n\n* eventName `string` the name of the event to bind to\n* listener `Function` or `Object` the listener that will listen to this event, it can be a function or an object where:\n\t* fn `Function` (mandatory) the listener function\n\t* id `any type` (default to the provided *fn* function) the identifier of the listener, useful if we have to remove it later\n\t* context `string` (default: undefined - no context) a non-empty string identifying a context, if defined the listener\n\t  will be tied to this context, if this context is unexistant, it will be implicitly defined with default behaviour\n\t* nice `integer` (default: -Infinity) see [the nice feature](#ref.note.nice) for details\n\t* async `boolean` (default: false) set it to *true* if the listener is async by nature and a context serialization is wanted\n\nNode.js documentation:\n\n> Adds a **one time** listener for the event.\n> This listener is invoked only the next time the event is fired, after which it is removed. \n\n```js\nserver.once( 'connection' , function( stream ) {\n\tconsole.log( 'Ah, we have our first user!' ) ;\n} ) ;\n```\n\n> Returns emitter, so calls can be chained.\n\nNote that using `.once()` in *NextGen Events* lib is just a syntactic sugar (and it's also there for compatibility),\nthe previous example can be rewritten using `.on()`:\n\n```js\nserver.on( 'connection' , {\n\tfn: function( stream ) {\n\t\tconsole.log( 'Ah, we have our first user!' ) ;\n\t} ,\n\tonce: true\n} ) ;\n```\n\n\n\n<a name=\"ref.events.removeListener\"></a>\n### .removeListener( eventName , listenerID )   *or*   .off( eventName , listenerID )\n\n* eventName `string` the name of the event the listener to remove is binded to\n* listenerID `any type` the identifier of the listener to remove\n\nNode.js documentation:\n\n> Remove a listener from the listener array for the specified event.\n> **Caution**: changes array indices in the listener array behind the listener. \n\n```js\nvar callback = function( stream ) {\n\tconsole.log( 'someone connected!' ) ;\n} ;\n\nserver.on( 'connection' , callback ) ;\n// ...\nserver.removeListener( 'connection' , callback ) ;\n```\n\n**CAUTION: Unlike the built-in Node.js emitter**, `.removeListener()` will remove **ALL** listeners whose ID is matching\nthe given *listenerID*.\nIf any single listener has been added multiple times to the listener array for the specified event, then only one\ncall to `.removeListener()` will remove them all.\n\n> Returns emitter, so calls can be chained.\n\nExample using user-defined ID:\n\n```js\nvar callback = function( stream ) {\n\tconsole.log( 'someone connected!' ) ;\n} ;\n\nserver.on( 'connection' , { id: 'foo' , fn: callback } ) ;\nserver.on( 'connection' , { id: 'bar' , fn: callback } ) ;\n\n// ...\n\n// Does nothing! we have used custom IDs!\nserver.removeListener( 'connection' , callback ) ;\n\n// Remove the first listener only, despite the fact they are sharing the same function\nserver.removeListener( 'connection' , 'foo' ) ;\n```\n\nDon't forget that by default, the ID is the callback function itself.\n\n\n\n<a name=\"ref.events.removeAllListeners\"></a>\n### .removeAllListeners( [eventName] )\n\n* eventName `string` (optional) the name of the event the listeners to remove are binded to\n\nNode.js documentation:\n\n> Removes all listeners, or those of the specified event.\n> It's not a good idea to remove listeners that were added elsewhere in the code, especially when it's on an emitter\n> that you didn't create (e.g. sockets or file streams).\n\n> Returns emitter, so calls can be chained.\n\n\n\n<a name=\"ref.events.setMaxListeners\"></a>\n### .setMaxListeners()\n\nOnly available for compatibility with the built-in Node.js emitter, so it does not break the code for people that want\nto make the switch.\n\nBut please note that **there is no such concept of max listener in NextGen Events**, this method does nothing\n(it's an empty function).\n\n\n\n<a name=\"ref.events.listeners\"></a>\n### .listeners( eventName )\n\n* eventName `string` (optional) the name of the event the listeners to list are binded to\n\nNode.js documentation:\n\n> Returns an array of listeners for the specified event.\n\n```js\nserver.on( 'connection' , function( stream ) {\n\tconsole.log( 'someone connected!' ) ;\n} ) ;\n\nconsole.log( util.inspect( server.listeners( 'connection' ) ) ) ;\n// output:\n// [ { id: [Function], fn: [Function], nice: -Infinity, event: 'connection' } ]\n```\n\n\n\n<a name=\"ref.events.listenerCount\"></a>\n### .listenerCount( eventName )\n\n* eventName `string` the name of the event\n\nNode.js documentation:\n\n> Returns the number of listeners listening to the type of event.\n\n\n\n<a name=\"ref.events.setNice\"></a>\n### .setNice( nice )\n\n* nice `integer` (default: -Infinity) see [the nice feature](#ref.note.nice) for details\n\nSet the default *nice value* of the current emitter.\n\n\n\n<a name=\"ref.events.emit\"></a>\n### .emit( [nice] , eventName , [arg1] , [arg2] , [...] , [callback] )\n\n* nice `integer` (default: -Infinity) see [the nice feature](#ref.note.nice) for details\n* eventName `string` (optional) the name of the event to emit\n* arg1 `any type` (optional) first argument to transmit\n* arg2 `any type` (optional) second argument to transmit\n* ...\n* callback `function` (optional) a completion callback triggered when all listener have done, accepting arguments:\n\t* interruption `any type` if truthy, then emit was interrupted with this interrupt value (provided by userland)\n\t* event `Object` representing the current event\n\nIt returns an object representing the current event.\n\nNode.js documentation:\n\n> Execute each of the listeners in order with the supplied arguments.\n\n**It does not returns the emitter!**\n\n\n\n\n<a name=\"ref.note.nice\"></a>\n### A note about the *nice feature*\n\nThe *nice value* represent the *niceness* of the event-emitting processing.\nThis concept is inspired by the UNIX *nice* concept for processus (see the man page for the *nice* and *renice* command).\n\nIn this lib, this represents the asyncness of the event-emitting processing.\n\nThe constant `require( 'nextgen-events' ).SYNC` can be used to have synchronous event emitting, its value is `-Infinity`\nand it's the default value.\n\n* any nice value *N* greater than or equals to 0 will be emitted asynchronously using setTimeout() with a *N* ms timeout\n  to call the listeners\n* any nice value *N* lesser than 0 will emit event synchronously until *-N* recursion is reached, after that, setImmediate()\n  will be used to call the listeners, the first event count as 1 recursion, so if nice=-1, all events will be asynchronously emitted,\n  if nice=-2 the initial event will call the listener synchronously, but if the listener emits events on the same emitter object,\n  the sub-listener will be called through setImmediate(), breaking the recursion... and so on...\n\nThey are many elements that can define their own *nice value*.\n\nHere is how this is resolved:\n\n* First the *emit nice value* will be the one passed to the `.emit()` method if given, or the default *emitter nice value*\n  defined with [.setNice()](#ref.events.setNice).\n* For each listener to be called, the real *nice value* for the current listener will be the **HIGHEST** *nice value* of\n  the *emit nice value* (see above), the listener *nice value* (defined with [.addListener()](#ref.events.addListener)), and\n  if the listener is tied to a context, the context *nice value* (defined with [.addListenerContext()](#ref.events.addListenerContext)\n  or [.setListenerContextNice](#ref.events.setListenerContextNice))\n\n\n\n<a name=\"ref.events.addListenerContext\"></a>\n### .addListenerContext( contextName , options )\n\n* contextName `string` a non-empty string identifying the context to be created\n* options `Object` an object of options, where:\n\t* nice `integer` (default: -Infinity) see [the nice feature](#ref.note.nice) for details\n\t* serial `boolean` (default: false) if true, the async listeners tied to this context will run sequentially,\n\t  one after the other is fully completed\n\nCreate a context using the given *contextName*.\n\nListeners can be tied to a context, enabling some grouping features like turning them on or off just by enabling/disabling\nthe context, queuing them, resuming them, or forcing serialization of all async listeners.\n\n\n\n<a name=\"ref.events.disableListenerContext\"></a>\n### .disableListenerContext( contextName )\n\n* contextName `string` a non-empty string identifying the context to be created\n\nIt disables a context: any listeners tied to it will not be triggered anymore.\n\nThe context is not destroyed, the listeners are not removed, they are just inactive.\nThey can be enabled again using [.enableListenerContext()](#ref.events.enableListenerContext).\n\n\n\n<a name=\"ref.events.queueListenerContext\"></a>\n### .queueListenerContext( contextName )\n\n* contextName `string` a non-empty string identifying the context to be created\n\nIt switchs a context into *queue mode*: any listeners tied to it will not be triggered anymore, but every listener's call\nwill be queued.\n\nWhen the context will be enabled again using [.enableListenerContext()](#ref.events.enableListenerContext), any queued listener's call\nwill be processed.\n\n\n\n<a name=\"ref.events.enableListenerContext\"></a>\n### .enableListenerContext( contextName )\n\n* contextName `string` a non-empty string identifying the context to be created\n\nThis enables a context previously disabled using [.disableListenerContext()](#ref.events.disableListenerContext) or queued\nusing [.disableListenerContext()](#ref.events.disableListenerContext).\n\nIf the context was queued, any queued listener's call will be processed right now for synchronous emitter, or a bit later\ndepending on the *nice value*. E.g. if a listener would have been called with a timeout of 50 ms (nice value = 5),\nand the call has been queued, the timeout will apply at resume time.\n\n\n\n<a name=\"ref.events.setListenerContextNice\"></a>\n### .setListenerContextNice( contextName , nice )\n\n* contextName `string` a non-empty string identifying the context to be created\n* nice `integer` (default: -Infinity) see [the nice feature](#ref.note.nice) for details\n\nSet the *nice* value for the current context.\n\n\n\n<a name=\"ref.events.serializeListenerContext\"></a>\n### .serializeListenerContext( contextName , [value] )\n\n* contextName `string` a non-empty string identifying the context to be created\n* value `boolean` (optional, default is true) if *true* the context will enable serialization for async listeners.\n\nThis is one of the top feature of this lib.\n\nIf set to *true* it enables the context serialization.\n\nIt has no effect on listeners defined without the *async* option (see [.addListener()](#ref.events.addListener)).\nListeners defined with the async option will postpone any other listener's calls part of the same context.\nThose calls will be queued until the completion callback of the listener is triggered.\n\nExample:\n\n```js\napp.on( 'maintenance' , {\n\tcontext: 'maintenanceHandlers' ,\n\tasync: true ,\n\tfn: function( type , done ) {\n\t\tperformSomeCriticalAsyncStuff( function() {\n\t\t\tconsole.log( 'Critical maintenance stuff finished' ) ;\n\t\t\tdone() ;\n\t\t} ) ;\n\t}\n} ) ;\n\napp.serializeListenerContext( maintenanceHandlers ) ;\n\n// ...\n\napp.emit( 'maintenance' , 'doBackup' ) ;\n\n// Despite the fact we emit synchronously, the listener will not be called now,\n// it will be queued and called later when the previous call will be finished\napp.emit( 'maintenance' , 'doUpgrade' ) ;\n```\n\nBy the way, there is only one listener here that will queue itself, and only one event type is fired.\nBut this would work the same with multiple listener and event type, if they share the same context.\n\nSame code with two listeners and two event type:\n\n```js\napp.on( 'doBackup' , {\n\tcontext: 'maintenanceHandlers' ,\n\tasync: true ,\n\tfn: function( done ) {\n\t\tperformBackup( function() {\n\t\t\tconsole.log( 'Backup finished' ) ;\n\t\t\tdone() ;\n\t\t} ) ;\n\t}\n} ) ;\n\napp.on( 'doUpgrade' , {\n\tcontext: 'maintenanceHandlers' ,\n\tasync: true ,\n\tfn: function( done ) {\n\t\tperformUpgrade( function() {\n\t\t\tconsole.log( 'Upgrade finished' ) ;\n\t\t\tdone() ;\n\t\t} ) ;\n\t}\n} ) ;\n\napp.on( 'whatever' , function() {\n\t// Some actions...\n} ) ;\n\napp.serializeListenerContext( maintenanceHandlers ) ;\n\n// ...\n\napp.emit( 'doBackup' ) ;\n\n// Despite the fact we emit synchronously, the second listener will not be called now,\n// it will be queued and called later when the first listener will have finished its job\napp.emit( 'doUpgrade' ) ;\n\n// The third listener is not part of the 'maintenanceHandlers' context, so it will be called\n// right now, before the first listener finished, and before the second listener ever start\napp.emit( 'whatever' ) ;\n```\n\n\n\n<a name=\"ref.events.destroyListenerContext\"></a>\n### .destroyListenerContext( contextName )\n\n* contextName `string` a non-empty string identifying the context to be created\n\nThis destroy a context and remove all listeners tied to it.\n\nAny queued listener's calls will be lost.\n\n\n\n<a name=\"incompatibilities\"></a>\n## Incompatibilities with the built-in Node.js EventEmitter\n\nNextGen Events is almost compatible with Node.js' EventEmitter, except for few things:\n\n* .emit() does not return the emitter, but an object representing the current event.\n\n* If the last argument passed to .emit() is a function, it is not passed to listeners, instead it is a completion callback\n  triggered when all listeners have done their job. If one want to pass function to listeners as the final argument, it is easy\n  to add an extra `null` or `undefined` argument to .emit().\n\n* There is more reserved event name: 'interrupt', 'emitted'.\n\n* There is no such concept of *max listener* in NextGen Events, .setMaxListeners() function exists only to not break compatibility\n  for people that want to make the switch, but it does nothing (it's an empty function).\n\n* .removeListener() will remove all matching listener, not only the first listener found.\n\n* 'newListener'/'removeListener' event listener will receive an array of new/removed *listener object*, instead of only one\n  *listener function*.\n  E.g: it will be fired only once by when .removeListener() or .removeAllListener() is invoked and multiple listeners are deleted.\n  A *listener object* contains a property called 'fn' that hold the actual *listener function*.\n\n* `.removeAllListeners()` without any argument does not trigger 'removeListener' listener, because there are actually removed too.\n  The same apply to `.removeAllListeners( 'removeListener' )`.\n\n* .listeners() same here: rather than providing an array of *listener function* an array of *listener object* is provided.\n\n\n\n<a name=\"ref.proxy\"></a>\n## Proxy Services\n\n**This part of the doc is still a work in progress!**\n\n**Proxy services are awesome.** They abstract away the network so we can emit and listen to emitter on the other side of the plug!\nBoth side of the channel create a Proxy, and add to it local and remote *services*, i.e. event emitters, and that's all.\nA remote service looks like a normal (i.e. local) emitter, and share the same API (with few limitations).\n\nIt's totally protocol agnostic, you just define two methods for your proxy: one to read from the network and one to send to it\n(e.g. for Web Socket, this is a one-liner).\n\n\n\n#### Example, using the Web Socket *ws* node module\n\nThe code below set up a server and a client written in Node.js.\nThe server expose the *heartBeatService* which simply emit an *heartBeat* event once in a while with the beat count as data.\nMost of this code is websocket boiler-plate, the actual proxy code involves only few lines.\nThe client code could be easily rewritten for the browser.\n\n**Server:**\n\n```js\nvar NGEvents = require( 'nextgen-events' ) ;\n\n// Create our service/emitter\nvar heartBeatEmitter = new NGEvents() ;\nvar nextBeat = 1 ;\n\n// Emit one 'heartBeat' event every few seconds\nsetInterval( function() {\n  var beat = nextBeat ++ ;\n  heartBeatEmitter.emit( 'heartBeat' , beat ) ;\n} , 2000 ) ;\n\n// Create our server\nvar WebSocket = require( 'ws' ) ;\nvar server = new WebSocket.Server( { port: 12345 } ) ;\n\n// On new connection... \nserver.on( 'connection' , function connection( ws ) {\n  \n  // Create a proxy for this client\n  var proxy = new NGEvents.Proxy() ;\n  \n  // Add the local service exposed to this client and grant it all right\n  proxy.addLocalService( 'heartBeatService' , heartBeatEmitter ,\n    { listen: true , emit: true , ack: true } ) ;\n  \n  // message received: just hook to proxy.receive()\n  ws.on( 'message' , function incoming( message ) {\n    proxy.receive( message ) ;\n  } ) ;\n  \n  // Define the receive method: should call proxy.push()\n  // after decoding the raw message\n  proxy.receive = function receive( raw ) {\n    try { proxy.push( JSON.parse( raw ) ) ; } catch ( error ) {}\n  } ;\n  \n  // Define the send method\n  proxy.send = function send( message ) {\n    ws.send( JSON.stringify( message ) ) ;\n  } ;\n  \n  // Clean up after everything is done\n  ws.on( 'close' , function close() {\n    proxy.destroy() ;\n  } ) ;\n} ) ;\n```\n\n**Client:**\n\n```js\nvar NGEvents = require( 'nextgen-events' ) ;\nvar WebSocket = require( 'ws' ) ;\nvar ws = new WebSocket( 'ws://127.0.0.1:12345' ) ;\n\n// Create a proxy\nvar proxy = new NGEvents.Proxy() ;\n\n// Once the connection is established...\nws.on( 'open' , function open() {\n  \n  // Add the remote service we want to access\n  proxy.addRemoteService( 'heartBeatService' ) ;\n  \n  // Listen to the event 'heartBeat' on this service\n  proxy.remoteServices.heartBeatService.on( 'heartBeat' , function( beat ) {\n    console.log( '>>> Heart Beat (%d) received!' , beat ) ;\n  } ) ;\n} ) ;\n\n// message received: just hook to proxy.receive()\nws.on( 'message' , function( message ) {\n  proxy.receive( message ) ;\n} ) ;\n\n// Define the receive method: should call proxy.push()\n// after decoding the raw message\nproxy.receive = function receive( raw ) {\n  try { proxy.push( JSON.parse( raw ) ) ; } catch ( error ) {}\n} ;\n\n// Define the send method\nproxy.send = function send( message ) {\n  ws.send( JSON.stringify( message ) ) ;\n} ;\n\n// Clean up after everything is done\nws.on( 'close' , function close() {\n  proxy.destroy() ;\n} ) ;\n```\n\n\n\nOptions passed to `.addLocalService()`:\n\n* listen `boolean` if set, the remote client can listen (addListener()/on()) to the local emitter\n* emit `boolean` if set, the remote client can emit on the local emitter\n* ack `boolean` if set, the remote client can acknowledge or ask for acknowledgement, enabling **async listeners**\n  and .emit()'s **completion callback**\n\n\n\nNextGen Events features available in proxy services:\n\n* All the basic API is supported (the node-compatible API)\n* Emit completion callback supported\n* Async listeners supported\n\n\n\nFeatures that could be supported in the future:\n\n* Emit interruption and retrieving the interruption value\n\n\n\nFeatures that are unlikely to be supported:\n\n* Remote emit with a nice value (does not make sense at all through a network)\n* Contexts cannot be shared across different proxies/client, think of it as if they were namespaced behind their proxy\n\n\n",
+  "readmeFilename": "README.md",
+  "gitHead": "89c1358487295ba5f815710d06da67d680307c7f",
+  "homepage": "https://github.com/cronvel/nextgen-events#readme",
+  "_id": "nextgen-events@0.9.5",
+  "_shasum": "a8a9ba63a613b83a514078b43628b590ae48be82",
+  "_from": "nextgen-events@0.9.5"
+}
+
+},{}],45:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -8361,7 +9524,7 @@ module.exports = {
 
 
 
-},{}],43:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -8460,7 +9623,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],44:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -8918,7 +10081,7 @@ function inspectStack( options , stack )
 	{
 		stack = stack.replace( /^[^\n]*\n/ , '' ) ;
 		stack = stack.replace(
-			/^\s*(at)\s+(?:([^\s:\(\)\[\]\n]+)\s)?(?:\[as ([^\s:\(\)\[\]\n]+)\]\s)?(?:\(?([^:\(\)\[\]\n]+):([0-9]+):([0-9]+)\)?)?$/mg ,
+			/^\s*(at)\s+(?:([^\s:\(\)\[\]\n]+(?:\([^\)]+\))?)\s)?(?:\[as ([^\s:\(\)\[\]\n]+)\]\s)?(?:\(?([^:\(\)\[\]\n]+):([0-9]+):([0-9]+)\)?)?$/mg ,
 			function( matches , at , method , as , file , line , column ) {	// jshint ignore:line
 				return options.style.errorStack( '    at ' ) +
 					( method ? options.style.errorStackMethod( method ) + ' ' : '' ) +
@@ -9024,24 +10187,24 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")},require('_process'))
-},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":16,"./ansi.js":42,"./escape.js":43,"_process":17,"tree-kit/lib/extend.js":45}],45:[function(require,module,exports){
+},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":17,"./ansi.js":45,"./escape.js":46,"_process":18,"tree-kit/lib/extend.js":48}],48:[function(require,module,exports){
 /*
-	The Cedric's Swiss Knife (CSK) - CSK object tree toolbox
-
-	Copyright (c) 2014, 2015 Cédric Ronvel 
+	Tree Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
 	
 	The MIT License (MIT)
-
+	
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-
+	
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-
+	
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -9073,7 +10236,7 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 		* nofunc: skip functions
 		* deepFunc: in conjunction with 'deep', this will process sources functions like objects rather than
 			copying/referencing them directly into the source, thus, the result will not be a function, it forces 'deep'
-		* proto: try to clone objects with the right prototype, using Object.create() or mutating it with __proto__,
+		* proto: try to clone objects with the right prototype, using Object.create() or mutating it with Object.setPrototypeOf(),
 			it forces option 'own'.
 		* inherit: rather than mutating target prototype for source prototype like the 'proto' option does, here it is
 			the source itself that IS the prototype for the target. Force option 'own' and disable 'proto'.
@@ -9086,88 +10249,110 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 				for object whose prototype is listed
 			* whitelist: the opposite of blacklist
 */
-function extend( runtime , options , target )
+function extend( options , target )
 {
-	var i , j , jmax , source , sourceKeys , sourceKey , sourceValue ,
-		value , sourceDescriptor , targetKey , targetPointer , path ,
-		indexOfSource = -1 , newTarget = false , length = arguments.length ;
+	//console.log( "\nextend():\n" , arguments ) ;
+	var i , source , newTarget = false , length = arguments.length ;
+	
+	if ( length < 3 ) { return target ; }
+	
+	var sources = Array.prototype.slice.call( arguments , 2 ) ;
+	length = sources.length ;
 	
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
 	
-	// Things applied only for the first call, not for recursive call
-	if ( ! runtime )
+	var runtime = { depth: 0 , prefix: '' } ;
+	
+	if ( ! options.maxDepth && options.deep && ! options.circular ) { options.maxDepth = 100 ; }
+	
+	if ( options.deepFunc ) { options.deep = true ; }
+	
+	if ( options.deepFilter && typeof options.deepFilter === 'object' )
 	{
-		runtime = { depth: 0 , prefix: '' } ;
-		
-		if ( ! options.maxDepth && options.deep && ! options.circular ) { options.maxDepth = 100 ; }
-		
-		if ( options.deepFunc ) { options.deep = true ; }
-		
-		if ( options.deepFilter && typeof options.deepFilter === 'object' )
-		{
-			if ( options.deepFilter.whitelist && ( ! Array.isArray( options.deepFilter.whitelist ) || ! options.deepFilter.whitelist.length ) ) { delete options.deepFilter.whitelist ; }
-			if ( options.deepFilter.blacklist && ( ! Array.isArray( options.deepFilter.blacklist ) || ! options.deepFilter.blacklist.length ) ) { delete options.deepFilter.blacklist ; }
-			if ( ! options.deepFilter.whitelist && ! options.deepFilter.blacklist ) { delete options.deepFilter ; }
-		}
-		
-		// 'flat' option force 'deep'
-		if ( options.flat )
-		{
-			options.deep = true ;
-			options.proto = false ;
-			options.inherit = false ;
-			options.unflat = false ;
-			if ( typeof options.flat !== 'string' ) { options.flat = '.' ; }
-		}
-		
-		if ( options.unflat )
-		{
-			options.deep = false ;
-			options.proto = false ;
-			options.inherit = false ;
-			options.flat = false ;
-			if ( typeof options.unflat !== 'string' ) { options.unflat = '.' ; }
-		}
-		
-		// If the prototype is applied, only owned properties should be copied
-		if ( options.inherit ) { options.own = true ; options.proto = false ; }
-		else if ( options.proto ) { options.own = true ; }
-		
-		if ( ! target || ( typeof target !== 'object' && typeof target !== 'function' ) )
-		{
-			newTarget = true ;
-		}
-		
-		if ( ! options.skipRoot && ( options.inherit || options.proto ) )
-		{
-			for ( i = length - 1 ; i >= 3 ; i -- )
-			{
-				source = arguments[ i ] ;
-				if ( source && ( typeof source === 'object' || typeof source === 'function' ) )
-				{
-					if ( options.inherit )
-					{
-						if ( newTarget ) { target = Object.create( source ) ; }
-						else { target.__proto__ = source ; }	// jshint ignore:line
-					}
-					else if ( options.proto )
-					{
-						if ( newTarget ) { target = Object.create( source.__proto__ ) ; }	// jshint ignore:line
-						else { target.__proto__ = source.__proto__ ; }	// jshint ignore:line
-					}
-					
-					break ;
-				}
-			}
-		}
-		else if ( newTarget )
-		{
-			target = {} ;
-		}
-		
-		runtime.references = { sources: [] , targets: [] } ;
+		if ( options.deepFilter.whitelist && ( ! Array.isArray( options.deepFilter.whitelist ) || ! options.deepFilter.whitelist.length ) ) { delete options.deepFilter.whitelist ; }
+		if ( options.deepFilter.blacklist && ( ! Array.isArray( options.deepFilter.blacklist ) || ! options.deepFilter.blacklist.length ) ) { delete options.deepFilter.blacklist ; }
+		if ( ! options.deepFilter.whitelist && ! options.deepFilter.blacklist ) { delete options.deepFilter ; }
 	}
 	
+	// 'flat' option force 'deep'
+	if ( options.flat )
+	{
+		options.deep = true ;
+		options.proto = false ;
+		options.inherit = false ;
+		options.unflat = false ;
+		if ( typeof options.flat !== 'string' ) { options.flat = '.' ; }
+	}
+	
+	if ( options.unflat )
+	{
+		options.deep = false ;
+		options.proto = false ;
+		options.inherit = false ;
+		options.flat = false ;
+		if ( typeof options.unflat !== 'string' ) { options.unflat = '.' ; }
+	}
+	
+	// If the prototype is applied, only owned properties should be copied
+	if ( options.inherit ) { options.own = true ; options.proto = false ; }
+	else if ( options.proto ) { options.own = true ; }
+	
+	if ( ! target || ( typeof target !== 'object' && typeof target !== 'function' ) )
+	{
+		newTarget = true ;
+	}
+	
+	if ( ! options.skipRoot && ( options.inherit || options.proto ) )
+	{
+		for ( i = length - 1 ; i >= 0 ; i -- )
+		{
+			source = sources[ i ] ;
+			if ( source && ( typeof source === 'object' || typeof source === 'function' ) )
+			{
+				if ( options.inherit )
+				{
+					if ( newTarget ) { target = Object.create( source ) ; }
+					else { Object.setPrototypeOf( target , source ) ; }
+				}
+				else if ( options.proto )
+				{
+					if ( newTarget ) { target = Object.create( Object.getPrototypeOf( source ) ) ; }
+					else { Object.setPrototypeOf( target , Object.getPrototypeOf( source ) ) ; }
+				}
+				
+				break ;
+			}
+		}
+	}
+	else if ( newTarget )
+	{
+		target = {} ;
+	}
+	
+	runtime.references = { sources: [] , targets: [] } ;
+	
+	for ( i = 0 ; i < length ; i ++ )
+	{
+		source = sources[ i ] ;
+		if ( ! source || ( typeof source !== 'object' && typeof source !== 'function' ) ) { continue ; }
+		extendOne( runtime , options , target , source ) ;
+	}
+	
+	return target ;
+}
+
+module.exports = extend ;
+
+
+
+function extendOne( runtime , options , target , source )
+{
+	//console.log( "\nextendOne():\n" , arguments ) ;
+	//process.exit() ;
+	
+	var j , jmax , sourceKeys , sourceKey , sourceValue , sourceValueProto ,
+		value , sourceDescriptor , targetKey , targetPointer , path ,
+		indexOfSource = -1 ;
 	
 	// Max depth check
 	if ( options.maxDepth && runtime.depth > options.maxDepth )
@@ -9175,186 +10360,173 @@ function extend( runtime , options , target )
 		throw new Error( '[tree] extend(): max depth reached(' + options.maxDepth + ')' ) ;
 	}
 	
-	
-	// Real extend processing part
-	for ( i = 3 ; i < length ; i ++ )
+		
+	if ( options.circular )
 	{
-		source = arguments[ i ] ;
-		if ( ! source || ( typeof source !== 'object' && typeof source !== 'function' ) ) { continue ; }
+		runtime.references.sources.push( source ) ;
+		runtime.references.targets.push( target ) ;
+	}
+	
+	if ( options.own )
+	{
+		if ( options.nonEnum ) { sourceKeys = Object.getOwnPropertyNames( source ) ; }
+		else { sourceKeys = Object.keys( source ) ; }
+	}
+	else { sourceKeys = source ; }
+	
+	for ( sourceKey in sourceKeys )
+	{
+		if ( options.own ) { sourceKey = sourceKeys[ sourceKey ] ; }
 		
-		if ( options.circular )
+		// If descriptor is on, get it now
+		if ( options.descriptor )
 		{
-			runtime.references.sources.push( source ) ;
-			runtime.references.targets.push( target ) ;
+			sourceDescriptor = Object.getOwnPropertyDescriptor( source , sourceKey ) ;
+			sourceValue = sourceDescriptor.value ;
+		}
+		else
+		{
+			// We have to trigger an eventual getter only once
+			sourceValue = source[ sourceKey ] ;
 		}
 		
-		if ( options.own )
-		{
-			if ( options.nonEnum ) { sourceKeys = Object.getOwnPropertyNames( source ) ; }
-			else { sourceKeys = Object.keys( source ) ; }
-		}
-		else { sourceKeys = source ; }
+		targetPointer = target ;
+		targetKey = runtime.prefix + sourceKey ;
 		
-		for ( sourceKey in sourceKeys )
+		// Do not copy if property is a function and we don't want them
+		if ( options.nofunc && typeof sourceValue === 'function' ) { continue; }
+		
+		// 'unflat' mode computing
+		if ( options.unflat && runtime.depth === 0 )
 		{
-			if ( options.own ) { sourceKey = sourceKeys[ sourceKey ] ; }
+			path = sourceKey.split( options.unflat ) ;
+			jmax = path.length - 1 ;
 			
-			// If descriptor is on, get it now
-			if ( options.descriptor )
+			if ( jmax )
 			{
-				sourceDescriptor = Object.getOwnPropertyDescriptor( source , sourceKey ) ;
-				sourceValue = sourceDescriptor.value ;
+				for ( j = 0 ; j < jmax ; j ++ )
+				{
+					if ( ! targetPointer[ path[ j ] ] ||
+						( typeof targetPointer[ path[ j ] ] !== 'object' &&
+							typeof targetPointer[ path[ j ] ] !== 'function' ) )
+					{
+						targetPointer[ path[ j ] ] = {} ;
+					}
+					
+					targetPointer = targetPointer[ path[ j ] ] ;
+				}
+				
+				targetKey = runtime.prefix + path[ jmax ] ;
+			}
+		}
+		
+		
+		if ( options.deep &&
+			sourceValue &&
+			( typeof sourceValue === 'object' || ( options.deepFunc && typeof sourceValue === 'function' ) ) &&
+			( ! options.descriptor || ! sourceDescriptor.get ) &&
+			// not a condition we just cache sourceValueProto now
+			( ( sourceValueProto = Object.getPrototypeOf( sourceValue ) ) || true ) &&
+			( ! options.deepFilter ||
+				( ( ! options.deepFilter.whitelist || options.deepFilter.whitelist.indexOf( sourceValueProto ) !== -1 ) &&
+					( ! options.deepFilter.blacklist || options.deepFilter.blacklist.indexOf( sourceValueProto ) === -1 ) ) ) )
+		{
+			if ( options.circular )
+			{
+				indexOfSource = runtime.references.sources.indexOf( sourceValue ) ;
+			}
+			
+			if ( options.flat )
+			{
+				// No circular references reconnection when in 'flat' mode
+				if ( indexOfSource >= 0 ) { continue ; }
+				
+				extendOne(
+					{ depth: runtime.depth + 1 , prefix: runtime.prefix + sourceKey + options.flat , references: runtime.references } ,
+					options , targetPointer , sourceValue
+				) ;
 			}
 			else
 			{
-				// We have to trigger an eventual getter only once
-				sourceValue = source[ sourceKey ] ;
-			}
-			
-			targetPointer = target ;
-			targetKey = runtime.prefix + sourceKey ;
-			
-			// Do not copy if property is a function and we don't want them
-			if ( options.nofunc && typeof sourceValue === 'function' ) { continue; }
-			
-			// 'unflat' mode computing
-			if ( options.unflat && runtime.depth === 0 )
-			{
-				path = sourceKey.split( options.unflat ) ;
-				jmax = path.length - 1 ;
-				
-				if ( jmax )
+				if ( indexOfSource >= 0 )
 				{
-					for ( j = 0 ; j < jmax ; j ++ )
+					// Circular references reconnection...
+					if ( options.descriptor )
 					{
-						if ( ! targetPointer[ path[ j ] ] ||
-							( typeof targetPointer[ path[ j ] ] !== 'object' &&
-								typeof targetPointer[ path[ j ] ] !== 'function' ) )
-						{
-							targetPointer[ path[ j ] ] = {} ;
-						}
-						
-						targetPointer = targetPointer[ path[ j ] ] ;
+						Object.defineProperty( targetPointer , targetKey , {
+							value: runtime.references.targets[ indexOfSource ] ,
+							enumerable: sourceDescriptor.enumerable ,
+							writable: sourceDescriptor.writable ,
+							configurable: sourceDescriptor.configurable
+						} ) ;
+					}
+					else
+					{
+						targetPointer[ targetKey ] = runtime.references.targets[ indexOfSource ] ;
 					}
 					
-					targetKey = runtime.prefix + path[ jmax ] ;
+					continue ;
 				}
-			}
-			
-			
-			if ( options.deep &&
-				sourceValue &&
-				( typeof sourceValue === 'object' || ( options.deepFunc && typeof sourceValue === 'function' ) ) &&
-				( ! options.descriptor || ! sourceDescriptor.get ) &&
-				( ! options.deepFilter ||
-					( ( ! options.deepFilter.whitelist || options.deepFilter.whitelist.indexOf( sourceValue.__proto__ ) !== -1 ) &&	// jshint ignore:line
-						( ! options.deepFilter.blacklist || options.deepFilter.blacklist.indexOf( sourceValue.__proto__ ) === -1 ) ) ) ) // jshint ignore:line
-			{
+				
+				if ( ! targetPointer[ targetKey ] || ! targetPointer.hasOwnProperty( targetKey ) || ( typeof targetPointer[ targetKey ] !== 'object' && typeof targetPointer[ targetKey ] !== 'function' ) )
+				{
+					if ( Array.isArray( sourceValue ) ) { value = [] ; }
+					else if ( options.proto ) { value = Object.create( sourceValueProto ) ; }	// jshint ignore:line
+					else if ( options.inherit ) { value = Object.create( sourceValue ) ; }
+					else { value = {} ; }
+					
+					if ( options.descriptor )
+					{
+						Object.defineProperty( targetPointer , targetKey , {
+							value: value ,
+							enumerable: sourceDescriptor.enumerable ,
+							writable: sourceDescriptor.writable ,
+							configurable: sourceDescriptor.configurable
+						} ) ;
+					}
+					else
+					{
+						targetPointer[ targetKey ] = value ;
+					}
+				}
+				else if ( options.proto && Object.getPrototypeOf( targetPointer[ targetKey ] ) !== sourceValueProto )
+				{
+					Object.setPrototypeOf( targetPointer[ targetKey ] , sourceValueProto ) ;
+				}
+				else if ( options.inherit && Object.getPrototypeOf( targetPointer[ targetKey ] ) !== sourceValue )
+				{
+					Object.setPrototypeOf( targetPointer[ targetKey ] , sourceValue ) ;
+				}
+				
 				if ( options.circular )
 				{
-					indexOfSource = runtime.references.sources.indexOf( sourceValue ) ;
+					runtime.references.sources.push( sourceValue ) ;
+					runtime.references.targets.push( targetPointer[ targetKey ] ) ;
 				}
 				
-				if ( options.flat )
-				{
-					// No circular references reconnection when in 'flat' mode
-					if ( indexOfSource >= 0 ) { continue ; }
-					
-					extend(
-						{ depth: runtime.depth + 1 , prefix: runtime.prefix + sourceKey + options.flat , references: runtime.references } ,
-						options , targetPointer , sourceValue
-					) ;
-				}
-				else
-				{
-					if ( indexOfSource >= 0 )
-					{
-						// Circular references reconnection...
-						if ( options.descriptor )
-						{
-							Object.defineProperty( targetPointer , targetKey , {
-								value: runtime.references.targets[ indexOfSource ] ,
-								enumerable: sourceDescriptor.enumerable ,
-								writable: sourceDescriptor.writable ,
-								configurable: sourceDescriptor.configurable
-							} ) ;
-						}
-						else
-						{
-							targetPointer[ targetKey ] = runtime.references.targets[ indexOfSource ] ;
-						}
-						
-						continue ;
-					}
-					
-					if ( ! targetPointer[ targetKey ] || ! targetPointer.hasOwnProperty( targetKey ) || ( typeof targetPointer[ targetKey ] !== 'object' && typeof targetPointer[ targetKey ] !== 'function' ) )
-					{
-						if ( Array.isArray( sourceValue ) ) { value = [] ; }
-						else if ( options.proto ) { value = Object.create( sourceValue.__proto__ ) ; }	// jshint ignore:line
-						else if ( options.inherit ) { value = Object.create( sourceValue ) ; }
-						else { value = {} ; }
-						
-						if ( options.descriptor )
-						{
-							Object.defineProperty( targetPointer , targetKey , {
-								value: value ,
-								enumerable: sourceDescriptor.enumerable ,
-								writable: sourceDescriptor.writable ,
-								configurable: sourceDescriptor.configurable
-							} ) ;
-						}
-						else
-						{
-							targetPointer[ targetKey ] = value ;
-						}
-					}
-					else if ( options.proto && targetPointer[ targetKey ].__proto__ !== sourceValue.__proto__ )	// jshint ignore:line
-					{
-						targetPointer[ targetKey ].__proto__ = sourceValue.__proto__ ;	// jshint ignore:line
-					}
-					else if ( options.inherit && targetPointer[ targetKey ].__proto__ !== sourceValue )	// jshint ignore:line
-					{
-						targetPointer[ targetKey ].__proto__ = sourceValue ;	// jshint ignore:line
-					}
-					
-					if ( options.circular )
-					{
-						runtime.references.sources.push( sourceValue ) ;
-						runtime.references.targets.push( targetPointer[ targetKey ] ) ;
-					}
-					
-					// Recursively extends sub-object
-					extend(
-						{ depth: runtime.depth + 1 , prefix: '' , references: runtime.references } ,
-						options , targetPointer[ targetKey ] , sourceValue
-					) ;
-				}
+				// Recursively extends sub-object
+				extendOne(
+					{ depth: runtime.depth + 1 , prefix: '' , references: runtime.references } ,
+					options , targetPointer[ targetKey ] , sourceValue
+				) ;
 			}
-			else if ( options.preserve && targetPointer[ targetKey ] !== undefined )
-			{
-				// Do not overwrite, and so do not delete source's properties that were not moved
-				continue ;
-			}
-			else if ( ! options.inherit )
-			{
-				if ( options.descriptor ) { Object.defineProperty( targetPointer , targetKey , sourceDescriptor ) ; }
-				else { targetPointer[ targetKey ] = sourceValue ; }
-			}
-			
-			// Delete owned property of the source object
-			if ( options.move ) { delete source[ sourceKey ] ; }
 		}
+		else if ( options.preserve && targetPointer[ targetKey ] !== undefined )
+		{
+			// Do not overwrite, and so do not delete source's properties that were not moved
+			continue ;
+		}
+		else if ( ! options.inherit )
+		{
+			if ( options.descriptor ) { Object.defineProperty( targetPointer , targetKey , sourceDescriptor ) ; }
+			else { targetPointer[ targetKey ] = sourceValue ; }
+		}
+		
+		// Delete owned property of the source object
+		if ( options.move ) { delete source[ sourceKey ] ; }
 	}
-	
-	return target ;
 }
 
 
-
-// The extend() method as publicly exposed
-module.exports = extend.bind( undefined , null ) ;
-
-
-
-},{}]},{},[4])(4)
+},{}]},{},[6])(6)
 });
