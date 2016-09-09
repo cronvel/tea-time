@@ -1,462 +1,4 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.createTeaTime = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-(function (process,global){
-/*
-	Async Try-Catch
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-function AsyncTryCatch() { throw new Error( "Use AsyncTryCatch.try() instead." ) ; }
-module.exports = AsyncTryCatch ;
-AsyncTryCatch.prototype.__prototypeUID__ = 'async-try-catch/AsyncTryCatch' ;
-AsyncTryCatch.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
-
-
-
-if ( global.AsyncTryCatch )
-{
-	if ( global.AsyncTryCatch.prototype.__prototypeUID__ === 'async-try-catch/AsyncTryCatch' )
-	{
-		//console.log( "Already installed:" , global.AsyncTryCatch.prototype.__prototypeVersion__ , "current:" , AsyncTryCatch.prototype.__prototypeVersion__ ) ;
-		
-		var currentVersions = AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
-		var installedVersions = global.AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
-		
-		// Basic semver comparison
-		if (
-			installedVersions[ 0 ] !== currentVersions[ 0 ] ||
-			( currentVersions[ 0 ] === "0" && installedVersions[ 1 ] !== currentVersions[ 1 ] )
-		)
-		{
-			throw new Error(
-				"Incompatible version of AsyncTryCatch already installed on global.AsyncTryCatch: " +
-				global.AsyncTryCatch.prototype.__prototypeVersion__ +
-				", current version: " + AsyncTryCatch.prototype.__prototypeVersion__
-			) ;
-		}
-		//global.AsyncTryCatch = AsyncTryCatch ;
-	}
-	else
-	{
-		throw new Error( "Incompatible module already installed on global.AsyncTryCatch" ) ;
-	}
-}
-else
-{
-	global.AsyncTryCatch = AsyncTryCatch ;
-	global.AsyncTryCatch.stack = [] ;
-	global.AsyncTryCatch.substituted = false ;
-	global.AsyncTryCatch.NextGenEvents = [] ;
-}
-
-
-
-if ( process.browser && ! global.setImmediate )
-{
-	global.setImmediate = function setImmediate( fn ) { return setTimeout( fn , 0 ) ; } ;
-	global.clearImmediate = function clearImmediate( timer ) { return clearTimeout( timer ) ; } ;
-}
-
-
-
-if ( ! global.Vanilla ) { global.Vanilla = {} ; }
-if ( ! global.Vanilla.setTimeout ) { global.Vanilla.setTimeout = setTimeout ; }
-if ( ! global.Vanilla.setImmediate ) { global.Vanilla.setImmediate = setImmediate ; }
-if ( ! global.Vanilla.nextTick ) { global.Vanilla.nextTick = process.nextTick ; }
-
-
-
-AsyncTryCatch.try = function try_( fn )
-{
-	var self = Object.create( AsyncTryCatch.prototype , {
-		fn: { value: fn , enumerable: true } ,
-		parent: { value: global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] }
-	} ) ;
-	
-	return self ;
-} ;
-
-
-
-AsyncTryCatch.prototype.catch = function catch_( catchFn )
-{
-	Object.defineProperties( this , {
-		catchFn: { value: catchFn , enumerable: true }
-	} ) ;
-	
-	if ( ! global.AsyncTryCatch.substituted ) { AsyncTryCatch.substitute() ; }
-	
-	try {
-		global.AsyncTryCatch.stack.push( this ) ;
-		this.fn() ;
-		global.AsyncTryCatch.stack.pop() ;
-	}
-	catch ( error ) {
-		global.AsyncTryCatch.stack.pop() ;
-		this.callCatchFn( error ) ;
-	}
-	
-} ;
-
-
-
-// Handle the bubble up
-AsyncTryCatch.prototype.callCatchFn = function callCatchFn( error )
-{
-	if ( ! this.parent )
-	{
-		this.catchFn( error ) ;
-		return ;
-	}
-	
-	try {
-		global.AsyncTryCatch.stack.push( this.parent ) ;
-		this.catchFn( error ) ;
-		global.AsyncTryCatch.stack.pop() ;
-	}
-	catch ( error ) {
-		global.AsyncTryCatch.stack.pop() ;
-		this.parent.callCatchFn( error ) ;
-	}
-} ;
-
-
-
-// for setTimeout(), setImmediate(), process.nextTick()
-AsyncTryCatch.timerWrapper = function timerWrapper( originalMethod , fn )
-{
-	var fn , context , wrapperFn ,
-		args = Array.prototype.slice.call( arguments , 1 ) ;
-	
-	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
-	{
-		return originalMethod.apply( this , args ) ;
-	}
-	
-	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
-	
-	wrapperFn = function() {
-		try {
-			global.AsyncTryCatch.stack.push( context ) ;
-			fn.apply( this , arguments ) ;
-			global.AsyncTryCatch.stack.pop() ;
-		}
-		catch ( error ) {
-			global.AsyncTryCatch.stack.pop() ;
-			context.callCatchFn( error ) ;
-		}
-	} ;
-	
-	args[ 0 ] = wrapperFn ;
-	
-	return originalMethod.apply( this , args ) ;
-} ;
-
-
-
-// for Node-EventEmitter-compatible .addListener()
-AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod , eventName , fn , options )
-{
-	var fn , context , wrapperFn ;
-	
-	// NextGen event compatibility
-	if ( typeof fn === 'object' )
-	{
-		options = fn ;
-		fn = options.fn ;
-		delete options.fn ;
-	}
-	
-	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
-	{
-		return originalMethod.call( this , eventName , fn , options ) ;
-	}
-	
-	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
-	
-	// Assume that the function is only wrapped once per eventEmitter
-	if ( this.__fnToWrapperMap )
-	{
-		wrapperFn = this.__fnToWrapperMap.get( fn ) ;
-	}
-	else 
-	{
-		// Create the map, make it non-enumerable
-		Object.defineProperty( this , '__fnToWrapperMap', { value: new WeakMap() } ) ;
-	}
-	
-	if ( ! wrapperFn )
-	{
-		wrapperFn = function() {
-			try {
-				global.AsyncTryCatch.stack.push( context ) ;
-				fn.apply( this , arguments ) ;
-				global.AsyncTryCatch.stack.pop() ;
-			}
-			catch ( error ) {
-				global.AsyncTryCatch.stack.pop() ;
-				context.callCatchFn( error ) ;
-			}
-		} ;
-		
-		this.__fnToWrapperMap.set( fn , wrapperFn ) ;
-	}
-	
-	return originalMethod.call( this , eventName , wrapperFn , options ) ;
-} ;
-
-
-
-AsyncTryCatch.removeListenerWrapper = function removeListenerWrapper( originalMethod , eventName , fn )
-{
-	//console.log( 'fn:' , fn ) ;
-	
-	if ( typeof fn === 'function' && this.__fnToWrapperMap )
-	{
-		fn = this.__fnToWrapperMap.get( fn ) || fn ;
-	}
-	
-	return originalMethod.call( this , eventName , fn ) ;
-} ;
-
-
-
-AsyncTryCatch.setTimeout = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setTimeout ) ;
-AsyncTryCatch.setImmediate = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setImmediate ) ;
-AsyncTryCatch.nextTick = AsyncTryCatch.timerWrapper.bind( process , global.Vanilla.nextTick ) ;
-
-// NodeEvents on()/addListener() replacement
-AsyncTryCatch.addListener = function addListener( eventName , fn )
-{
-	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListener , eventName , fn ) ;
-} ;
-
-// NodeEvents once() replacement
-AsyncTryCatch.addListenerOnce = function addListenerOnce( eventName , fn )
-{
-	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListenerOnce , eventName , fn ) ;
-} ;
-
-// NodeEvents removeListener() replacement
-AsyncTryCatch.removeListener = function removeListener( eventName , fn )
-{
-	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__removeListener , eventName , fn ) ;
-} ;
-
-// NextGen Events on()/addListener() replacement
-AsyncTryCatch.ngevAddListener = function ngevAddListener( eventName , fn , options )
-{
-	/*
-	console.log( 'this:' , this ) ;
-	console.log( 'this.asyncTryCatchId:' , this.asyncTryCatchId ) ;
-	console.log( 'called with:' , Array.from( arguments ) ) ;
-	try {*/
-	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].on , eventName , fn , options ) ;
-	/*}
-	catch ( error ) {
-		console.error( error ) ;
-		console.log( index ) ;
-		throw error ;
-	}*/
-} ;
-
-// NextGen Events once() replacement
-AsyncTryCatch.ngevAddListenerOnce = function ngevAddListenerOnce( eventName , fn , options )
-{
-	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].once , eventName , fn , options ) ;
-} ;
-
-// NextGen Events off()/removeListener() replacement
-AsyncTryCatch.ngevRemoveListener = function ngevRemoveListener( eventName , fn )
-{
-	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].off , eventName , fn ) ;
-} ;
-
-
-
-AsyncTryCatch.substitute = function substitute()
-{
-	// This test should be done by the caller, because substitution could be incomplete
-	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
-	//if ( global.AsyncTryCatch.substituted ) { return ; }
-	
-	global.AsyncTryCatch.substituted = true ;
-	
-	global.setTimeout = AsyncTryCatch.setTimeout ;
-	global.setImmediate = AsyncTryCatch.setTimeout ;
-	process.nextTick = AsyncTryCatch.nextTick ;
-	
-	// Global is checked first, in case we are running inside a browser
-	try {
-		AsyncTryCatch.NodeEvents = global.EventEmitter || require( 'events' ) ;
-	} catch ( error ) {}
-	
-	/*
-	try {
-		AsyncTryCatch.NextGenEvents = global.NextGenEvents || require( 'nextgen-events' ) ;
-	} catch ( error ) {}
-	*/
-	
-	if ( AsyncTryCatch.NodeEvents )
-	{
-		if ( ! AsyncTryCatch.NodeEvents.__addListener )
-		{
-			AsyncTryCatch.NodeEvents.__addListener = AsyncTryCatch.NodeEvents.prototype.on ;
-		}
-		
-		if ( ! AsyncTryCatch.NodeEvents.__addListenerOnce )
-		{
-			AsyncTryCatch.NodeEvents.__addListenerOnce = AsyncTryCatch.NodeEvents.prototype.once ;
-		}
-		
-		if ( ! AsyncTryCatch.NodeEvents.__removeListener )
-		{
-			AsyncTryCatch.NodeEvents.__removeListener = AsyncTryCatch.NodeEvents.prototype.removeListener ;
-		}
-		
-		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.addListener ;
-		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.addListener ;
-		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.addListenerOnce ;
-		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.removeListener ;
-	}
-	
-	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ )
-	{
-		//console.log( 'substituting NextGenEvents' , i ) ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.on = AsyncTryCatch.ngevAddListener ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.addListener = AsyncTryCatch.ngevAddListener ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.once = AsyncTryCatch.ngevAddListenerOnce ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.off = AsyncTryCatch.ngevRemoveListener ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.removeListener = AsyncTryCatch.ngevRemoveListener ;
-	}
-	
-	/*
-	if ( AsyncTryCatch.NextGenEvents )
-	{
-		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.ngevAddListener ;
-		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.ngevAddListener ;
-		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.ngevAddListenerOnce ;
-		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.ngevRemoveListener ;
-		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.ngevRemoveListener ;
-	}
-	*/
-} ;
-
-
-
-AsyncTryCatch.restore = function restore()
-{
-	// This test should be done by the caller, because substitution could be incomplete
-	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
-	//if ( ! global.AsyncTryCatch.substituted ) { return ; }
-	
-	global.AsyncTryCatch.substituted = false ;
-	
-	global.setTimeout = global.Vanilla.setTimeout ;
-	global.setImmediate = global.Vanilla.setImmediate ;
-	process.nextTick = global.Vanilla.nextTick ;
-	
-	if ( AsyncTryCatch.NodeEvents )
-	{
-		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.NodeEvents.__addListener ;
-		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.NodeEvents.__addListener ;
-		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.NodeEvents.__addListenerOnce ;
-		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.NodeEvents.__removeListener ;
-	}
-	
-	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ )
-	{
-		AsyncTryCatch.NextGenEvents[ i ].prototype.on = AsyncTryCatch.NextGenEvents[ i ].on ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.addListener = AsyncTryCatch.NextGenEvents[ i ].on ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.once = AsyncTryCatch.NextGenEvents[ i ].once ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.off = AsyncTryCatch.NextGenEvents[ i ].off ;
-		AsyncTryCatch.NextGenEvents[ i ].prototype.removeListener = AsyncTryCatch.NextGenEvents[ i ].removeListener ;
-	}
-	
-	/*
-	if ( AsyncTryCatch.NextGenEvents )
-	{
-		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.NextGenEvents.on ;
-		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.NextGenEvents.on ;
-		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.NextGenEvents.once ;
-		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.NextGenEvents.off ;
-		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.NextGenEvents.removeListener ;
-	}
-	*/
-} ;
-
-
-
-}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":2,"_process":18,"events":16}],2:[function(require,module,exports){
-module.exports={
-  "name": "async-try-catch",
-  "version": "0.3.0",
-  "description": "Async try catch",
-  "main": "lib/AsyncTryCatch.js",
-  "directories": {
-    "test": "test"
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "browserify": "^13.0.1",
-    "expect.js": "^0.3.1",
-    "jshint": "^2.9.2",
-    "mocha": "^2.5.3",
-    "nextgen-events": "^0.9.5",
-    "uglify-js": "^2.6.2"
-  },
-  "scripts": {
-    "test": "mocha -R dot"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/cronvel/async-try-catch.git"
-  },
-  "keywords": [
-    "async",
-    "try",
-    "catch"
-  ],
-  "author": "Cédric Ronvel",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/cronvel/async-try-catch/issues"
-  },
-  "copyright": {
-    "title": "Async Try-Catch",
-    "years": [
-      2015,
-      2016
-    ],
-    "owner": "Cédric Ronvel"
-  }
-}
-},{}],3:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -663,6 +205,8 @@ Reporter.errorReport = function errorReport( errors )
 				break ;
 		}
 		
+		if ( error.error.uncaught ) { content += '<span style="' + hookErrorStyle + '">UNCAUGHT EXCEPTION</span> ' ; }
+		
 		content += error.name ;
 		content += '</p>' ;
 		content += this.reportOneError( error.error ) ;
@@ -700,7 +244,7 @@ Reporter.prototype.reportOneError = function reportOneError( error )
 
 
 
-},{}],4:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -781,7 +325,7 @@ Reporter.report = function report( ok , fail , skip )
 
 
 
-},{}],5:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -900,7 +444,7 @@ Reporter.exit = function exit( callback )
 
 
 
-},{}],6:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -1045,7 +589,7 @@ dom.ready( function() {
 
 
 
-},{"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"./tea-time.js":9,"dom-kit":40,"string-kit/lib/inspect.js":47,"url":23}],7:[function(require,module,exports){
+},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":40,"string-kit/lib/inspect.js":47,"url":23}],5:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -1137,7 +681,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":34,"string-kit/lib/inspect.js":47}],8:[function(require,module,exports){
+},{"diff":34,"string-kit/lib/inspect.js":47}],6:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -1204,7 +748,7 @@ module.exports = function htmlColorDiff( oldValue , newValue )
 
 
 
-},{"./diff.js":7}],9:[function(require,module,exports){
+},{"./diff.js":5}],7:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -1734,9 +1278,14 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		slow: function( slowTime_ ) { slowTime = slowTime_ ; }
 	} ;
 	
+	var uncaughtExceptionHandler = function uncaughtExceptionHandler( error ) {
+		error.uncaught = true ;
+		triggerCallback( error ) ;
+	} ;
+	
 	var triggerCallback = function triggerCallback( error ) {
 		
-		self.offUncaughtException( triggerCallback ) ;
+		self.offUncaughtException( uncaughtExceptionHandler ) ;
 		if ( callbackTriggered ) { return ; }
 		
 		time = Date.now() - startTime ;
@@ -1762,7 +1311,7 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		triggerCallback( error ) ;
 	} ) ;
 	
-	this.onceUncaughtException( triggerCallback ) ;
+	this.onceUncaughtException( uncaughtExceptionHandler ) ;
 } ;
 
 
@@ -1815,9 +1364,14 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 	// We need a fresh callstack after each hook
 	callback = this.freshCallback( callback ) ;
 	
+	var uncaughtExceptionHandler = function uncaughtExceptionHandler( error ) {
+		error.uncaught = true ;
+		triggerCallback( error ) ;
+	} ;
+	
 	var triggerCallback = function triggerCallback( error ) {
 		
-		self.offUncaughtException( triggerCallback ) ;
+		self.offUncaughtException( uncaughtExceptionHandler ) ;
 		if ( callbackTriggered ) { return ; }
 		
 		callbackTriggered = true ;
@@ -1831,7 +1385,7 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 		triggerCallback( error ) ;
 	} ) ;
 	
-	this.onceUncaughtException( triggerCallback ) ;
+	this.onceUncaughtException( uncaughtExceptionHandler ) ;
 } ;
 
 
@@ -1998,7 +1552,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":10,"async-try-catch":1,"nextgen-events":42}],10:[function(require,module,exports){
+},{"async-kit":8,"async-try-catch":13,"nextgen-events":42}],8:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -2041,7 +1595,7 @@ async.clearSafeTimeout = safeTimeout.clearSafeTimeout ;
 
 
 
-},{"./core.js":11,"./exit.js":12,"./safeTimeout.js":13,"./wrapper.js":14}],11:[function(require,module,exports){
+},{"./core.js":9,"./exit.js":10,"./safeTimeout.js":11,"./wrapper.js":12}],9:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3975,7 +3529,7 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"nextgen-events":42,"tree-kit/lib/extend.js":48}],12:[function(require,module,exports){
+},{"nextgen-events":42,"tree-kit/lib/extend.js":48}],10:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -4065,7 +3619,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":10,"_process":18}],13:[function(require,module,exports){
+},{"./async.js":8,"_process":18}],11:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -4133,7 +3687,7 @@ exports.clearSafeTimeout = function clearSafeTimeout( timer )
 
 
 
-},{}],14:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -4199,6 +3753,474 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 } ;
 
 
+
+},{}],13:[function(require,module,exports){
+(function (process,global){
+/*
+	Async Try-Catch
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+function AsyncTryCatch() { throw new Error( "Use AsyncTryCatch.try() instead." ) ; }
+module.exports = AsyncTryCatch ;
+AsyncTryCatch.prototype.__prototypeUID__ = 'async-try-catch/AsyncTryCatch' ;
+AsyncTryCatch.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
+
+
+
+if ( global.AsyncTryCatch )
+{
+	if ( global.AsyncTryCatch.prototype.__prototypeUID__ === 'async-try-catch/AsyncTryCatch' )
+	{
+		//console.log( "Already installed:" , global.AsyncTryCatch.prototype.__prototypeVersion__ , "current:" , AsyncTryCatch.prototype.__prototypeVersion__ ) ;
+		
+		var currentVersions = AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
+		var installedVersions = global.AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
+		
+		// Basic semver comparison
+		if (
+			installedVersions[ 0 ] !== currentVersions[ 0 ] ||
+			( currentVersions[ 0 ] === "0" && installedVersions[ 1 ] !== currentVersions[ 1 ] )
+		)
+		{
+			throw new Error(
+				"Incompatible version of AsyncTryCatch already installed on global.AsyncTryCatch: " +
+				global.AsyncTryCatch.prototype.__prototypeVersion__ +
+				", current version: " + AsyncTryCatch.prototype.__prototypeVersion__
+			) ;
+		}
+		//global.AsyncTryCatch = AsyncTryCatch ;
+	}
+	else
+	{
+		throw new Error( "Incompatible module already installed on global.AsyncTryCatch" ) ;
+	}
+}
+else
+{
+	global.AsyncTryCatch = AsyncTryCatch ;
+	global.AsyncTryCatch.stack = [] ;
+	global.AsyncTryCatch.substituted = false ;
+	global.AsyncTryCatch.NextGenEvents = [] ;
+}
+
+
+
+if ( process.browser && ! global.setImmediate )
+{
+	global.setImmediate = function setImmediate( fn ) { return setTimeout( fn , 0 ) ; } ;
+	global.clearImmediate = function clearImmediate( timer ) { return clearTimeout( timer ) ; } ;
+}
+
+
+
+if ( ! global.Vanilla ) { global.Vanilla = {} ; }
+if ( ! global.Vanilla.setTimeout ) { global.Vanilla.setTimeout = setTimeout ; }
+if ( ! global.Vanilla.setImmediate ) { global.Vanilla.setImmediate = setImmediate ; }
+if ( ! global.Vanilla.nextTick ) { global.Vanilla.nextTick = process.nextTick ; }
+
+
+
+AsyncTryCatch.try = function try_( fn )
+{
+	var self = Object.create( AsyncTryCatch.prototype , {
+		fn: { value: fn , enumerable: true } ,
+		parent: { value: global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] }
+	} ) ;
+	
+	return self ;
+} ;
+
+
+
+AsyncTryCatch.prototype.catch = function catch_( catchFn )
+{
+	Object.defineProperties( this , {
+		catchFn: { value: catchFn , enumerable: true }
+	} ) ;
+	
+	if ( ! global.AsyncTryCatch.substituted ) { AsyncTryCatch.substitute() ; }
+	
+	try {
+		global.AsyncTryCatch.stack.push( this ) ;
+		this.fn() ;
+		global.AsyncTryCatch.stack.pop() ;
+	}
+	catch ( error ) {
+		global.AsyncTryCatch.stack.pop() ;
+		this.callCatchFn( error ) ;
+	}
+	
+} ;
+
+
+
+// Handle the bubble up
+AsyncTryCatch.prototype.callCatchFn = function callCatchFn( error )
+{
+	if ( ! this.parent )
+	{
+		this.catchFn( error ) ;
+		return ;
+	}
+	
+	try {
+		global.AsyncTryCatch.stack.push( this.parent ) ;
+		this.catchFn( error ) ;
+		global.AsyncTryCatch.stack.pop() ;
+	}
+	catch ( error ) {
+		global.AsyncTryCatch.stack.pop() ;
+		this.parent.callCatchFn( error ) ;
+	}
+} ;
+
+
+
+// for setTimeout(), setImmediate(), process.nextTick()
+AsyncTryCatch.timerWrapper = function timerWrapper( originalMethod , fn )
+{
+	var fn , context , wrapperFn ,
+		args = Array.prototype.slice.call( arguments , 1 ) ;
+	
+	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
+	{
+		return originalMethod.apply( this , args ) ;
+	}
+	
+	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
+	
+	wrapperFn = function() {
+		try {
+			global.AsyncTryCatch.stack.push( context ) ;
+			fn.apply( this , arguments ) ;
+			global.AsyncTryCatch.stack.pop() ;
+		}
+		catch ( error ) {
+			global.AsyncTryCatch.stack.pop() ;
+			context.callCatchFn( error ) ;
+		}
+	} ;
+	
+	args[ 0 ] = wrapperFn ;
+	
+	return originalMethod.apply( this , args ) ;
+} ;
+
+
+
+// for Node-EventEmitter-compatible .addListener()
+AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod , eventName , fn , options )
+{
+	var fn , context , wrapperFn ;
+	
+	// NextGen event compatibility
+	if ( typeof fn === 'object' )
+	{
+		options = fn ;
+		fn = options.fn ;
+		delete options.fn ;
+	}
+	
+	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
+	{
+		return originalMethod.call( this , eventName , fn , options ) ;
+	}
+	
+	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
+	
+	// Assume that the function is only wrapped once per eventEmitter
+	if ( this.__fnToWrapperMap )
+	{
+		wrapperFn = this.__fnToWrapperMap.get( fn ) ;
+	}
+	else 
+	{
+		// Create the map, make it non-enumerable
+		Object.defineProperty( this , '__fnToWrapperMap', { value: new WeakMap() } ) ;
+	}
+	
+	if ( ! wrapperFn )
+	{
+		wrapperFn = function() {
+			try {
+				global.AsyncTryCatch.stack.push( context ) ;
+				fn.apply( this , arguments ) ;
+				global.AsyncTryCatch.stack.pop() ;
+			}
+			catch ( error ) {
+				global.AsyncTryCatch.stack.pop() ;
+				context.callCatchFn( error ) ;
+			}
+		} ;
+		
+		this.__fnToWrapperMap.set( fn , wrapperFn ) ;
+	}
+	
+	return originalMethod.call( this , eventName , wrapperFn , options ) ;
+} ;
+
+
+
+AsyncTryCatch.removeListenerWrapper = function removeListenerWrapper( originalMethod , eventName , fn )
+{
+	//console.log( 'fn:' , fn ) ;
+	
+	if ( typeof fn === 'function' && this.__fnToWrapperMap )
+	{
+		fn = this.__fnToWrapperMap.get( fn ) || fn ;
+	}
+	
+	return originalMethod.call( this , eventName , fn ) ;
+} ;
+
+
+
+AsyncTryCatch.setTimeout = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setTimeout ) ;
+AsyncTryCatch.setImmediate = AsyncTryCatch.timerWrapper.bind( undefined , global.Vanilla.setImmediate ) ;
+AsyncTryCatch.nextTick = AsyncTryCatch.timerWrapper.bind( process , global.Vanilla.nextTick ) ;
+
+// NodeEvents on()/addListener() replacement
+AsyncTryCatch.addListener = function addListener( eventName , fn )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListener , eventName , fn ) ;
+} ;
+
+// NodeEvents once() replacement
+AsyncTryCatch.addListenerOnce = function addListenerOnce( eventName , fn )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListenerOnce , eventName , fn ) ;
+} ;
+
+// NodeEvents removeListener() replacement
+AsyncTryCatch.removeListener = function removeListener( eventName , fn )
+{
+	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__removeListener , eventName , fn ) ;
+} ;
+
+// NextGen Events on()/addListener() replacement
+AsyncTryCatch.ngevAddListener = function ngevAddListener( eventName , fn , options )
+{
+	/*
+	console.log( 'this:' , this ) ;
+	console.log( 'this.asyncTryCatchId:' , this.asyncTryCatchId ) ;
+	console.log( 'called with:' , Array.from( arguments ) ) ;
+	try {*/
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].on , eventName , fn , options ) ;
+	/*}
+	catch ( error ) {
+		console.error( error ) ;
+		console.log( index ) ;
+		throw error ;
+	}*/
+} ;
+
+// NextGen Events once() replacement
+AsyncTryCatch.ngevAddListenerOnce = function ngevAddListenerOnce( eventName , fn , options )
+{
+	AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].once , eventName , fn , options ) ;
+} ;
+
+// NextGen Events off()/removeListener() replacement
+AsyncTryCatch.ngevRemoveListener = function ngevRemoveListener( eventName , fn )
+{
+	AsyncTryCatch.removeListenerWrapper.call( this , AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].off , eventName , fn ) ;
+} ;
+
+
+
+AsyncTryCatch.substitute = function substitute()
+{
+	// This test should be done by the caller, because substitution could be incomplete
+	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
+	//if ( global.AsyncTryCatch.substituted ) { return ; }
+	
+	global.AsyncTryCatch.substituted = true ;
+	
+	global.setTimeout = AsyncTryCatch.setTimeout ;
+	global.setImmediate = AsyncTryCatch.setTimeout ;
+	process.nextTick = AsyncTryCatch.nextTick ;
+	
+	// Global is checked first, in case we are running inside a browser
+	try {
+		AsyncTryCatch.NodeEvents = global.EventEmitter || require( 'events' ) ;
+	} catch ( error ) {}
+	
+	/*
+	try {
+		AsyncTryCatch.NextGenEvents = global.NextGenEvents || require( 'nextgen-events' ) ;
+	} catch ( error ) {}
+	*/
+	
+	if ( AsyncTryCatch.NodeEvents )
+	{
+		if ( ! AsyncTryCatch.NodeEvents.__addListener )
+		{
+			AsyncTryCatch.NodeEvents.__addListener = AsyncTryCatch.NodeEvents.prototype.on ;
+		}
+		
+		if ( ! AsyncTryCatch.NodeEvents.__addListenerOnce )
+		{
+			AsyncTryCatch.NodeEvents.__addListenerOnce = AsyncTryCatch.NodeEvents.prototype.once ;
+		}
+		
+		if ( ! AsyncTryCatch.NodeEvents.__removeListener )
+		{
+			AsyncTryCatch.NodeEvents.__removeListener = AsyncTryCatch.NodeEvents.prototype.removeListener ;
+		}
+		
+		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.addListener ;
+		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.addListener ;
+		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.addListenerOnce ;
+		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.removeListener ;
+	}
+	
+	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ )
+	{
+		//console.log( 'substituting NextGenEvents' , i ) ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.on = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.addListener = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.once = AsyncTryCatch.ngevAddListenerOnce ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.off = AsyncTryCatch.ngevRemoveListener ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.removeListener = AsyncTryCatch.ngevRemoveListener ;
+	}
+	
+	/*
+	if ( AsyncTryCatch.NextGenEvents )
+	{
+		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.ngevAddListener ;
+		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.ngevAddListenerOnce ;
+		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.ngevRemoveListener ;
+		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.ngevRemoveListener ;
+	}
+	*/
+} ;
+
+
+
+AsyncTryCatch.restore = function restore()
+{
+	// This test should be done by the caller, because substitution could be incomplete
+	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
+	//if ( ! global.AsyncTryCatch.substituted ) { return ; }
+	
+	global.AsyncTryCatch.substituted = false ;
+	
+	global.setTimeout = global.Vanilla.setTimeout ;
+	global.setImmediate = global.Vanilla.setImmediate ;
+	process.nextTick = global.Vanilla.nextTick ;
+	
+	if ( AsyncTryCatch.NodeEvents )
+	{
+		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.NodeEvents.__addListener ;
+		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.NodeEvents.__addListener ;
+		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.NodeEvents.__addListenerOnce ;
+		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.NodeEvents.__removeListener ;
+	}
+	
+	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ )
+	{
+		AsyncTryCatch.NextGenEvents[ i ].prototype.on = AsyncTryCatch.NextGenEvents[ i ].on ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.addListener = AsyncTryCatch.NextGenEvents[ i ].on ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.once = AsyncTryCatch.NextGenEvents[ i ].once ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.off = AsyncTryCatch.NextGenEvents[ i ].off ;
+		AsyncTryCatch.NextGenEvents[ i ].prototype.removeListener = AsyncTryCatch.NextGenEvents[ i ].removeListener ;
+	}
+	
+	/*
+	if ( AsyncTryCatch.NextGenEvents )
+	{
+		AsyncTryCatch.NextGenEvents.prototype.on = AsyncTryCatch.NextGenEvents.on ;
+		AsyncTryCatch.NextGenEvents.prototype.addListener = AsyncTryCatch.NextGenEvents.on ;
+		AsyncTryCatch.NextGenEvents.prototype.once = AsyncTryCatch.NextGenEvents.once ;
+		AsyncTryCatch.NextGenEvents.prototype.off = AsyncTryCatch.NextGenEvents.off ;
+		AsyncTryCatch.NextGenEvents.prototype.removeListener = AsyncTryCatch.NextGenEvents.removeListener ;
+	}
+	*/
+} ;
+
+
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../package.json":14,"_process":18,"events":16}],14:[function(require,module,exports){
+module.exports={
+  "name": "async-try-catch",
+  "version": "0.3.0",
+  "description": "Async try catch",
+  "main": "lib/AsyncTryCatch.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "browserify": "^13.0.1",
+    "expect.js": "^0.3.1",
+    "jshint": "^2.9.2",
+    "mocha": "^2.5.3",
+    "nextgen-events": "^0.9.5",
+    "uglify-js": "^2.6.2"
+  },
+  "scripts": {
+    "test": "mocha -R dot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cronvel/async-try-catch.git"
+  },
+  "keywords": [
+    "async",
+    "try",
+    "catch"
+  ],
+  "author": {
+    "name": "Cédric Ronvel"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cronvel/async-try-catch/issues"
+  },
+  "copyright": {
+    "title": "Async Try-Catch",
+    "years": [
+      2015,
+      2016
+    ],
+    "owner": "Cédric Ronvel"
+  },
+  "readme": "\n\n# Async Try-Catch\n\nThe name says it all: it performs async try catch. \n\n* License: MIT\n* Current status: beta\n* Platform: Node.js only\n\n",
+  "readmeFilename": "README.md",
+  "gitHead": "ef7c8947313326a8a5a9f869846072e6007e3bed",
+  "homepage": "https://github.com/cronvel/async-try-catch#readme",
+  "_id": "async-try-catch@0.3.0",
+  "_shasum": "71f922c34ce96e5a88d3799b3bbbadbee355d42c",
+  "_from": "async-try-catch@>=0.3.0 <0.4.0"
+}
 
 },{}],15:[function(require,module,exports){
 
@@ -10528,5 +10550,5 @@ function extendOne( runtime , options , target , source )
 }
 
 
-},{}]},{},[6])(6)
+},{}]},{},[4])(4)
 });
