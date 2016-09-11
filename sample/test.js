@@ -47,6 +47,47 @@ describe( "Async tests" , function() {
 
 
 
+describe( "Optional tests" , function() {
+	
+	it.next( "Sync Exception" , function() {
+		throw new Error( "Failed!" ) ;
+	} ) ;
+	
+	it.next( "Sync Ok" , function() {
+	} ) ;
+	
+	it.next( "Async sync Ok" , function( done ) {
+		done() ;
+	} ) ;
+	
+	it.next( "Async sync Exception" , function( done ) {
+		throw new Error( "Failed!" ) ;
+	} ) ;
+	
+	it.next( "Async sync fail callback" , function( done ) {
+		done( new Error( 'Failed!' ) ) ;
+	} ) ;
+	
+	it.next( "Async Ok" , function( done ) {
+		setTimeout( done , 10 ) ;
+	} ) ;
+	
+	it.next( "Async Exception" , function( done ) {
+		setTimeout( function() {
+			throw new Error( "Asyncly Failed!" ) ;
+			done() ;
+		} , 10 ) ;
+	} ) ;
+	
+	it.next( "Async fail callback" , function( done ) {
+		setTimeout( function() {
+			done( new Error( 'Asyncly Failed!' ) ) ;
+		} , 10 ) ;
+	} ) ;
+} ) ;
+
+
+
 describe( "Suite into suite" , function() {
 	
 	//it( "Some test #1" , function() {} ) ;

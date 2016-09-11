@@ -45,6 +45,18 @@ For the doc, start reading the [mocha documentation](http://mochajs.org/).
     } ) ;
     ```
 
+* Optional tests:
+	
+	When an optional test fails, it does not cause a 'fail' but an 'optionalFail'.
+	
+	Syntax:
+	
+    ```js
+    it.optional( "Optional test" , function( done ) {
+        throw new Error( "Optional fail" ) ;
+    } ) ;
+    ```
+
 
 
 ## Install

@@ -54,6 +54,7 @@ function Reporter( teaTime , self )
 	self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
 	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
 	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
 	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
 	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
 	self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
@@ -84,12 +85,14 @@ function indentStyle( depth )
 
 var passingStyle = "color:green;" ;
 var failingStyle = "color:red;" ;
+var optionalFailingStyle = "color:brown;" ;
 var pendingStyle = "color:blue;" ;
 
 var fastStyle = "color:grey;" ;
 var slowStyle = "color:yellow;" ;
 var slowerStyle = "color:red;" ;
 
+var optionalErrorStyle = "color:brown;font-weight:bold;" ;
 var errorStyle = "color:red;font-weight:bold;" ;
 var hookErrorStyle = "background-color:red;color:white;font-weight:bold;" ;
 
@@ -147,6 +150,26 @@ Reporter.fail = function fail( testName , depth , time , slow , error )
 
 
 
+Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error )
+{
+	var content = '✘ ' + testName ;
+	
+	if ( time !== undefined )
+	{
+		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
+		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
+		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	}
+	
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<p class="tea-time-classic-reporter" style="' + optionalFailingStyle + indentStyle( depth ) + '">' + content + '</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
 Reporter.skip = function skip( testName , depth )
 {
 	var content = '· ' + testName ;
@@ -160,13 +183,14 @@ Reporter.skip = function skip( testName , depth )
 
 
 
-Reporter.report = function report( ok , fail , skip )
+Reporter.report = function report( ok , fail , optionalFail , skip )
 {
 	this.container.insertAdjacentHTML(
 		'beforeend' ,
 		'<hr />' +
 		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + ok + ' passing</p>' +
 		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + failingStyle + indentStyle( 1 ) + '">' + fail + ' failing</p>' +
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + optionalFailingStyle + indentStyle( 1 ) + '">' + optionalFail + ' opt failing</p>' +
 		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + skip + ' pending</p>'
 	) ;
 	
@@ -184,7 +208,9 @@ Reporter.errorReport = function errorReport( errors )
 	for ( i = 0 ; i < errors.length ; i ++ )
 	{
 		error = errors[ i ] ;
-		content += '<p class="tea-time-classic-reporter" style="' + errorStyle + indentStyle( 1 ) + '">' + ( i + 1 ) + ' ) ' ;
+		content += '<p class="tea-time-classic-reporter" style="' +
+			( error.optional ? optionalErrorStyle : errorStyle ) +
+			indentStyle( 1 ) + '">' + ( i + 1 ) + ' ) ' ;
 		
 		switch ( error.type )
 		{
@@ -286,6 +312,7 @@ function Reporter( teaTime , self )
 	
 	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
 	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
 	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
 	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
 	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
@@ -311,6 +338,13 @@ Reporter.fail = function fail( testName , depth , time , slow , error )
 
 
 
+Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error )
+{
+	console.log( 'Opt fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
+} ;
+
+
+
 Reporter.skip = function skip( testName , depth )
 {
 	console.log( 'Pending:' , testName ) ;
@@ -318,9 +352,9 @@ Reporter.skip = function skip( testName , depth )
 
 
 
-Reporter.report = function report( ok , fail , skip )
+Reporter.report = function report( ok , fail , optionalFail , skip )
 {
-	console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' pending:' , skip ) ;
+	console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' opt fail:' , optionalFail , ' pending:' , skip ) ;
 } ;
 
 
@@ -376,6 +410,7 @@ function Reporter( teaTime , self )
 	self.teaTime.on( 'exitTest' , Reporter.forward.bind( self , 'exitTest' ) ) ;
 	self.teaTime.on( 'ok' , Reporter.forward.bind( self , 'ok' ) ) ;
 	self.teaTime.on( 'fail' , Reporter.forward.bind( self , 'fail' ) ) ;
+	self.teaTime.on( 'optionalFail' , Reporter.forward.bind( self , 'optionalFail' ) ) ;
 	self.teaTime.on( 'skip' , Reporter.forward.bind( self , 'skip' ) ) ;
 	self.teaTime.on( 'report' , Reporter.forward.bind( self , 'report' ) ) ;
 	self.teaTime.on( 'errorReport' , Reporter.forward.bind( self , 'errorReport' ) ) ;
@@ -385,6 +420,7 @@ function Reporter( teaTime , self )
 	//self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
 	//self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
 	//self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	//self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
 	//self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
 	//self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
 	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
@@ -813,6 +849,7 @@ TeaTime.create = function createTeaTime( options )
 		done: { value: 0 , writable: true , enumerable: true } ,
 		ok: { value: 0 , writable: true , enumerable: true } ,
 		fail: { value: 0 , writable: true , enumerable: true } ,
+		optionalFail: { value: 0 , writable: true , enumerable: true } ,
 		skip: { value: 0 , writable: true , enumerable: true } ,
 		errors: { value: [] , enumerable: true } ,
 		
@@ -920,6 +957,10 @@ TeaTime.prototype.init = function init( callback )
 	
 	global.test.skip = TeaTime.registerSkipTest.bind( this ) ;
 	
+	global.test.optional = TeaTime.registerOptionalTest.bind( this ) ;
+	global.test.opt = TeaTime.registerOptionalTest.bind( this ) ;
+	global.test.next = TeaTime.registerOptionalTest.bind( this ) ;
+	
 	global.setup =
 		global.beforeEach =
 			TeaTime.registerHook.bind( this , 'setup' ) ;
@@ -1006,9 +1047,9 @@ TeaTime.prototype.run = function run( callback )
 		
 		self.runSuite( self.suite , 0 , function() {
 			
-			self.emit( 'report' , self.ok , self.fail , self.skip , Date.now() - self.startTime ) ;
+			self.emit( 'report' , self.ok , self.fail , self.optionalFail , self.skip , Date.now() - self.startTime ) ;
 			
-			if ( self.fail ) { self.emit( 'errorReport' , self.errors ) ; }
+			if ( self.fail + self.optionalFail ) { self.emit( 'errorReport' , self.errors ) ; }
 			
 			self.emit( 'exit' , triggerCallback ) ;
 			
@@ -1162,7 +1203,6 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 		if ( error )
 		{
 			self.done ++ ;
-			self.fail ++ ;
 			self.patchError( error ) ;
 			
 			self.errors.push( {
@@ -1171,10 +1211,21 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 					testFn.testName ,
 				type: errorType ,
 				fn: testFn ,
+				optional: testFn.optional ,
 				error: error
 			} ) ;
 			
-			self.emit( 'fail' , testFn.testName , depth , time , slow , error ) ;
+			if ( testFn.optional )
+			{
+				self.optionalFail ++ ;
+				self.emit( 'optionalFail' , testFn.testName , depth , time , slow , error ) ;
+			}
+			else
+			{
+				self.fail ++ ;
+				self.emit( 'fail' , testFn.testName , depth , time , slow , error ) ;
+			}
+			
 			callback( error ) ;
 		}
 		else
@@ -1429,13 +1480,13 @@ TeaTime.registerSuite = function registerSuite( suiteName , fn )
 
 
 // test(), it(), specify()
-TeaTime.registerTest = function registerTest( testName , fn )
+TeaTime.registerTest = function registerTest( testName , fn , optional )
 {
 	var i , iMax , j , jMax , found , parentSuite ;
 	
 	if ( ! testName || typeof testName !== 'string' )
 	{
-		throw new Error( "Usage is test( name , [fn] )" ) ;
+		throw new Error( "Usage is test( name , [fn] , [optional] )" ) ;
 	}
 	
 	parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
@@ -1462,6 +1513,7 @@ TeaTime.registerTest = function registerTest( testName , fn )
 	
 	Object.defineProperties( fn , {
 		testName: { value: testName } ,
+		optional: { value: !! optional } ,
 		order: { value: parentSuite.length }
 	} ) ;
 	
@@ -1474,6 +1526,14 @@ TeaTime.registerTest = function registerTest( testName , fn )
 TeaTime.registerSkipTest = function registerSkipTest( testName ) //, fn )
 {
 	return TeaTime.registerTest.call( this , testName ) ;
+} ;
+
+
+
+// test.next(), it.next(), specify.next()
+TeaTime.registerOptionalTest = function registerOptionalTest( testName , fn )
+{
+	return TeaTime.registerTest.call( this , testName , fn , true ) ;
 } ;
 
 
