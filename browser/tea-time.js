@@ -83,6 +83,7 @@ function indentStyle( depth )
 
 
 
+var timeStyle = "color:grey;" ;
 var passingStyle = "color:green;" ;
 var failingStyle = "color:red;" ;
 var optionalFailingStyle = "color:brown;" ;
@@ -183,15 +184,20 @@ Reporter.skip = function skip( testName , depth )
 
 
 
-Reporter.report = function report( ok , fail , optionalFail , skip )
+Reporter.report = function report( ok , fail , optionalFail , skip , time )
 {
 	this.container.insertAdjacentHTML(
 		'beforeend' ,
 		'<hr />' +
-		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + ok + ' passing</p>' +
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + ok + ' passing ' +
+		( time < 2000 ?
+			'<span style="' + timeStyle + '">(' + Math.round( time ) + 'ms)</span>' :
+			'<span style="' + timeStyle + '">(' + Math.round( time / 1000 ) + 's)</span>'
+		) +
+		'</p>' +
 		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + failingStyle + indentStyle( 1 ) + '">' + fail + ' failing</p>' +
-		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + optionalFailingStyle + indentStyle( 1 ) + '">' + optionalFail + ' opt failing</p>' +
-		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + skip + ' pending</p>'
+		( optionalFail ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + optionalFailingStyle + indentStyle( 1 ) + '">' + optionalFail + ' opt failing</p>' : '' ) +
+		( skip ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + skip + ' pending</p>' : '' )
 	) ;
 	
 	scrollDown() ;
@@ -840,6 +846,7 @@ TeaTime.create = function createTeaTime( options )
 		grep: { value: Array.isArray( options.grep ) ? options.grep : [] , writable: true , enumerable: true } ,
 		allowConsole: { value: !! options.allowConsole , writable: true , enumerable: true } ,
 		bail: { value: !! options.bail , writable: true , enumerable: true } ,
+		skipOptional: { value: !! options.skipOptional , writable: true , enumerable: true } ,
 		
 		token: { value: options.token || null , writable: true , enumerable: true } , // for slave instance
 		acceptTokens: { value: options.acceptTokens || null , writable: true , enumerable: true } , // for master instance
@@ -879,6 +886,8 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	else if ( args.c !== undefined ) { options.allowConsole = args.c ; }
 	
 	if ( args.b || args.bail ) { options.bail = true ; }
+	
+	if ( args['skip-optional'] || args.O ) { options.skipOptional = true ; }
 	
 	if ( args.timeout && ( v = parseInt( args.timeout , 10 ) ) ) { options.timeout = v ; }
 	else if ( args.t && ( v = parseInt( args.t , 10 ) ) ) { options.timeout = v ; }
@@ -1533,7 +1542,9 @@ TeaTime.registerSkipTest = function registerSkipTest( testName ) //, fn )
 // test.next(), it.next(), specify.next()
 TeaTime.registerOptionalTest = function registerOptionalTest( testName , fn )
 {
-	return TeaTime.registerTest.call( this , testName , fn , true ) ;
+	return this.skipOptional ?
+		TeaTime.registerTest.call( this , testName ) :
+		TeaTime.registerTest.call( this , testName , fn , true ) ;
 } ;
 
 

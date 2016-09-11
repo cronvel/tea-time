@@ -22,7 +22,25 @@ For the doc, start reading the [mocha documentation](http://mochajs.org/).
 
     `tea-time test/*js --bb firefox`
 
-* Better test isolation, mocha (v2.5.3 ATM) would fail to run this test properly:
+* Optional tests:
+	
+	When an optional test fails, it does not cause a 'fail' but an 'optionalFail'.
+	Optional fails don't produce non-zero exit code.
+	Common use cases are next iteration preparation, or test cases created just after a bug discovery: we do not want those
+	fails to prevent new releases since there is no regression.
+	
+	Syntaxes:
+	- .optional()
+	- .opt()
+	- .next()
+	
+    ```js
+    it.optional( "Optional test" , function( done ) {
+        throw new Error( "Optional fail" ) ;
+    } ) ;
+    ```
+
+* Better test isolation, mocha (v3.0.2 ATM) would fail to run this test properly:
 
     ```js
     describe( "Desync" , function() {
@@ -42,18 +60,6 @@ For the doc, start reading the [mocha documentation](http://mochajs.org/).
                 done() ;
             } , 500 ) ;
         } ) ;
-    } ) ;
-    ```
-
-* Optional tests:
-	
-	When an optional test fails, it does not cause a 'fail' but an 'optionalFail'.
-	
-	Syntax:
-	
-    ```js
-    it.optional( "Optional test" , function( done ) {
-        throw new Error( "Optional fail" ) ;
     } ) ;
     ```
 
@@ -109,5 +115,5 @@ Browser reporters:
 
 * **classic**: *the default reporter*
 * **console**: *report everything in the browser console, using console.log()*
-* **websocket**: *connect a local Tea Time instance, and send anything to it*
+* **websocket**: *connect to a local Tea Time instance, and send anything to it*
 
