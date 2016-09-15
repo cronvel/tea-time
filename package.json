@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "engines": {
     "node": ">=4.0.0"
   },
@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "async-kit": "^2.1.6",
-    "async-try-catch": "^0.3.3",
+    "async-try-catch": "^0.3.4",
     "browserify": "^13.1.0",
     "diff": "^3.0.0",
     "dom-kit": "^0.1.0",
