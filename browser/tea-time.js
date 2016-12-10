@@ -631,7 +631,7 @@ dom.ready( function() {
 
 
 
-},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":40,"string-kit/lib/inspect.js":47,"url":23}],5:[function(require,module,exports){
+},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":32,"string-kit/lib/inspect.js":46,"url":48}],5:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -699,7 +699,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 	var oldStr = inspect.inspect( inspectOptions , oldValue ) ;
 	var newStr = inspect.inspect( inspectOptions , newValue ) ;
 	
-	if ( ! noCharMode )
+	if ( ! noCharMode && Math.max( oldStr.length , newStr.length ) < 2000 )
 	{
 		// First try the diffChars algorithm, it looks great if there are only few changes
 		diff = jsdiff.diffChars( oldStr , newStr ) ;
@@ -723,7 +723,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 
 
 
-},{"diff":34,"string-kit/lib/inspect.js":47}],6:[function(require,module,exports){
+},{"diff":26,"string-kit/lib/inspect.js":46}],6:[function(require,module,exports){
 /*
 	Tea Time!
 	
@@ -1623,7 +1623,7 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":8,"async-try-catch":13,"nextgen-events":42}],8:[function(require,module,exports){
+},{"async-kit":8,"async-try-catch":13,"nextgen-events":36}],8:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -1667,6 +1667,7 @@ async.clearSafeTimeout = safeTimeout.clearSafeTimeout ;
 
 
 },{"./core.js":9,"./exit.js":10,"./safeTimeout.js":11,"./wrapper.js":12}],9:[function(require,module,exports){
+(function (process,global){
 /*
 	Async Kit
 	
@@ -1741,6 +1742,18 @@ module.exports = async ;
 
 
 
+// Used to store important global variable, like the recursion counter (avoid stack overflow)
+if ( ! global.__ASYNC_KIT__ )
+{
+	global.__ASYNC_KIT__ = {
+		recursionCounter: 0 ,
+		// Fix that to Infinity by default, until this feature is stable enough
+		defaultMaxRecursion: Infinity
+	} ;
+}
+
+
+
 
 
 			//////////////////////////
@@ -1792,6 +1805,7 @@ var planCommonProperties = {
 	returnMapping1to1: { value: false , writable: true , enumerable: true , configurable: true } ,
 	
 	// Not configurable
+	maxRecursion: { value: Infinity , writable: true , enumerable: true } ,
 	jobsData: { value: {} , writable: true , enumerable: true } ,
 	jobsKeys: { value: [] , writable: true , enumerable: true } ,
 	jobsUsing: { value: undefined , writable: true , enumerable: true } ,
@@ -1835,6 +1849,8 @@ async.do = function _do( jobsData )
 		execFinal: { value: execDoFinal.bind( asyncPlan ) }
 	} ) ;
 	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
+	
 	asyncPlan.do( jobsData ) ;
 	
 	return asyncPlan ;
@@ -1856,6 +1872,8 @@ async.parallel = function parallel( jobsData )
 		execFinal: { value: execDoFinal.bind( asyncPlan ) }
 	} ) ;
 	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
+	
 	asyncPlan.do( jobsData ) ;
 	
 	return asyncPlan ;
@@ -1876,6 +1894,8 @@ async.series = function series( jobsData )
 		execLoopCallback: { value: execWhileCallback } ,
 		execFinal: { value: execDoFinal.bind( asyncPlan ) }
 	} ) ;
+	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
 	
 	asyncPlan.do( jobsData ) ;
 	
@@ -1902,6 +1922,7 @@ async.race = function race( jobsData )
 	
 	// We only want the result of the first succeeding job
 	asyncPlan.returnLastJobOnly = true ;
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
 	
 	asyncPlan.do( jobsData ) ;
 	
@@ -1928,6 +1949,7 @@ async.waterfall = function waterfall( jobsData )
 	
 	// We only want the result of the first succeeding job
 	asyncPlan.returnLastJobOnly = true ;
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
 	
 	asyncPlan.do( jobsData ) ;
 	
@@ -1950,6 +1972,8 @@ async.foreach = async.forEach = function foreach( jobsData , iterator )
 		execLoopCallback: { value: execWhileCallback } ,
 		execFinal: { value: execDoFinal.bind( asyncPlan ) }
 	} ) ;
+	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
 	
 	asyncPlan.do( jobsData ) ;
 	asyncPlan.iterator( iterator ) ;
@@ -1976,6 +2000,8 @@ async.map = function map( jobsData , iterator )
 		execLoopCallback: { value: execWhileCallback } ,
 		execFinal: { value: execDoFinal.bind( asyncPlan ) }
 	} ) ;
+	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
 	
 	asyncPlan.do( jobsData ) ;
 	asyncPlan.iterator( iterator ) ;
@@ -2016,6 +2042,7 @@ async.reduce = function reduce( jobsData , defaultAggregate , iterator )
 		asyncPlan.execMappingSignature = '( aggregateArg, [finallyCallback] )' ;
 	}
 	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
 	asyncPlan.transmitAggregate = true ;
 	asyncPlan.returnAggregate = true ;
 	asyncPlan.defaultAggregate = defaultAggregate ;
@@ -2045,6 +2072,8 @@ async.while = function _while( whileAction )
 		execFinal: { value: execDoFinal.bind( asyncPlan ) }
 	} ) ;
 	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
+	
 	asyncPlan.while( whileAction ) ;
 	
 	return asyncPlan ;
@@ -2067,6 +2096,8 @@ async.and = function and( jobsData )
 		execLoopCallback: { value: execWhileCallback } ,
 		execFinal: { value: execLogicFinal.bind( asyncPlan ) }
 	} ) ;
+	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
 	
 	asyncPlan.do( jobsData ) ;
 	
@@ -2091,6 +2122,8 @@ async.or = function or( jobsData )
 		execFinal: { value: execLogicFinal.bind( asyncPlan ) }
 	} ) ;
 	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
+	
 	asyncPlan.do( jobsData ) ;
 	
 	return asyncPlan ;
@@ -2114,6 +2147,8 @@ async.if = function _if( jobsData )
 		execFinal: { value: execLogicFinal.bind( asyncPlan ) }
 	} ) ;
 	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
+	
 	if ( jobsData ) { asyncPlan.do( jobsData ) ; }
 	
 	return asyncPlan ;
@@ -2134,6 +2169,8 @@ async.if.or = function ifOr( jobsData )
 		execLoopCallback: { value: execWhileCallback } ,
 		execFinal: { value: execLogicFinal.bind( asyncPlan ) }
 	} ) ;
+	
+	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
 	
 	if ( jobsData ) { asyncPlan.do( jobsData ) ; }
 	
@@ -2192,7 +2229,11 @@ async.Plan.prototype.do = function _do( jobsData )
 	else if ( typeof jobsData === 'function' )  { this.jobsData = [ jobsData ] ; this.returnLastJobOnly = true ; }
 	else { this.jobsData = {} ; }
 	
+	// Arrays and Objects are unified, Object.keys() does the job but...
 	this.jobsKeys = Object.keys( this.jobsData ) ;
+	
+	// ... we should avoid troubles with arrays that have enumerable properties
+	if ( Array.isArray( this.jobsData ) ) { this.jobsKeys.length = this.jobsData.length ; }
 	
 	return this ;
 } ;
@@ -2405,6 +2446,16 @@ async.Plan.prototype.nice = function nice( asyncEventNice )
 	else if ( asyncEventNice === false ) { this.asyncEventNice = -20 ; }
 	else { this.asyncEventNice = asyncEventNice ; }
 	
+	return this ;
+} ;
+
+
+
+// Set the async'ness of the flow, even sync jobs can be turned async
+async.Plan.prototype.setMaxRecursion = function setMaxRecursion( maxRecursion )
+{
+	if ( this.locked ) { return this ; }
+	if ( maxRecursion >= 0 ) { this.maxRecursion = maxRecursion ; }
 	return this ;
 } ;
 
@@ -3094,7 +3145,15 @@ function execDoInit( config , fromExecContext )
 // Iterator/next
 function execDoNext( execContext )
 {
-	var indexOfKey , key , length = execContext.jobsKeys.length , startIndex , endIndex ;
+	// Stack overflow/recursion protection against synchronous jobs
+	if ( global.__ASYNC_KIT__.recursionCounter >= execContext.plan.maxRecursion )
+	{
+		//process.stdout.write( 'Alert: high recursion counter: ' + global.__ASYNC_KIT__.recursionCounter + '\n' ) ;
+		process.nextTick( execDoNext.bind( this , execContext ) ) ;
+		return ;
+	}
+	
+	var self = this , indexOfKey , key , length = execContext.jobsKeys.length , startIndex , endIndex ;
 	
 	startIndex = execContext.iterator ;
 	
@@ -3127,7 +3186,9 @@ function execDoNext( execContext )
 	// Defered execution of jobs
 	for ( indexOfKey = startIndex ; indexOfKey <= endIndex ; indexOfKey ++ )
 	{
+		global.__ASYNC_KIT__.recursionCounter ++ ;
 		this.execJob( execContext , execContext.jobsData[ execContext.jobsKeys[ indexOfKey ] ] , indexOfKey , 0 ) ;
+		global.__ASYNC_KIT__.recursionCounter -- ;
 	}
 }
 
@@ -3600,7 +3661,8 @@ function execLogicFinal( execContext , result )
 
 
 
-},{"nextgen-events":42,"tree-kit/lib/extend.js":48}],10:[function(require,module,exports){
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"_process":39,"nextgen-events":36,"tree-kit/lib/extend.js":47}],10:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -3690,7 +3752,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":8,"_process":18}],11:[function(require,module,exports){
+},{"./async.js":8,"_process":39}],11:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -4206,7 +4268,7 @@ AsyncTryCatch.restore = function restore()
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":14,"_process":18,"events":16}],14:[function(require,module,exports){
+},{"../package.json":14,"_process":39,"events":34}],14:[function(require,module,exports){
 module.exports={
   "name": "async-try-catch",
   "version": "0.3.4",
@@ -4263,6 +4325,1713 @@ module.exports={
 },{}],15:[function(require,module,exports){
 
 },{}],16:[function(require,module,exports){
+/*istanbul ignore start*/"use strict";
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/convertChangesToDMP = convertChangesToDMP;
+// See: http://code.google.com/p/google-diff-match-patch/wiki/API
+function convertChangesToDMP(changes) {
+  var ret = [],
+      change = /*istanbul ignore start*/void 0 /*istanbul ignore end*/,
+      operation = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+  for (var i = 0; i < changes.length; i++) {
+    change = changes[i];
+    if (change.added) {
+      operation = 1;
+    } else if (change.removed) {
+      operation = -1;
+    } else {
+      operation = 0;
+    }
+
+    ret.push([operation, change.value]);
+  }
+  return ret;
+}
+
+
+},{}],17:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/convertChangesToXML = convertChangesToXML;
+function convertChangesToXML(changes) {
+  var ret = [];
+  for (var i = 0; i < changes.length; i++) {
+    var change = changes[i];
+    if (change.added) {
+      ret.push('<ins>');
+    } else if (change.removed) {
+      ret.push('<del>');
+    }
+
+    ret.push(escapeHTML(change.value));
+
+    if (change.added) {
+      ret.push('</ins>');
+    } else if (change.removed) {
+      ret.push('</del>');
+    }
+  }
+  return ret.join('');
+}
+
+function escapeHTML(s) {
+  var n = s;
+  n = n.replace(/&/g, '&amp;');
+  n = n.replace(/</g, '&lt;');
+  n = n.replace(/>/g, '&gt;');
+  n = n.replace(/"/g, '&quot;');
+
+  return n;
+}
+
+
+},{}],18:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.arrayDiff = undefined;
+exports. /*istanbul ignore end*/diffArrays = diffArrays;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+/*istanbul ignore end*/var arrayDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/arrayDiff = new /*istanbul ignore start*/_base2['default']() /*istanbul ignore end*/;
+arrayDiff.tokenize = arrayDiff.join = function (value) {
+  return value.slice();
+};
+
+function diffArrays(oldArr, newArr, callback) {
+  return arrayDiff.diff(oldArr, newArr, callback);
+}
+
+
+},{"./base":19}],19:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports['default'] = /*istanbul ignore end*/Diff;
+function Diff() {}
+
+Diff.prototype = { /*istanbul ignore start*/
+  /*istanbul ignore end*/diff: function diff(oldString, newString) {
+    /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+    var callback = options.callback;
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    }
+    this.options = options;
+
+    var self = this;
+
+    function done(value) {
+      if (callback) {
+        setTimeout(function () {
+          callback(undefined, value);
+        }, 0);
+        return true;
+      } else {
+        return value;
+      }
+    }
+
+    // Allow subclasses to massage the input prior to running
+    oldString = this.castInput(oldString);
+    newString = this.castInput(newString);
+
+    oldString = this.removeEmpty(this.tokenize(oldString));
+    newString = this.removeEmpty(this.tokenize(newString));
+
+    var newLen = newString.length,
+        oldLen = oldString.length;
+    var editLength = 1;
+    var maxEditLength = newLen + oldLen;
+    var bestPath = [{ newPos: -1, components: [] }];
+
+    // Seed editLength = 0, i.e. the content starts with the same values
+    var oldPos = this.extractCommon(bestPath[0], newString, oldString, 0);
+    if (bestPath[0].newPos + 1 >= newLen && oldPos + 1 >= oldLen) {
+      // Identity per the equality and tokenizer
+      return done([{ value: this.join(newString), count: newString.length }]);
+    }
+
+    // Main worker method. checks all permutations of a given edit length for acceptance.
+    function execEditLength() {
+      for (var diagonalPath = -1 * editLength; diagonalPath <= editLength; diagonalPath += 2) {
+        var basePath = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+        var addPath = bestPath[diagonalPath - 1],
+            removePath = bestPath[diagonalPath + 1],
+            _oldPos = (removePath ? removePath.newPos : 0) - diagonalPath;
+        if (addPath) {
+          // No one else is going to attempt to use this value, clear it
+          bestPath[diagonalPath - 1] = undefined;
+        }
+
+        var canAdd = addPath && addPath.newPos + 1 < newLen,
+            canRemove = removePath && 0 <= _oldPos && _oldPos < oldLen;
+        if (!canAdd && !canRemove) {
+          // If this path is a terminal then prune
+          bestPath[diagonalPath] = undefined;
+          continue;
+        }
+
+        // Select the diagonal that we want to branch from. We select the prior
+        // path whose position in the new string is the farthest from the origin
+        // and does not pass the bounds of the diff graph
+        if (!canAdd || canRemove && addPath.newPos < removePath.newPos) {
+          basePath = clonePath(removePath);
+          self.pushComponent(basePath.components, undefined, true);
+        } else {
+          basePath = addPath; // No need to clone, we've pulled it from the list
+          basePath.newPos++;
+          self.pushComponent(basePath.components, true, undefined);
+        }
+
+        _oldPos = self.extractCommon(basePath, newString, oldString, diagonalPath);
+
+        // If we have hit the end of both strings, then we are done
+        if (basePath.newPos + 1 >= newLen && _oldPos + 1 >= oldLen) {
+          return done(buildValues(self, basePath.components, newString, oldString, self.useLongestToken));
+        } else {
+          // Otherwise track this path as a potential candidate and continue.
+          bestPath[diagonalPath] = basePath;
+        }
+      }
+
+      editLength++;
+    }
+
+    // Performs the length of edit iteration. Is a bit fugly as this has to support the
+    // sync and async mode which is never fun. Loops over execEditLength until a value
+    // is produced.
+    if (callback) {
+      (function exec() {
+        setTimeout(function () {
+          // This should not happen, but we want to be safe.
+          /* istanbul ignore next */
+          if (editLength > maxEditLength) {
+            return callback();
+          }
+
+          if (!execEditLength()) {
+            exec();
+          }
+        }, 0);
+      })();
+    } else {
+      while (editLength <= maxEditLength) {
+        var ret = execEditLength();
+        if (ret) {
+          return ret;
+        }
+      }
+    }
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/pushComponent: function pushComponent(components, added, removed) {
+    var last = components[components.length - 1];
+    if (last && last.added === added && last.removed === removed) {
+      // We need to clone here as the component clone operation is just
+      // as shallow array clone
+      components[components.length - 1] = { count: last.count + 1, added: added, removed: removed };
+    } else {
+      components.push({ count: 1, added: added, removed: removed });
+    }
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/extractCommon: function extractCommon(basePath, newString, oldString, diagonalPath) {
+    var newLen = newString.length,
+        oldLen = oldString.length,
+        newPos = basePath.newPos,
+        oldPos = newPos - diagonalPath,
+        commonCount = 0;
+    while (newPos + 1 < newLen && oldPos + 1 < oldLen && this.equals(newString[newPos + 1], oldString[oldPos + 1])) {
+      newPos++;
+      oldPos++;
+      commonCount++;
+    }
+
+    if (commonCount) {
+      basePath.components.push({ count: commonCount });
+    }
+
+    basePath.newPos = newPos;
+    return oldPos;
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/equals: function equals(left, right) {
+    return left === right;
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/removeEmpty: function removeEmpty(array) {
+    var ret = [];
+    for (var i = 0; i < array.length; i++) {
+      if (array[i]) {
+        ret.push(array[i]);
+      }
+    }
+    return ret;
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/castInput: function castInput(value) {
+    return value;
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/tokenize: function tokenize(value) {
+    return value.split('');
+  },
+  /*istanbul ignore start*/ /*istanbul ignore end*/join: function join(chars) {
+    return chars.join('');
+  }
+};
+
+function buildValues(diff, components, newString, oldString, useLongestToken) {
+  var componentPos = 0,
+      componentLen = components.length,
+      newPos = 0,
+      oldPos = 0;
+
+  for (; componentPos < componentLen; componentPos++) {
+    var component = components[componentPos];
+    if (!component.removed) {
+      if (!component.added && useLongestToken) {
+        var value = newString.slice(newPos, newPos + component.count);
+        value = value.map(function (value, i) {
+          var oldValue = oldString[oldPos + i];
+          return oldValue.length > value.length ? oldValue : value;
+        });
+
+        component.value = diff.join(value);
+      } else {
+        component.value = diff.join(newString.slice(newPos, newPos + component.count));
+      }
+      newPos += component.count;
+
+      // Common case
+      if (!component.added) {
+        oldPos += component.count;
+      }
+    } else {
+      component.value = diff.join(oldString.slice(oldPos, oldPos + component.count));
+      oldPos += component.count;
+
+      // Reverse add and remove so removes are output first to match common convention
+      // The diffing algorithm is tied to add then remove output and this is the simplest
+      // route to get the desired output with minimal overhead.
+      if (componentPos && components[componentPos - 1].added) {
+        var tmp = components[componentPos - 1];
+        components[componentPos - 1] = components[componentPos];
+        components[componentPos] = tmp;
+      }
+    }
+  }
+
+  // Special case handle for when one terminal is ignored. For this case we merge the
+  // terminal into the prior string and drop the change.
+  var lastComponent = components[componentLen - 1];
+  if (componentLen > 1 && (lastComponent.added || lastComponent.removed) && diff.equals('', lastComponent.value)) {
+    components[componentLen - 2].value += lastComponent.value;
+    components.pop();
+  }
+
+  return components;
+}
+
+function clonePath(path) {
+  return { newPos: path.newPos, components: path.components.slice(0) };
+}
+
+
+},{}],20:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.characterDiff = undefined;
+exports. /*istanbul ignore end*/diffChars = diffChars;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+/*istanbul ignore end*/var characterDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/characterDiff = new /*istanbul ignore start*/_base2['default']() /*istanbul ignore end*/;
+function diffChars(oldStr, newStr, callback) {
+  return characterDiff.diff(oldStr, newStr, callback);
+}
+
+
+},{"./base":19}],21:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.cssDiff = undefined;
+exports. /*istanbul ignore end*/diffCss = diffCss;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+/*istanbul ignore end*/var cssDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/cssDiff = new /*istanbul ignore start*/_base2['default']() /*istanbul ignore end*/;
+cssDiff.tokenize = function (value) {
+  return value.split(/([{}:;,]|\s+)/);
+};
+
+function diffCss(oldStr, newStr, callback) {
+  return cssDiff.diff(oldStr, newStr, callback);
+}
+
+
+},{"./base":19}],22:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.jsonDiff = undefined;
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
+exports. /*istanbul ignore end*/diffJson = diffJson;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = canonicalize;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_line = require('./line') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+/*istanbul ignore end*/
+
+var objectPrototypeToString = Object.prototype.toString;
+
+var jsonDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/jsonDiff = new /*istanbul ignore start*/_base2['default']() /*istanbul ignore end*/;
+// Discriminate between two lines of pretty-printed, serialized JSON where one of them has a
+// dangling comma and the other doesn't. Turns out including the dangling comma yields the nicest output:
+jsonDiff.useLongestToken = true;
+
+jsonDiff.tokenize = /*istanbul ignore start*/_line.lineDiff. /*istanbul ignore end*/tokenize;
+jsonDiff.castInput = function (value) {
+  return typeof value === 'string' ? value : JSON.stringify(canonicalize(value), undefined, '  ');
+};
+jsonDiff.equals = function (left, right) {
+  return (/*istanbul ignore start*/_base2['default']. /*istanbul ignore end*/prototype.equals(left.replace(/,([\r\n])/g, '$1'), right.replace(/,([\r\n])/g, '$1'))
+  );
+};
+
+function diffJson(oldObj, newObj, callback) {
+  return jsonDiff.diff(oldObj, newObj, callback);
+}
+
+// This function handles the presence of circular references by bailing out when encountering an
+// object that is already on the "stack" of items being processed.
+function canonicalize(obj, stack, replacementStack) {
+  stack = stack || [];
+  replacementStack = replacementStack || [];
+
+  var i = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+
+  for (i = 0; i < stack.length; i += 1) {
+    if (stack[i] === obj) {
+      return replacementStack[i];
+    }
+  }
+
+  var canonicalizedObj = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+
+  if ('[object Array]' === objectPrototypeToString.call(obj)) {
+    stack.push(obj);
+    canonicalizedObj = new Array(obj.length);
+    replacementStack.push(canonicalizedObj);
+    for (i = 0; i < obj.length; i += 1) {
+      canonicalizedObj[i] = canonicalize(obj[i], stack, replacementStack);
+    }
+    stack.pop();
+    replacementStack.pop();
+    return canonicalizedObj;
+  }
+
+  if (obj && obj.toJSON) {
+    obj = obj.toJSON();
+  }
+
+  if ( /*istanbul ignore start*/(typeof /*istanbul ignore end*/obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object' && obj !== null) {
+    stack.push(obj);
+    canonicalizedObj = {};
+    replacementStack.push(canonicalizedObj);
+    var sortedKeys = [],
+        key = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+    for (key in obj) {
+      /* istanbul ignore else */
+      if (obj.hasOwnProperty(key)) {
+        sortedKeys.push(key);
+      }
+    }
+    sortedKeys.sort();
+    for (i = 0; i < sortedKeys.length; i += 1) {
+      key = sortedKeys[i];
+      canonicalizedObj[key] = canonicalize(obj[key], stack, replacementStack);
+    }
+    stack.pop();
+    replacementStack.pop();
+  } else {
+    canonicalizedObj = obj;
+  }
+  return canonicalizedObj;
+}
+
+
+},{"./base":19,"./line":23}],23:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.lineDiff = undefined;
+exports. /*istanbul ignore end*/diffLines = diffLines;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffTrimmedLines = diffTrimmedLines;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_params = require('../util/params') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+/*istanbul ignore end*/var lineDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/lineDiff = new /*istanbul ignore start*/_base2['default']() /*istanbul ignore end*/;
+lineDiff.tokenize = function (value) {
+  var retLines = [],
+      linesAndNewlines = value.split(/(\n|\r\n)/);
+
+  // Ignore the final empty token that occurs if the string ends with a new line
+  if (!linesAndNewlines[linesAndNewlines.length - 1]) {
+    linesAndNewlines.pop();
+  }
+
+  // Merge the content and line separators into single tokens
+  for (var i = 0; i < linesAndNewlines.length; i++) {
+    var line = linesAndNewlines[i];
+
+    if (i % 2 && !this.options.newlineIsToken) {
+      retLines[retLines.length - 1] += line;
+    } else {
+      if (this.options.ignoreWhitespace) {
+        line = line.trim();
+      }
+      retLines.push(line);
+    }
+  }
+
+  return retLines;
+};
+
+function diffLines(oldStr, newStr, callback) {
+  return lineDiff.diff(oldStr, newStr, callback);
+}
+function diffTrimmedLines(oldStr, newStr, callback) {
+  var options = /*istanbul ignore start*/(0, _params.generateOptions) /*istanbul ignore end*/(callback, { ignoreWhitespace: true });
+  return lineDiff.diff(oldStr, newStr, options);
+}
+
+
+},{"../util/params":31,"./base":19}],24:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.sentenceDiff = undefined;
+exports. /*istanbul ignore end*/diffSentences = diffSentences;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+/*istanbul ignore end*/var sentenceDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/sentenceDiff = new /*istanbul ignore start*/_base2['default']() /*istanbul ignore end*/;
+sentenceDiff.tokenize = function (value) {
+  return value.split(/(\S.+?[.!?])(?=\s+|$)/);
+};
+
+function diffSentences(oldStr, newStr, callback) {
+  return sentenceDiff.diff(oldStr, newStr, callback);
+}
+
+
+},{"./base":19}],25:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.wordDiff = undefined;
+exports. /*istanbul ignore end*/diffWords = diffWords;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWordsWithSpace = diffWordsWithSpace;
+
+var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_params = require('../util/params') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+/*istanbul ignore end*/
+
+// Based on https://en.wikipedia.org/wiki/Latin_script_in_Unicode
+//
+// Ranges and exceptions:
+// Latin-1 Supplement, 0080–00FF
+//  - U+00D7  × Multiplication sign
+//  - U+00F7  ÷ Division sign
+// Latin Extended-A, 0100–017F
+// Latin Extended-B, 0180–024F
+// IPA Extensions, 0250–02AF
+// Spacing Modifier Letters, 02B0–02FF
+//  - U+02C7  ˇ &#711;  Caron
+//  - U+02D8  ˘ &#728;  Breve
+//  - U+02D9  ˙ &#729;  Dot Above
+//  - U+02DA  ˚ &#730;  Ring Above
+//  - U+02DB  ˛ &#731;  Ogonek
+//  - U+02DC  ˜ &#732;  Small Tilde
+//  - U+02DD  ˝ &#733;  Double Acute Accent
+// Latin Extended Additional, 1E00–1EFF
+var extendedWordChars = /^[A-Za-z\xC0-\u02C6\u02C8-\u02D7\u02DE-\u02FF\u1E00-\u1EFF]+$/;
+
+var reWhitespace = /\S/;
+
+var wordDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/wordDiff = new /*istanbul ignore start*/_base2['default']() /*istanbul ignore end*/;
+wordDiff.equals = function (left, right) {
+  return left === right || this.options.ignoreWhitespace && !reWhitespace.test(left) && !reWhitespace.test(right);
+};
+wordDiff.tokenize = function (value) {
+  var tokens = value.split(/(\s+|\b)/);
+
+  // Join the boundary splits that we do not consider to be boundaries. This is primarily the extended Latin character set.
+  for (var i = 0; i < tokens.length - 1; i++) {
+    // If we have an empty string in the next field and we have only word chars before and after, merge
+    if (!tokens[i + 1] && tokens[i + 2] && extendedWordChars.test(tokens[i]) && extendedWordChars.test(tokens[i + 2])) {
+      tokens[i] += tokens[i + 2];
+      tokens.splice(i + 1, 2);
+      i--;
+    }
+  }
+
+  return tokens;
+};
+
+function diffWords(oldStr, newStr, callback) {
+  var options = /*istanbul ignore start*/(0, _params.generateOptions) /*istanbul ignore end*/(callback, { ignoreWhitespace: true });
+  return wordDiff.diff(oldStr, newStr, options);
+}
+function diffWordsWithSpace(oldStr, newStr, callback) {
+  return wordDiff.diff(oldStr, newStr, callback);
+}
+
+
+},{"../util/params":31,"./base":19}],26:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports.canonicalize = exports.convertChangesToXML = exports.convertChangesToDMP = exports.parsePatch = exports.applyPatches = exports.applyPatch = exports.createPatch = exports.createTwoFilesPatch = exports.structuredPatch = exports.diffArrays = exports.diffJson = exports.diffCss = exports.diffSentences = exports.diffTrimmedLines = exports.diffLines = exports.diffWordsWithSpace = exports.diffWords = exports.diffChars = exports.Diff = undefined;
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_base = require('./diff/base') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _base2 = _interopRequireDefault(_base);
+
+/*istanbul ignore end*/
+var /*istanbul ignore start*/_character = require('./diff/character') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_word = require('./diff/word') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_line = require('./diff/line') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_sentence = require('./diff/sentence') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_css = require('./diff/css') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_json = require('./diff/json') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_array = require('./diff/array') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_apply = require('./patch/apply') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_parse = require('./patch/parse') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_create = require('./patch/create') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_dmp = require('./convert/dmp') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_xml = require('./convert/xml') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+exports. /*istanbul ignore end*/Diff = _base2['default'];
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffChars = _character.diffChars;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWords = _word.diffWords;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWordsWithSpace = _word.diffWordsWithSpace;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffLines = _line.diffLines;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffTrimmedLines = _line.diffTrimmedLines;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffSentences = _sentence.diffSentences;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffCss = _css.diffCss;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffJson = _json.diffJson;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/diffArrays = _array.diffArrays;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/structuredPatch = _create.structuredPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/createTwoFilesPatch = _create.createTwoFilesPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/createPatch = _create.createPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatch = _apply.applyPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatches = _apply.applyPatches;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/parsePatch = _parse.parsePatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/convertChangesToDMP = _dmp.convertChangesToDMP;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/convertChangesToXML = _xml.convertChangesToXML;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize; /* See LICENSE file for terms of use */
+
+/*
+ * Text diff implementation.
+ *
+ * This library supports the following APIS:
+ * JsDiff.diffChars: Character by character diff
+ * JsDiff.diffWords: Word (as defined by \b regex) diff which ignores whitespace
+ * JsDiff.diffLines: Line based diff
+ *
+ * JsDiff.diffCss: Diff targeted at CSS content
+ *
+ * These methods are based on the implementation proposed in
+ * "An O(ND) Difference Algorithm and its Variations" (Myers, 1986).
+ * http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.4.6927
+ */
+
+
+},{"./convert/dmp":16,"./convert/xml":17,"./diff/array":18,"./diff/base":19,"./diff/character":20,"./diff/css":21,"./diff/json":22,"./diff/line":23,"./diff/sentence":24,"./diff/word":25,"./patch/apply":27,"./patch/create":28,"./patch/parse":29}],27:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/applyPatch = applyPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatches = applyPatches;
+
+var /*istanbul ignore start*/_parse = require('./parse') /*istanbul ignore end*/;
+
+var /*istanbul ignore start*/_distanceIterator = require('../util/distance-iterator') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+var _distanceIterator2 = _interopRequireDefault(_distanceIterator);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
+
+/*istanbul ignore end*/function applyPatch(source, uniDiff) {
+  /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
+
+  if (typeof uniDiff === 'string') {
+    uniDiff = /*istanbul ignore start*/(0, _parse.parsePatch) /*istanbul ignore end*/(uniDiff);
+  }
+
+  if (Array.isArray(uniDiff)) {
+    if (uniDiff.length > 1) {
+      throw new Error('applyPatch only works with a single input.');
+    }
+
+    uniDiff = uniDiff[0];
+  }
+
+  // Apply the diff to the input
+  var lines = source.split(/\r\n|[\n\v\f\r\x85]/),
+      delimiters = source.match(/\r\n|[\n\v\f\r\x85]/g) || [],
+      hunks = uniDiff.hunks,
+      compareLine = options.compareLine || function (lineNumber, line, operation, patchContent) /*istanbul ignore start*/{
+    return (/*istanbul ignore end*/line === patchContent
+    );
+  },
+      errorCount = 0,
+      fuzzFactor = options.fuzzFactor || 0,
+      minLine = 0,
+      offset = 0,
+      removeEOFNL = /*istanbul ignore start*/void 0 /*istanbul ignore end*/,
+      addEOFNL = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+
+  /**
+   * Checks if the hunk exactly fits on the provided location
+   */
+  function hunkFits(hunk, toPos) {
+    for (var j = 0; j < hunk.lines.length; j++) {
+      var line = hunk.lines[j],
+          operation = line[0],
+          content = line.substr(1);
+
+      if (operation === ' ' || operation === '-') {
+        // Context sanity check
+        if (!compareLine(toPos + 1, lines[toPos], operation, content)) {
+          errorCount++;
+
+          if (errorCount > fuzzFactor) {
+            return false;
+          }
+        }
+        toPos++;
+      }
+    }
+
+    return true;
+  }
+
+  // Search best fit offsets for each hunk based on the previous ones
+  for (var i = 0; i < hunks.length; i++) {
+    var hunk = hunks[i],
+        maxLine = lines.length - hunk.oldLines,
+        localOffset = 0,
+        toPos = offset + hunk.oldStart - 1;
+
+    var iterator = /*istanbul ignore start*/(0, _distanceIterator2['default']) /*istanbul ignore end*/(toPos, minLine, maxLine);
+
+    for (; localOffset !== undefined; localOffset = iterator()) {
+      if (hunkFits(hunk, toPos + localOffset)) {
+        hunk.offset = offset += localOffset;
+        break;
+      }
+    }
+
+    if (localOffset === undefined) {
+      return false;
+    }
+
+    // Set lower text limit to end of the current hunk, so next ones don't try
+    // to fit over already patched text
+    minLine = hunk.offset + hunk.oldStart + hunk.oldLines;
+  }
+
+  // Apply patch hunks
+  for (var _i = 0; _i < hunks.length; _i++) {
+    var _hunk = hunks[_i],
+        _toPos = _hunk.offset + _hunk.newStart - 1;
+    if (_hunk.newLines == 0) {
+      _toPos++;
+    }
+
+    for (var j = 0; j < _hunk.lines.length; j++) {
+      var line = _hunk.lines[j],
+          operation = line[0],
+          content = line.substr(1),
+          delimiter = _hunk.linedelimiters[j];
+
+      if (operation === ' ') {
+        _toPos++;
+      } else if (operation === '-') {
+        lines.splice(_toPos, 1);
+        delimiters.splice(_toPos, 1);
+        /* istanbul ignore else */
+      } else if (operation === '+') {
+          lines.splice(_toPos, 0, content);
+          delimiters.splice(_toPos, 0, delimiter);
+          _toPos++;
+        } else if (operation === '\\') {
+          var previousOperation = _hunk.lines[j - 1] ? _hunk.lines[j - 1][0] : null;
+          if (previousOperation === '+') {
+            removeEOFNL = true;
+          } else if (previousOperation === '-') {
+            addEOFNL = true;
+          }
+        }
+    }
+  }
+
+  // Handle EOFNL insertion/removal
+  if (removeEOFNL) {
+    while (!lines[lines.length - 1]) {
+      lines.pop();
+      delimiters.pop();
+    }
+  } else if (addEOFNL) {
+    lines.push('');
+    delimiters.push('\n');
+  }
+  for (var _k = 0; _k < lines.length - 1; _k++) {
+    lines[_k] = lines[_k] + delimiters[_k];
+  }
+  return lines.join('');
+}
+
+// Wrapper that supports multiple file patches via callbacks.
+function applyPatches(uniDiff, options) {
+  if (typeof uniDiff === 'string') {
+    uniDiff = /*istanbul ignore start*/(0, _parse.parsePatch) /*istanbul ignore end*/(uniDiff);
+  }
+
+  var currentIndex = 0;
+  function processIndex() {
+    var index = uniDiff[currentIndex++];
+    if (!index) {
+      return options.complete();
+    }
+
+    options.loadFile(index, function (err, data) {
+      if (err) {
+        return options.complete(err);
+      }
+
+      var updatedContent = applyPatch(data, index, options);
+      options.patched(index, updatedContent, function (err) {
+        if (err) {
+          return options.complete(err);
+        }
+
+        processIndex();
+      });
+    });
+  }
+  processIndex();
+}
+
+
+},{"../util/distance-iterator":30,"./parse":29}],28:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/structuredPatch = structuredPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/createTwoFilesPatch = createTwoFilesPatch;
+/*istanbul ignore start*/exports. /*istanbul ignore end*/createPatch = createPatch;
+
+var /*istanbul ignore start*/_line = require('../diff/line') /*istanbul ignore end*/;
+
+/*istanbul ignore start*/
+function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
+
+/*istanbul ignore end*/function structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
+  if (!options) {
+    options = { context: 4 };
+  }
+
+  var diff = /*istanbul ignore start*/(0, _line.diffLines) /*istanbul ignore end*/(oldStr, newStr);
+  diff.push({ value: '', lines: [] }); // Append an empty value to make cleanup easier
+
+  function contextLines(lines) {
+    return lines.map(function (entry) {
+      return ' ' + entry;
+    });
+  }
+
+  var hunks = [];
+  var oldRangeStart = 0,
+      newRangeStart = 0,
+      curRange = [],
+      oldLine = 1,
+      newLine = 1;
+  /*istanbul ignore start*/
+  var _loop = function _loop( /*istanbul ignore end*/i) {
+    var current = diff[i],
+        lines = current.lines || current.value.replace(/\n$/, '').split('\n');
+    current.lines = lines;
+
+    if (current.added || current.removed) {
+      /*istanbul ignore start*/
+      var _curRange;
+
+      /*istanbul ignore end*/
+      // If we have previous context, start with that
+      if (!oldRangeStart) {
+        var prev = diff[i - 1];
+        oldRangeStart = oldLine;
+        newRangeStart = newLine;
+
+        if (prev) {
+          curRange = options.context > 0 ? contextLines(prev.lines.slice(-options.context)) : [];
+          oldRangeStart -= curRange.length;
+          newRangeStart -= curRange.length;
+        }
+      }
+
+      // Output our changes
+      /*istanbul ignore start*/(_curRange = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/lines.map(function (entry) {
+        return (current.added ? '+' : '-') + entry;
+      })));
+
+      // Track the updated file position
+      if (current.added) {
+        newLine += lines.length;
+      } else {
+        oldLine += lines.length;
+      }
+    } else {
+      // Identical context lines. Track line changes
+      if (oldRangeStart) {
+        // Close out any changes that have been output (or join overlapping)
+        if (lines.length <= options.context * 2 && i < diff.length - 2) {
+          /*istanbul ignore start*/
+          var _curRange2;
+
+          /*istanbul ignore end*/
+          // Overlapping
+          /*istanbul ignore start*/(_curRange2 = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange2 /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/contextLines(lines)));
+        } else {
+          /*istanbul ignore start*/
+          var _curRange3;
+
+          /*istanbul ignore end*/
+          // end the range and output
+          var contextSize = Math.min(lines.length, options.context);
+          /*istanbul ignore start*/(_curRange3 = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange3 /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/contextLines(lines.slice(0, contextSize))));
+
+          var hunk = {
+            oldStart: oldRangeStart,
+            oldLines: oldLine - oldRangeStart + contextSize,
+            newStart: newRangeStart,
+            newLines: newLine - newRangeStart + contextSize,
+            lines: curRange
+          };
+          if (i >= diff.length - 2 && lines.length <= options.context) {
+            // EOF is inside this hunk
+            var oldEOFNewline = /\n$/.test(oldStr);
+            var newEOFNewline = /\n$/.test(newStr);
+            if (lines.length == 0 && !oldEOFNewline) {
+              // special case: old has no eol and no trailing context; no-nl can end up before adds
+              curRange.splice(hunk.oldLines, 0, '\\ No newline at end of file');
+            } else if (!oldEOFNewline || !newEOFNewline) {
+              curRange.push('\\ No newline at end of file');
+            }
+          }
+          hunks.push(hunk);
+
+          oldRangeStart = 0;
+          newRangeStart = 0;
+          curRange = [];
+        }
+      }
+      oldLine += lines.length;
+      newLine += lines.length;
+    }
+  };
+
+  for (var i = 0; i < diff.length; i++) {
+    /*istanbul ignore start*/
+    _loop( /*istanbul ignore end*/i);
+  }
+
+  return {
+    oldFileName: oldFileName, newFileName: newFileName,
+    oldHeader: oldHeader, newHeader: newHeader,
+    hunks: hunks
+  };
+}
+
+function createTwoFilesPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
+  var diff = structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options);
+
+  var ret = [];
+  if (oldFileName == newFileName) {
+    ret.push('Index: ' + oldFileName);
+  }
+  ret.push('===================================================================');
+  ret.push('--- ' + diff.oldFileName + (typeof diff.oldHeader === 'undefined' ? '' : '\t' + diff.oldHeader));
+  ret.push('+++ ' + diff.newFileName + (typeof diff.newHeader === 'undefined' ? '' : '\t' + diff.newHeader));
+
+  for (var i = 0; i < diff.hunks.length; i++) {
+    var hunk = diff.hunks[i];
+    ret.push('@@ -' + hunk.oldStart + ',' + hunk.oldLines + ' +' + hunk.newStart + ',' + hunk.newLines + ' @@');
+    ret.push.apply(ret, hunk.lines);
+  }
+
+  return ret.join('\n') + '\n';
+}
+
+function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
+  return createTwoFilesPatch(fileName, fileName, oldStr, newStr, oldHeader, newHeader, options);
+}
+
+
+},{"../diff/line":23}],29:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/parsePatch = parsePatch;
+function parsePatch(uniDiff) {
+  /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
+
+  var diffstr = uniDiff.split(/\r\n|[\n\v\f\r\x85]/),
+      delimiters = uniDiff.match(/\r\n|[\n\v\f\r\x85]/g) || [],
+      list = [],
+      i = 0;
+
+  function parseIndex() {
+    var index = {};
+    list.push(index);
+
+    // Parse diff metadata
+    while (i < diffstr.length) {
+      var line = diffstr[i];
+
+      // File header found, end parsing diff metadata
+      if (/^(\-\-\-|\+\+\+|@@)\s/.test(line)) {
+        break;
+      }
+
+      // Diff index
+      var header = /^(?:Index:|diff(?: -r \w+)+)\s+(.+?)\s*$/.exec(line);
+      if (header) {
+        index.index = header[1];
+      }
+
+      i++;
+    }
+
+    // Parse file headers if they are defined. Unified diff requires them, but
+    // there's no technical issues to have an isolated hunk without file header
+    parseFileHeader(index);
+    parseFileHeader(index);
+
+    // Parse hunks
+    index.hunks = [];
+
+    while (i < diffstr.length) {
+      var _line = diffstr[i];
+
+      if (/^(Index:|diff|\-\-\-|\+\+\+)\s/.test(_line)) {
+        break;
+      } else if (/^@@/.test(_line)) {
+        index.hunks.push(parseHunk());
+      } else if (_line && options.strict) {
+        // Ignore unexpected content unless in strict mode
+        throw new Error('Unknown line ' + (i + 1) + ' ' + JSON.stringify(_line));
+      } else {
+        i++;
+      }
+    }
+  }
+
+  // Parses the --- and +++ headers, if none are found, no lines
+  // are consumed.
+  function parseFileHeader(index) {
+    var headerPattern = /^(---|\+\+\+)\s+([\S ]*)(?:\t(.*?)\s*)?$/;
+    var fileHeader = headerPattern.exec(diffstr[i]);
+    if (fileHeader) {
+      var keyPrefix = fileHeader[1] === '---' ? 'old' : 'new';
+      index[keyPrefix + 'FileName'] = fileHeader[2];
+      index[keyPrefix + 'Header'] = fileHeader[3];
+
+      i++;
+    }
+  }
+
+  // Parses a hunk
+  // This assumes that we are at the start of a hunk.
+  function parseHunk() {
+    var chunkHeaderIndex = i,
+        chunkHeaderLine = diffstr[i++],
+        chunkHeader = chunkHeaderLine.split(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+
+    var hunk = {
+      oldStart: +chunkHeader[1],
+      oldLines: +chunkHeader[2] || 1,
+      newStart: +chunkHeader[3],
+      newLines: +chunkHeader[4] || 1,
+      lines: [],
+      linedelimiters: []
+    };
+
+    var addCount = 0,
+        removeCount = 0;
+    for (; i < diffstr.length; i++) {
+      // Lines starting with '---' could be mistaken for the "remove line" operation
+      // But they could be the header for the next file. Therefore prune such cases out.
+      if (diffstr[i].indexOf('--- ') === 0 && i + 2 < diffstr.length && diffstr[i + 1].indexOf('+++ ') === 0 && diffstr[i + 2].indexOf('@@') === 0) {
+        break;
+      }
+      var operation = diffstr[i][0];
+
+      if (operation === '+' || operation === '-' || operation === ' ' || operation === '\\') {
+        hunk.lines.push(diffstr[i]);
+        hunk.linedelimiters.push(delimiters[i] || '\n');
+
+        if (operation === '+') {
+          addCount++;
+        } else if (operation === '-') {
+          removeCount++;
+        } else if (operation === ' ') {
+          addCount++;
+          removeCount++;
+        }
+      } else {
+        break;
+      }
+    }
+
+    // Handle the empty block count case
+    if (!addCount && hunk.newLines === 1) {
+      hunk.newLines = 0;
+    }
+    if (!removeCount && hunk.oldLines === 1) {
+      hunk.oldLines = 0;
+    }
+
+    // Perform optional sanity checking
+    if (options.strict) {
+      if (addCount !== hunk.newLines) {
+        throw new Error('Added line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
+      }
+      if (removeCount !== hunk.oldLines) {
+        throw new Error('Removed line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
+      }
+    }
+
+    return hunk;
+  }
+
+  while (i < diffstr.length) {
+    parseIndex();
+  }
+
+  return list;
+}
+
+
+},{}],30:[function(require,module,exports){
+/*istanbul ignore start*/"use strict";
+
+exports.__esModule = true;
+
+exports["default"] = /*istanbul ignore end*/function (start, minLine, maxLine) {
+  var wantForward = true,
+      backwardExhausted = false,
+      forwardExhausted = false,
+      localOffset = 1;
+
+  return function iterator() {
+    if (wantForward && !forwardExhausted) {
+      if (backwardExhausted) {
+        localOffset++;
+      } else {
+        wantForward = false;
+      }
+
+      // Check if trying to fit beyond text length, and if not, check it fits
+      // after offset location (or desired location on first iteration)
+      if (start + localOffset <= maxLine) {
+        return localOffset;
+      }
+
+      forwardExhausted = true;
+    }
+
+    if (!backwardExhausted) {
+      if (!forwardExhausted) {
+        wantForward = true;
+      }
+
+      // Check if trying to fit before text beginning, and if not, check it fits
+      // before offset location
+      if (minLine <= start - localOffset) {
+        return -localOffset++;
+      }
+
+      backwardExhausted = true;
+      return iterator();
+    }
+
+    // We tried to fit hunk before text beginning and beyond text lenght, then
+    // hunk can't fit on the text. Return undefined
+  };
+};
+
+
+},{}],31:[function(require,module,exports){
+/*istanbul ignore start*/'use strict';
+
+exports.__esModule = true;
+exports. /*istanbul ignore end*/generateOptions = generateOptions;
+function generateOptions(options, defaults) {
+  if (typeof options === 'function') {
+    defaults.callback = options;
+  } else if (options) {
+    for (var name in options) {
+      /* istanbul ignore else */
+      if (options.hasOwnProperty(name)) {
+        defaults[name] = options[name];
+      }
+    }
+  }
+  return defaults;
+}
+
+
+},{}],32:[function(require,module,exports){
+/*
+	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
+
+	Copyright (c) 2015 - 2016 Cédric Ronvel 
+	
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+
+
+/* global NamedNodeMap */
+
+// Load modules
+//var string = require( 'string-kit' ) ;
+
+
+
+var dom = {} ;
+module.exports = dom ;
+
+
+
+// Load the svg submodule
+dom.svg = require( './svg.js' ) ;
+
+
+
+// Like jQuery's $(document).ready()
+dom.ready = function ready( callback )
+{
+	document.addEventListener( 'DOMContentLoaded' , function internalCallback() {
+		document.removeEventListener( 'DOMContentLoaded' , internalCallback , false ) ;
+		callback() ;
+	} , false ) ;
+} ;
+
+
+
+// Return a fragment from html code
+dom.fromHtml = function fromHtml( html )
+{
+	var i , doc , fragment ;
+	
+	// Fragment allow us to return a collection that... well... is not a collection,
+	// and that's fine because the html code may contains multiple top-level element
+	fragment = document.createDocumentFragment() ;
+	
+	doc = document.createElement( 'div' ) ;	// whatever type...
+	
+	// either .innerHTML or .insertAdjacentHTML()
+	//doc.innerHTML = html ;
+	doc.insertAdjacentHTML( 'beforeend' , html ) ;
+	
+	for ( i = 0 ; i < doc.children.length ; i ++ )
+	{
+		fragment.appendChild( doc.children[ i ] ) ;
+	}
+	
+	return fragment ;
+} ;
+
+
+
+// Batch processing, like array, HTMLCollection, and so on...
+dom.batch = function batch( method , elements )
+{
+	var i , args = Array.prototype.slice.call( arguments , 1 ) ;
+	
+	if ( elements instanceof Element )
+	{
+		args[ 0 ] = elements ;
+		method.apply( this , args ) ;
+	}
+	else if ( Array.isArray( elements ) )
+	{
+		for ( i = 0 ; i < elements.length ; i ++ )
+		{
+			args[ 0 ] = elements[ i ] ;
+			method.apply( this , args ) ;
+		}
+	}
+	else if ( elements instanceof NodeList || elements instanceof NamedNodeMap )
+	{
+		for ( i = 0 ; i < elements.length ; i ++ )
+		{
+			args[ 0 ] = elements[ i ] ;
+			method.apply( this , args ) ;
+		}
+	}
+} ;
+
+
+
+// Set a bunch of css properties given as an object
+dom.css = function css( element , object )
+{
+	var key ;
+	
+	for ( key in object )
+	{
+		element.style[ key ] = object[ key ] ;
+	}
+} ;
+
+
+
+// Set a bunch of attributes given as an object
+dom.attr = function attr( element , object )
+{
+	var key ;
+	
+	for ( key in object )
+	{
+		if ( object[ key ] === null ) { element.removeAttribute( key ) ; }
+		else { element.setAttribute( key , object[ key ] ) ; }
+	}
+} ;
+
+
+
+// Set/unset a bunch of classes given as an object
+dom.class = function class_( element , object )
+{
+	var key ;
+	
+	for ( key in object )
+	{
+		if ( object[ key ] ) { element.classList.add( key ) ; }
+		else { element.classList.remove( key ) ; }
+	}
+} ;
+
+
+
+// Remove an element. A little shortcut that ease life...
+dom.remove = function remove( element ) { element.parentNode.removeChild( element ) ; } ;
+
+
+
+// Remove all children of an element
+dom.empty = function empty( element )
+{
+	// element.innerHTML = '' ;	// According to jsPerf, it is 96% slower
+	while ( element.firstChild ) { element.removeChild( element.firstChild ); }
+} ;
+
+
+
+// Clone a source DOM tree and replace children of the destination
+dom.cloneInto = function cloneInto( destination , source )
+{
+	dom.empty( destination ) ;
+	destination.appendChild( source.cloneNode( true ) ) ;
+} ;
+
+
+
+// Same than cloneInto() without cloning anything
+dom.insertInto = function insertInto( destination , source )
+{
+	dom.empty( destination ) ;
+	destination.appendChild( source ) ;
+} ;
+
+
+
+// Children of this element get all their ID namespaced, any url(#id) references are patched accordingly
+dom.idNamespace = function idNamespace( element , namespace )
+{
+	var elements , replacement = {} ;
+	
+	elements = element.querySelectorAll( '*' ) ;
+	
+	dom.batch( dom.idNamespace.idAttributePass , elements , namespace , replacement ) ;
+	dom.batch( dom.idNamespace.otherAttributesPass , elements , replacement ) ;
+} ;
+
+// Callbacks for dom.idNamespace(), cleanly hidden behind its namespace
+
+dom.idNamespace.idAttributePass = function idAttributePass( element , namespace , replacement ) {
+	replacement[ element.id ] = namespace + '.' + element.id ;
+	element.id = replacement[ element.id ] ;
+} ;
+
+dom.idNamespace.otherAttributesPass = function otherAttributesPass( element , replacement ) {
+	dom.batch( dom.idNamespace.oneAttributeSubPass , element.attributes , replacement ) ;
+} ;
+
+dom.idNamespace.oneAttributeSubPass = function oneAttributeSubPass( attr , replacement ) {
+	
+	// We have to search all url(#id) like substring in the current attribute's value
+	attr.value = attr.value.replace( /url\(#([^)]+)\)/g , function( match , id ) {
+		
+		// No replacement? return the matched string
+		if ( ! replacement[ id ] ) { return match ; }
+		
+		// Or return the replacement ID
+		return 'url(#' + replacement[ id ] + ')' ;
+	} ) ;
+} ;
+
+
+
+		/* Function useful for .batch() as callback */
+		/* ... to avoid defining again and again the same callback function */
+
+// Change id
+dom.id = function id( element , id ) { element.id = id ; } ;
+
+// Like jQuery .text().
+dom.text = function text( element , text ) { element.textContent = text ; } ;
+
+// Like jQuery .html().
+dom.html = function html( element , html ) { element.innerHTML = html ; } ;
+
+
+
+
+
+},{"./svg.js":33}],33:[function(require,module,exports){
+(function (process){
+/*
+	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
+
+	Copyright (c) 2015 - 2016 Cédric Ronvel 
+	
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+
+
+// Load modules
+var fs = require( 'fs' ) ;
+//var string = require( 'string-kit' ) ;
+var dom = require( './dom.js' ) ;
+
+
+
+var domSvg = {} ;
+module.exports = domSvg ;
+
+
+
+/*
+	load( container , url , [options] , callback )
+	
+	* container: null or the DOM element where the <svg> tag will be put
+	* url: the URL of the .svg file
+	* options: an optional object with optional options
+		* id: the id attribute of the <svg> tag (recommanded)
+		* class: a class object to add/remove on the <svg> tag
+		* hidden: inject the svg but make it hidden (useful to apply modification before the show)
+		* noWidthHeightAttr: remove the width and height attribute of the <svg> tag
+		* css: a css object to apply on the <svg> tag
+	* callback: completion callback
+*/
+domSvg.load = function load( container , url , options , callback )
+{
+	if ( typeof options === 'function' ) { callback = options ; }
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	if ( url.substring( 0 , 7 ) === 'file://' && ! process.browser )
+	{
+		// Use Node.js 'fs' module
+		
+		fs.readFile( url.slice( 7 ) , function( error , content ) {
+			
+			if ( error ) { callback( error ) ; return ; }
+			
+			var parser = new DOMParser() ;
+			var svg = parser.parseFromString( content.toString() , 'application/xml' ).documentElement ;
+			
+			try {
+				domSvg.attachXmlTo( container , svg , options ) ;
+			}
+			catch ( error ) {
+				callback( error ) ;
+				return ;
+			}
+			
+			callback( undefined , svg ) ;
+		} ) ;
+	}
+	else
+	{
+		// Use an AJAX HTTP Request
+		
+		domSvg.ajax( url , function( error , xmlDoc ) {
+			
+			if ( error ) { callback( error ) ; return ; }
+			
+			var svg = xmlDoc.documentElement ;
+			
+			try {
+				domSvg.attachXmlTo( container , svg , options ) ;
+			}
+			catch ( error ) {
+				callback( error ) ;
+				return ;
+			}
+			
+			callback( undefined , svg ) ;
+		} ) ;
+	}
+} ;
+
+
+
+// Dummy ATM...
+domSvg.attachXmlTo = function attachXmlTo( container , svg , options )
+{
+	var viewBox , width , height ;
+	
+	domSvg.lightCleanup( svg ) ;
+	
+	// Fix id, if necessary
+	if ( options.id !== undefined )
+	{
+		if ( typeof options.id === 'string' ) { svg.setAttribute( 'id' , options.id ) ; }
+		else if ( ! options.id ) { svg.removeAttribute( 'id' ) ; }
+	}
+	
+	if ( options.class && typeof options.class === 'object' ) { dom.class( svg , options.class ) ; }
+	
+	if ( options.idNamespace ) { dom.idNamespace( svg , options.idNamespace ) ; }
+	
+	if ( options.hidden ) { svg.style.visibility = 'hidden' ; }
+	
+	if ( options.noWidthHeightAttr )
+	{
+		// Save and remove the width and height attribute
+		width = svg.getAttribute( 'width' ) ;
+		height = svg.getAttribute( 'height' ) ;
+		
+		svg.removeAttribute( 'height' ) ;
+		svg.removeAttribute( 'width' ) ;
+		
+		// if the svg don't have a viewBox attribute, set it now from the width and height (it works most of time)
+		if ( ! svg.getAttribute( 'viewBox' ) && width && height )
+		{
+			viewBox = '0 0 ' + width + ' ' + height ;
+			//console.log( "viewBox:" , viewBox ) ;
+			svg.setAttribute( 'viewBox' , viewBox ) ;
+		}
+	}
+	
+	if ( options.css ) { dom.css( svg , options.css ) ; }
+	
+	// If a container was specified, attach to it
+	if ( container ) { container.appendChild( svg ) ; }
+} ;
+
+
+
+domSvg.lightCleanup = function lightCleanup( svgElement )
+{
+	removeAllTag( svgElement , 'metadata' ) ;
+	removeAllTag( svgElement , 'script' ) ;
+} ;
+
+
+
+// Should remove all tags and attributes that have non-registered namespace,
+// e.g.: sodipodi, inkscape, etc...
+//domSvg.heavyCleanup = function heavyCleanup( svgElement ) {} ;
+
+
+
+function removeAllTag( container , tag )
+{
+	var i , elements , element ;
+	
+	elements = container.getElementsByTagName( tag ) ;
+	
+	for ( i = 0 ; i < elements.length ; i ++ )
+	{
+		element = elements.item( i ) ;
+		element.parentNode.removeChild( element ) ;
+	}
+}
+
+
+
+
+
+
+domSvg.ajax = function ajax( url , callback )
+{
+	var xhr = new XMLHttpRequest() ;
+	
+	//console.warn( "ajax url:" , url ) ;
+	
+	xhr.responseType = 'document' ;
+	xhr.onreadystatechange = domSvg.ajax.ajaxStatus.bind( xhr , callback ) ;
+	xhr.open( 'GET', url ) ;
+	xhr.send() ;
+} ;
+
+
+
+domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
+{
+	// From MDN: In the event of a communication error (such as the webserver going down),
+	// an exception will be thrown in the when attempting to access the 'status' property. 
+	
+	try {
+		if ( this.readyState === 4 )
+		{
+			if ( this.status === 200 )
+			{
+				callback( undefined , this.responseXML ) ;
+			}
+			else if ( this.status === 0 && this.responseXML )	// Yay, loading with file:// does not provide any status...
+			{
+				callback( undefined , this.responseXML ) ;
+			}
+			else
+			{
+				if ( this.status ) { callback( this.status ) ; }
+				else { callback( new Error( "[dom-kit.svg] ajaxStatus(): Error with falsy status" ) ) ; }
+			}
+		}
+	}
+	catch ( error ) {
+		callback( error ) ;
+	}
+} ;
+
+
+
+}).call(this,require('_process'))
+},{"./dom.js":32,"_process":39,"fs":15}],34:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4566,3237 +6335,30 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],17:[function(require,module,exports){
-/**
- * Determine if an object is Buffer
+},{}],35:[function(require,module,exports){
+/*!
+ * Determine if an object is a Buffer
  *
- * Author:   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * License:  MIT
- *
- * `npm install is-buffer`
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @license  MIT
  */
 
+// The _isBuffer check is for Safari 5-7 support, because it's missing
+// Object.prototype.constructor. Remove this eventually
 module.exports = function (obj) {
-  return !!(obj != null &&
-    (obj._isBuffer || // For Safari 5-7 (missing Object.prototype.constructor)
-      (obj.constructor &&
-      typeof obj.constructor.isBuffer === 'function' &&
-      obj.constructor.isBuffer(obj))
-    ))
+  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
 }
 
-},{}],18:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-
-// cached from whatever global is present so that test runners that stub it
-// don't break things.  But we need to wrap it in a try catch in case it is
-// wrapped in strict mode code which doesn't define any globals.  It's inside a
-// function because try/catches deoptimize in certain engines.
-
-var cachedSetTimeout;
-var cachedClearTimeout;
-
-(function () {
-  try {
-    cachedSetTimeout = setTimeout;
-  } catch (e) {
-    cachedSetTimeout = function () {
-      throw new Error('setTimeout is not defined');
-    }
-  }
-  try {
-    cachedClearTimeout = clearTimeout;
-  } catch (e) {
-    cachedClearTimeout = function () {
-      throw new Error('clearTimeout is not defined');
-    }
-  }
-} ())
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    if (!draining || !currentQueue) {
-        return;
-    }
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
+function isBuffer (obj) {
+  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
 }
 
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = cachedSetTimeout.call(null, cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            if (currentQueue) {
-                currentQueue[queueIndex].run();
-            }
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    cachedClearTimeout.call(null, timeout);
+// For Node v0.10 support. Remove this eventually.
+function isSlowBuffer (obj) {
+  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
 }
 
-process.nextTick = function (fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        cachedSetTimeout.call(null, drainQueue, 0);
-    }
-};
-
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
-},{}],19:[function(require,module,exports){
-(function (global){
-/*! https://mths.be/punycode v1.4.1 by @mathias */
-;(function(root) {
-
-	/** Detect free variables */
-	var freeExports = typeof exports == 'object' && exports &&
-		!exports.nodeType && exports;
-	var freeModule = typeof module == 'object' && module &&
-		!module.nodeType && module;
-	var freeGlobal = typeof global == 'object' && global;
-	if (
-		freeGlobal.global === freeGlobal ||
-		freeGlobal.window === freeGlobal ||
-		freeGlobal.self === freeGlobal
-	) {
-		root = freeGlobal;
-	}
-
-	/**
-	 * The `punycode` object.
-	 * @name punycode
-	 * @type Object
-	 */
-	var punycode,
-
-	/** Highest positive signed 32-bit float value */
-	maxInt = 2147483647, // aka. 0x7FFFFFFF or 2^31-1
-
-	/** Bootstring parameters */
-	base = 36,
-	tMin = 1,
-	tMax = 26,
-	skew = 38,
-	damp = 700,
-	initialBias = 72,
-	initialN = 128, // 0x80
-	delimiter = '-', // '\x2D'
-
-	/** Regular expressions */
-	regexPunycode = /^xn--/,
-	regexNonASCII = /[^\x20-\x7E]/, // unprintable ASCII chars + non-ASCII chars
-	regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g, // RFC 3490 separators
-
-	/** Error messages */
-	errors = {
-		'overflow': 'Overflow: input needs wider integers to process',
-		'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
-		'invalid-input': 'Invalid input'
-	},
-
-	/** Convenience shortcuts */
-	baseMinusTMin = base - tMin,
-	floor = Math.floor,
-	stringFromCharCode = String.fromCharCode,
-
-	/** Temporary variable */
-	key;
-
-	/*--------------------------------------------------------------------------*/
-
-	/**
-	 * A generic error utility function.
-	 * @private
-	 * @param {String} type The error type.
-	 * @returns {Error} Throws a `RangeError` with the applicable error message.
-	 */
-	function error(type) {
-		throw new RangeError(errors[type]);
-	}
-
-	/**
-	 * A generic `Array#map` utility function.
-	 * @private
-	 * @param {Array} array The array to iterate over.
-	 * @param {Function} callback The function that gets called for every array
-	 * item.
-	 * @returns {Array} A new array of values returned by the callback function.
-	 */
-	function map(array, fn) {
-		var length = array.length;
-		var result = [];
-		while (length--) {
-			result[length] = fn(array[length]);
-		}
-		return result;
-	}
-
-	/**
-	 * A simple `Array#map`-like wrapper to work with domain name strings or email
-	 * addresses.
-	 * @private
-	 * @param {String} domain The domain name or email address.
-	 * @param {Function} callback The function that gets called for every
-	 * character.
-	 * @returns {Array} A new string of characters returned by the callback
-	 * function.
-	 */
-	function mapDomain(string, fn) {
-		var parts = string.split('@');
-		var result = '';
-		if (parts.length > 1) {
-			// In email addresses, only the domain name should be punycoded. Leave
-			// the local part (i.e. everything up to `@`) intact.
-			result = parts[0] + '@';
-			string = parts[1];
-		}
-		// Avoid `split(regex)` for IE8 compatibility. See #17.
-		string = string.replace(regexSeparators, '\x2E');
-		var labels = string.split('.');
-		var encoded = map(labels, fn).join('.');
-		return result + encoded;
-	}
-
-	/**
-	 * Creates an array containing the numeric code points of each Unicode
-	 * character in the string. While JavaScript uses UCS-2 internally,
-	 * this function will convert a pair of surrogate halves (each of which
-	 * UCS-2 exposes as separate characters) into a single code point,
-	 * matching UTF-16.
-	 * @see `punycode.ucs2.encode`
-	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
-	 * @memberOf punycode.ucs2
-	 * @name decode
-	 * @param {String} string The Unicode input string (UCS-2).
-	 * @returns {Array} The new array of code points.
-	 */
-	function ucs2decode(string) {
-		var output = [],
-		    counter = 0,
-		    length = string.length,
-		    value,
-		    extra;
-		while (counter < length) {
-			value = string.charCodeAt(counter++);
-			if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
-				// high surrogate, and there is a next character
-				extra = string.charCodeAt(counter++);
-				if ((extra & 0xFC00) == 0xDC00) { // low surrogate
-					output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
-				} else {
-					// unmatched surrogate; only append this code unit, in case the next
-					// code unit is the high surrogate of a surrogate pair
-					output.push(value);
-					counter--;
-				}
-			} else {
-				output.push(value);
-			}
-		}
-		return output;
-	}
-
-	/**
-	 * Creates a string based on an array of numeric code points.
-	 * @see `punycode.ucs2.decode`
-	 * @memberOf punycode.ucs2
-	 * @name encode
-	 * @param {Array} codePoints The array of numeric code points.
-	 * @returns {String} The new Unicode string (UCS-2).
-	 */
-	function ucs2encode(array) {
-		return map(array, function(value) {
-			var output = '';
-			if (value > 0xFFFF) {
-				value -= 0x10000;
-				output += stringFromCharCode(value >>> 10 & 0x3FF | 0xD800);
-				value = 0xDC00 | value & 0x3FF;
-			}
-			output += stringFromCharCode(value);
-			return output;
-		}).join('');
-	}
-
-	/**
-	 * Converts a basic code point into a digit/integer.
-	 * @see `digitToBasic()`
-	 * @private
-	 * @param {Number} codePoint The basic numeric code point value.
-	 * @returns {Number} The numeric value of a basic code point (for use in
-	 * representing integers) in the range `0` to `base - 1`, or `base` if
-	 * the code point does not represent a value.
-	 */
-	function basicToDigit(codePoint) {
-		if (codePoint - 48 < 10) {
-			return codePoint - 22;
-		}
-		if (codePoint - 65 < 26) {
-			return codePoint - 65;
-		}
-		if (codePoint - 97 < 26) {
-			return codePoint - 97;
-		}
-		return base;
-	}
-
-	/**
-	 * Converts a digit/integer into a basic code point.
-	 * @see `basicToDigit()`
-	 * @private
-	 * @param {Number} digit The numeric value of a basic code point.
-	 * @returns {Number} The basic code point whose value (when used for
-	 * representing integers) is `digit`, which needs to be in the range
-	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
-	 * used; else, the lowercase form is used. The behavior is undefined
-	 * if `flag` is non-zero and `digit` has no uppercase form.
-	 */
-	function digitToBasic(digit, flag) {
-		//  0..25 map to ASCII a..z or A..Z
-		// 26..35 map to ASCII 0..9
-		return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
-	}
-
-	/**
-	 * Bias adaptation function as per section 3.4 of RFC 3492.
-	 * https://tools.ietf.org/html/rfc3492#section-3.4
-	 * @private
-	 */
-	function adapt(delta, numPoints, firstTime) {
-		var k = 0;
-		delta = firstTime ? floor(delta / damp) : delta >> 1;
-		delta += floor(delta / numPoints);
-		for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
-			delta = floor(delta / baseMinusTMin);
-		}
-		return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
-	}
-
-	/**
-	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
-	 * symbols.
-	 * @memberOf punycode
-	 * @param {String} input The Punycode string of ASCII-only symbols.
-	 * @returns {String} The resulting string of Unicode symbols.
-	 */
-	function decode(input) {
-		// Don't use UCS-2
-		var output = [],
-		    inputLength = input.length,
-		    out,
-		    i = 0,
-		    n = initialN,
-		    bias = initialBias,
-		    basic,
-		    j,
-		    index,
-		    oldi,
-		    w,
-		    k,
-		    digit,
-		    t,
-		    /** Cached calculation results */
-		    baseMinusT;
-
-		// Handle the basic code points: let `basic` be the number of input code
-		// points before the last delimiter, or `0` if there is none, then copy
-		// the first basic code points to the output.
-
-		basic = input.lastIndexOf(delimiter);
-		if (basic < 0) {
-			basic = 0;
-		}
-
-		for (j = 0; j < basic; ++j) {
-			// if it's not a basic code point
-			if (input.charCodeAt(j) >= 0x80) {
-				error('not-basic');
-			}
-			output.push(input.charCodeAt(j));
-		}
-
-		// Main decoding loop: start just after the last delimiter if any basic code
-		// points were copied; start at the beginning otherwise.
-
-		for (index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
-
-			// `index` is the index of the next character to be consumed.
-			// Decode a generalized variable-length integer into `delta`,
-			// which gets added to `i`. The overflow checking is easier
-			// if we increase `i` as we go, then subtract off its starting
-			// value at the end to obtain `delta`.
-			for (oldi = i, w = 1, k = base; /* no condition */; k += base) {
-
-				if (index >= inputLength) {
-					error('invalid-input');
-				}
-
-				digit = basicToDigit(input.charCodeAt(index++));
-
-				if (digit >= base || digit > floor((maxInt - i) / w)) {
-					error('overflow');
-				}
-
-				i += digit * w;
-				t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-
-				if (digit < t) {
-					break;
-				}
-
-				baseMinusT = base - t;
-				if (w > floor(maxInt / baseMinusT)) {
-					error('overflow');
-				}
-
-				w *= baseMinusT;
-
-			}
-
-			out = output.length + 1;
-			bias = adapt(i - oldi, out, oldi == 0);
-
-			// `i` was supposed to wrap around from `out` to `0`,
-			// incrementing `n` each time, so we'll fix that now:
-			if (floor(i / out) > maxInt - n) {
-				error('overflow');
-			}
-
-			n += floor(i / out);
-			i %= out;
-
-			// Insert `n` at position `i` of the output
-			output.splice(i++, 0, n);
-
-		}
-
-		return ucs2encode(output);
-	}
-
-	/**
-	 * Converts a string of Unicode symbols (e.g. a domain name label) to a
-	 * Punycode string of ASCII-only symbols.
-	 * @memberOf punycode
-	 * @param {String} input The string of Unicode symbols.
-	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
-	 */
-	function encode(input) {
-		var n,
-		    delta,
-		    handledCPCount,
-		    basicLength,
-		    bias,
-		    j,
-		    m,
-		    q,
-		    k,
-		    t,
-		    currentValue,
-		    output = [],
-		    /** `inputLength` will hold the number of code points in `input`. */
-		    inputLength,
-		    /** Cached calculation results */
-		    handledCPCountPlusOne,
-		    baseMinusT,
-		    qMinusT;
-
-		// Convert the input in UCS-2 to Unicode
-		input = ucs2decode(input);
-
-		// Cache the length
-		inputLength = input.length;
-
-		// Initialize the state
-		n = initialN;
-		delta = 0;
-		bias = initialBias;
-
-		// Handle the basic code points
-		for (j = 0; j < inputLength; ++j) {
-			currentValue = input[j];
-			if (currentValue < 0x80) {
-				output.push(stringFromCharCode(currentValue));
-			}
-		}
-
-		handledCPCount = basicLength = output.length;
-
-		// `handledCPCount` is the number of code points that have been handled;
-		// `basicLength` is the number of basic code points.
-
-		// Finish the basic string - if it is not empty - with a delimiter
-		if (basicLength) {
-			output.push(delimiter);
-		}
-
-		// Main encoding loop:
-		while (handledCPCount < inputLength) {
-
-			// All non-basic code points < n have been handled already. Find the next
-			// larger one:
-			for (m = maxInt, j = 0; j < inputLength; ++j) {
-				currentValue = input[j];
-				if (currentValue >= n && currentValue < m) {
-					m = currentValue;
-				}
-			}
-
-			// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
-			// but guard against overflow
-			handledCPCountPlusOne = handledCPCount + 1;
-			if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
-				error('overflow');
-			}
-
-			delta += (m - n) * handledCPCountPlusOne;
-			n = m;
-
-			for (j = 0; j < inputLength; ++j) {
-				currentValue = input[j];
-
-				if (currentValue < n && ++delta > maxInt) {
-					error('overflow');
-				}
-
-				if (currentValue == n) {
-					// Represent delta as a generalized variable-length integer
-					for (q = delta, k = base; /* no condition */; k += base) {
-						t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-						if (q < t) {
-							break;
-						}
-						qMinusT = q - t;
-						baseMinusT = base - t;
-						output.push(
-							stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
-						);
-						q = floor(qMinusT / baseMinusT);
-					}
-
-					output.push(stringFromCharCode(digitToBasic(q, 0)));
-					bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
-					delta = 0;
-					++handledCPCount;
-				}
-			}
-
-			++delta;
-			++n;
-
-		}
-		return output.join('');
-	}
-
-	/**
-	 * Converts a Punycode string representing a domain name or an email address
-	 * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
-	 * it doesn't matter if you call it on a string that has already been
-	 * converted to Unicode.
-	 * @memberOf punycode
-	 * @param {String} input The Punycoded domain name or email address to
-	 * convert to Unicode.
-	 * @returns {String} The Unicode representation of the given Punycode
-	 * string.
-	 */
-	function toUnicode(input) {
-		return mapDomain(input, function(string) {
-			return regexPunycode.test(string)
-				? decode(string.slice(4).toLowerCase())
-				: string;
-		});
-	}
-
-	/**
-	 * Converts a Unicode string representing a domain name or an email address to
-	 * Punycode. Only the non-ASCII parts of the domain name will be converted,
-	 * i.e. it doesn't matter if you call it with a domain that's already in
-	 * ASCII.
-	 * @memberOf punycode
-	 * @param {String} input The domain name or email address to convert, as a
-	 * Unicode string.
-	 * @returns {String} The Punycode representation of the given domain name or
-	 * email address.
-	 */
-	function toASCII(input) {
-		return mapDomain(input, function(string) {
-			return regexNonASCII.test(string)
-				? 'xn--' + encode(string)
-				: string;
-		});
-	}
-
-	/*--------------------------------------------------------------------------*/
-
-	/** Define the public API */
-	punycode = {
-		/**
-		 * A string representing the current Punycode.js version number.
-		 * @memberOf punycode
-		 * @type String
-		 */
-		'version': '1.4.1',
-		/**
-		 * An object of methods to convert from JavaScript's internal character
-		 * representation (UCS-2) to Unicode code points, and back.
-		 * @see <https://mathiasbynens.be/notes/javascript-encoding>
-		 * @memberOf punycode
-		 * @type Object
-		 */
-		'ucs2': {
-			'decode': ucs2decode,
-			'encode': ucs2encode
-		},
-		'decode': decode,
-		'encode': encode,
-		'toASCII': toASCII,
-		'toUnicode': toUnicode
-	};
-
-	/** Expose `punycode` */
-	// Some AMD build optimizers, like r.js, check for specific condition patterns
-	// like the following:
-	if (
-		typeof define == 'function' &&
-		typeof define.amd == 'object' &&
-		define.amd
-	) {
-		define('punycode', function() {
-			return punycode;
-		});
-	} else if (freeExports && freeModule) {
-		if (module.exports == freeExports) {
-			// in Node.js, io.js, or RingoJS v0.8.0+
-			freeModule.exports = punycode;
-		} else {
-			// in Narwhal or RingoJS v0.7.0-
-			for (key in punycode) {
-				punycode.hasOwnProperty(key) && (freeExports[key] = punycode[key]);
-			}
-		}
-	} else {
-		// in Rhino or a web browser
-		root.punycode = punycode;
-	}
-
-}(this));
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],20:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-'use strict';
-
-// If obj.hasOwnProperty has been overridden, then calling
-// obj.hasOwnProperty(prop) will break.
-// See: https://github.com/joyent/node/issues/1707
-function hasOwnProperty(obj, prop) {
-  return Object.prototype.hasOwnProperty.call(obj, prop);
-}
-
-module.exports = function(qs, sep, eq, options) {
-  sep = sep || '&';
-  eq = eq || '=';
-  var obj = {};
-
-  if (typeof qs !== 'string' || qs.length === 0) {
-    return obj;
-  }
-
-  var regexp = /\+/g;
-  qs = qs.split(sep);
-
-  var maxKeys = 1000;
-  if (options && typeof options.maxKeys === 'number') {
-    maxKeys = options.maxKeys;
-  }
-
-  var len = qs.length;
-  // maxKeys <= 0 means that we should not limit keys count
-  if (maxKeys > 0 && len > maxKeys) {
-    len = maxKeys;
-  }
-
-  for (var i = 0; i < len; ++i) {
-    var x = qs[i].replace(regexp, '%20'),
-        idx = x.indexOf(eq),
-        kstr, vstr, k, v;
-
-    if (idx >= 0) {
-      kstr = x.substr(0, idx);
-      vstr = x.substr(idx + 1);
-    } else {
-      kstr = x;
-      vstr = '';
-    }
-
-    k = decodeURIComponent(kstr);
-    v = decodeURIComponent(vstr);
-
-    if (!hasOwnProperty(obj, k)) {
-      obj[k] = v;
-    } else if (isArray(obj[k])) {
-      obj[k].push(v);
-    } else {
-      obj[k] = [obj[k], v];
-    }
-  }
-
-  return obj;
-};
-
-var isArray = Array.isArray || function (xs) {
-  return Object.prototype.toString.call(xs) === '[object Array]';
-};
-
-},{}],21:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-'use strict';
-
-var stringifyPrimitive = function(v) {
-  switch (typeof v) {
-    case 'string':
-      return v;
-
-    case 'boolean':
-      return v ? 'true' : 'false';
-
-    case 'number':
-      return isFinite(v) ? v : '';
-
-    default:
-      return '';
-  }
-};
-
-module.exports = function(obj, sep, eq, name) {
-  sep = sep || '&';
-  eq = eq || '=';
-  if (obj === null) {
-    obj = undefined;
-  }
-
-  if (typeof obj === 'object') {
-    return map(objectKeys(obj), function(k) {
-      var ks = encodeURIComponent(stringifyPrimitive(k)) + eq;
-      if (isArray(obj[k])) {
-        return map(obj[k], function(v) {
-          return ks + encodeURIComponent(stringifyPrimitive(v));
-        }).join(sep);
-      } else {
-        return ks + encodeURIComponent(stringifyPrimitive(obj[k]));
-      }
-    }).join(sep);
-
-  }
-
-  if (!name) return '';
-  return encodeURIComponent(stringifyPrimitive(name)) + eq +
-         encodeURIComponent(stringifyPrimitive(obj));
-};
-
-var isArray = Array.isArray || function (xs) {
-  return Object.prototype.toString.call(xs) === '[object Array]';
-};
-
-function map (xs, f) {
-  if (xs.map) return xs.map(f);
-  var res = [];
-  for (var i = 0; i < xs.length; i++) {
-    res.push(f(xs[i], i));
-  }
-  return res;
-}
-
-var objectKeys = Object.keys || function (obj) {
-  var res = [];
-  for (var key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) res.push(key);
-  }
-  return res;
-};
-
-},{}],22:[function(require,module,exports){
-'use strict';
-
-exports.decode = exports.parse = require('./decode');
-exports.encode = exports.stringify = require('./encode');
-
-},{"./decode":20,"./encode":21}],23:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-'use strict';
-
-var punycode = require('punycode');
-var util = require('./util');
-
-exports.parse = urlParse;
-exports.resolve = urlResolve;
-exports.resolveObject = urlResolveObject;
-exports.format = urlFormat;
-
-exports.Url = Url;
-
-function Url() {
-  this.protocol = null;
-  this.slashes = null;
-  this.auth = null;
-  this.host = null;
-  this.port = null;
-  this.hostname = null;
-  this.hash = null;
-  this.search = null;
-  this.query = null;
-  this.pathname = null;
-  this.path = null;
-  this.href = null;
-}
-
-// Reference: RFC 3986, RFC 1808, RFC 2396
-
-// define these here so at least they only have to be
-// compiled once on the first module load.
-var protocolPattern = /^([a-z0-9.+-]+:)/i,
-    portPattern = /:[0-9]*$/,
-
-    // Special case for a simple path URL
-    simplePathPattern = /^(\/\/?(?!\/)[^\?\s]*)(\?[^\s]*)?$/,
-
-    // RFC 2396: characters reserved for delimiting URLs.
-    // We actually just auto-escape these.
-    delims = ['<', '>', '"', '`', ' ', '\r', '\n', '\t'],
-
-    // RFC 2396: characters not allowed for various reasons.
-    unwise = ['{', '}', '|', '\\', '^', '`'].concat(delims),
-
-    // Allowed by RFCs, but cause of XSS attacks.  Always escape these.
-    autoEscape = ['\''].concat(unwise),
-    // Characters that are never ever allowed in a hostname.
-    // Note that any invalid chars are also handled, but these
-    // are the ones that are *expected* to be seen, so we fast-path
-    // them.
-    nonHostChars = ['%', '/', '?', ';', '#'].concat(autoEscape),
-    hostEndingChars = ['/', '?', '#'],
-    hostnameMaxLen = 255,
-    hostnamePartPattern = /^[+a-z0-9A-Z_-]{0,63}$/,
-    hostnamePartStart = /^([+a-z0-9A-Z_-]{0,63})(.*)$/,
-    // protocols that can allow "unsafe" and "unwise" chars.
-    unsafeProtocol = {
-      'javascript': true,
-      'javascript:': true
-    },
-    // protocols that never have a hostname.
-    hostlessProtocol = {
-      'javascript': true,
-      'javascript:': true
-    },
-    // protocols that always contain a // bit.
-    slashedProtocol = {
-      'http': true,
-      'https': true,
-      'ftp': true,
-      'gopher': true,
-      'file': true,
-      'http:': true,
-      'https:': true,
-      'ftp:': true,
-      'gopher:': true,
-      'file:': true
-    },
-    querystring = require('querystring');
-
-function urlParse(url, parseQueryString, slashesDenoteHost) {
-  if (url && util.isObject(url) && url instanceof Url) return url;
-
-  var u = new Url;
-  u.parse(url, parseQueryString, slashesDenoteHost);
-  return u;
-}
-
-Url.prototype.parse = function(url, parseQueryString, slashesDenoteHost) {
-  if (!util.isString(url)) {
-    throw new TypeError("Parameter 'url' must be a string, not " + typeof url);
-  }
-
-  // Copy chrome, IE, opera backslash-handling behavior.
-  // Back slashes before the query string get converted to forward slashes
-  // See: https://code.google.com/p/chromium/issues/detail?id=25916
-  var queryIndex = url.indexOf('?'),
-      splitter =
-          (queryIndex !== -1 && queryIndex < url.indexOf('#')) ? '?' : '#',
-      uSplit = url.split(splitter),
-      slashRegex = /\\/g;
-  uSplit[0] = uSplit[0].replace(slashRegex, '/');
-  url = uSplit.join(splitter);
-
-  var rest = url;
-
-  // trim before proceeding.
-  // This is to support parse stuff like "  http://foo.com  \n"
-  rest = rest.trim();
-
-  if (!slashesDenoteHost && url.split('#').length === 1) {
-    // Try fast path regexp
-    var simplePath = simplePathPattern.exec(rest);
-    if (simplePath) {
-      this.path = rest;
-      this.href = rest;
-      this.pathname = simplePath[1];
-      if (simplePath[2]) {
-        this.search = simplePath[2];
-        if (parseQueryString) {
-          this.query = querystring.parse(this.search.substr(1));
-        } else {
-          this.query = this.search.substr(1);
-        }
-      } else if (parseQueryString) {
-        this.search = '';
-        this.query = {};
-      }
-      return this;
-    }
-  }
-
-  var proto = protocolPattern.exec(rest);
-  if (proto) {
-    proto = proto[0];
-    var lowerProto = proto.toLowerCase();
-    this.protocol = lowerProto;
-    rest = rest.substr(proto.length);
-  }
-
-  // figure out if it's got a host
-  // user@server is *always* interpreted as a hostname, and url
-  // resolution will treat //foo/bar as host=foo,path=bar because that's
-  // how the browser resolves relative URLs.
-  if (slashesDenoteHost || proto || rest.match(/^\/\/[^@\/]+@[^@\/]+/)) {
-    var slashes = rest.substr(0, 2) === '//';
-    if (slashes && !(proto && hostlessProtocol[proto])) {
-      rest = rest.substr(2);
-      this.slashes = true;
-    }
-  }
-
-  if (!hostlessProtocol[proto] &&
-      (slashes || (proto && !slashedProtocol[proto]))) {
-
-    // there's a hostname.
-    // the first instance of /, ?, ;, or # ends the host.
-    //
-    // If there is an @ in the hostname, then non-host chars *are* allowed
-    // to the left of the last @ sign, unless some host-ending character
-    // comes *before* the @-sign.
-    // URLs are obnoxious.
-    //
-    // ex:
-    // http://a@b@c/ => user:a@b host:c
-    // http://a@b?@c => user:a host:c path:/?@c
-
-    // v0.12 TODO(isaacs): This is not quite how Chrome does things.
-    // Review our test case against browsers more comprehensively.
-
-    // find the first instance of any hostEndingChars
-    var hostEnd = -1;
-    for (var i = 0; i < hostEndingChars.length; i++) {
-      var hec = rest.indexOf(hostEndingChars[i]);
-      if (hec !== -1 && (hostEnd === -1 || hec < hostEnd))
-        hostEnd = hec;
-    }
-
-    // at this point, either we have an explicit point where the
-    // auth portion cannot go past, or the last @ char is the decider.
-    var auth, atSign;
-    if (hostEnd === -1) {
-      // atSign can be anywhere.
-      atSign = rest.lastIndexOf('@');
-    } else {
-      // atSign must be in auth portion.
-      // http://a@b/c@d => host:b auth:a path:/c@d
-      atSign = rest.lastIndexOf('@', hostEnd);
-    }
-
-    // Now we have a portion which is definitely the auth.
-    // Pull that off.
-    if (atSign !== -1) {
-      auth = rest.slice(0, atSign);
-      rest = rest.slice(atSign + 1);
-      this.auth = decodeURIComponent(auth);
-    }
-
-    // the host is the remaining to the left of the first non-host char
-    hostEnd = -1;
-    for (var i = 0; i < nonHostChars.length; i++) {
-      var hec = rest.indexOf(nonHostChars[i]);
-      if (hec !== -1 && (hostEnd === -1 || hec < hostEnd))
-        hostEnd = hec;
-    }
-    // if we still have not hit it, then the entire thing is a host.
-    if (hostEnd === -1)
-      hostEnd = rest.length;
-
-    this.host = rest.slice(0, hostEnd);
-    rest = rest.slice(hostEnd);
-
-    // pull out port.
-    this.parseHost();
-
-    // we've indicated that there is a hostname,
-    // so even if it's empty, it has to be present.
-    this.hostname = this.hostname || '';
-
-    // if hostname begins with [ and ends with ]
-    // assume that it's an IPv6 address.
-    var ipv6Hostname = this.hostname[0] === '[' &&
-        this.hostname[this.hostname.length - 1] === ']';
-
-    // validate a little.
-    if (!ipv6Hostname) {
-      var hostparts = this.hostname.split(/\./);
-      for (var i = 0, l = hostparts.length; i < l; i++) {
-        var part = hostparts[i];
-        if (!part) continue;
-        if (!part.match(hostnamePartPattern)) {
-          var newpart = '';
-          for (var j = 0, k = part.length; j < k; j++) {
-            if (part.charCodeAt(j) > 127) {
-              // we replace non-ASCII char with a temporary placeholder
-              // we need this to make sure size of hostname is not
-              // broken by replacing non-ASCII by nothing
-              newpart += 'x';
-            } else {
-              newpart += part[j];
-            }
-          }
-          // we test again with ASCII char only
-          if (!newpart.match(hostnamePartPattern)) {
-            var validParts = hostparts.slice(0, i);
-            var notHost = hostparts.slice(i + 1);
-            var bit = part.match(hostnamePartStart);
-            if (bit) {
-              validParts.push(bit[1]);
-              notHost.unshift(bit[2]);
-            }
-            if (notHost.length) {
-              rest = '/' + notHost.join('.') + rest;
-            }
-            this.hostname = validParts.join('.');
-            break;
-          }
-        }
-      }
-    }
-
-    if (this.hostname.length > hostnameMaxLen) {
-      this.hostname = '';
-    } else {
-      // hostnames are always lower case.
-      this.hostname = this.hostname.toLowerCase();
-    }
-
-    if (!ipv6Hostname) {
-      // IDNA Support: Returns a punycoded representation of "domain".
-      // It only converts parts of the domain name that
-      // have non-ASCII characters, i.e. it doesn't matter if
-      // you call it with a domain that already is ASCII-only.
-      this.hostname = punycode.toASCII(this.hostname);
-    }
-
-    var p = this.port ? ':' + this.port : '';
-    var h = this.hostname || '';
-    this.host = h + p;
-    this.href += this.host;
-
-    // strip [ and ] from the hostname
-    // the host field still retains them, though
-    if (ipv6Hostname) {
-      this.hostname = this.hostname.substr(1, this.hostname.length - 2);
-      if (rest[0] !== '/') {
-        rest = '/' + rest;
-      }
-    }
-  }
-
-  // now rest is set to the post-host stuff.
-  // chop off any delim chars.
-  if (!unsafeProtocol[lowerProto]) {
-
-    // First, make 100% sure that any "autoEscape" chars get
-    // escaped, even if encodeURIComponent doesn't think they
-    // need to be.
-    for (var i = 0, l = autoEscape.length; i < l; i++) {
-      var ae = autoEscape[i];
-      if (rest.indexOf(ae) === -1)
-        continue;
-      var esc = encodeURIComponent(ae);
-      if (esc === ae) {
-        esc = escape(ae);
-      }
-      rest = rest.split(ae).join(esc);
-    }
-  }
-
-
-  // chop off from the tail first.
-  var hash = rest.indexOf('#');
-  if (hash !== -1) {
-    // got a fragment string.
-    this.hash = rest.substr(hash);
-    rest = rest.slice(0, hash);
-  }
-  var qm = rest.indexOf('?');
-  if (qm !== -1) {
-    this.search = rest.substr(qm);
-    this.query = rest.substr(qm + 1);
-    if (parseQueryString) {
-      this.query = querystring.parse(this.query);
-    }
-    rest = rest.slice(0, qm);
-  } else if (parseQueryString) {
-    // no query string, but parseQueryString still requested
-    this.search = '';
-    this.query = {};
-  }
-  if (rest) this.pathname = rest;
-  if (slashedProtocol[lowerProto] &&
-      this.hostname && !this.pathname) {
-    this.pathname = '/';
-  }
-
-  //to support http.request
-  if (this.pathname || this.search) {
-    var p = this.pathname || '';
-    var s = this.search || '';
-    this.path = p + s;
-  }
-
-  // finally, reconstruct the href based on what has been validated.
-  this.href = this.format();
-  return this;
-};
-
-// format a parsed object into a url string
-function urlFormat(obj) {
-  // ensure it's an object, and not a string url.
-  // If it's an obj, this is a no-op.
-  // this way, you can call url_format() on strings
-  // to clean up potentially wonky urls.
-  if (util.isString(obj)) obj = urlParse(obj);
-  if (!(obj instanceof Url)) return Url.prototype.format.call(obj);
-  return obj.format();
-}
-
-Url.prototype.format = function() {
-  var auth = this.auth || '';
-  if (auth) {
-    auth = encodeURIComponent(auth);
-    auth = auth.replace(/%3A/i, ':');
-    auth += '@';
-  }
-
-  var protocol = this.protocol || '',
-      pathname = this.pathname || '',
-      hash = this.hash || '',
-      host = false,
-      query = '';
-
-  if (this.host) {
-    host = auth + this.host;
-  } else if (this.hostname) {
-    host = auth + (this.hostname.indexOf(':') === -1 ?
-        this.hostname :
-        '[' + this.hostname + ']');
-    if (this.port) {
-      host += ':' + this.port;
-    }
-  }
-
-  if (this.query &&
-      util.isObject(this.query) &&
-      Object.keys(this.query).length) {
-    query = querystring.stringify(this.query);
-  }
-
-  var search = this.search || (query && ('?' + query)) || '';
-
-  if (protocol && protocol.substr(-1) !== ':') protocol += ':';
-
-  // only the slashedProtocols get the //.  Not mailto:, xmpp:, etc.
-  // unless they had them to begin with.
-  if (this.slashes ||
-      (!protocol || slashedProtocol[protocol]) && host !== false) {
-    host = '//' + (host || '');
-    if (pathname && pathname.charAt(0) !== '/') pathname = '/' + pathname;
-  } else if (!host) {
-    host = '';
-  }
-
-  if (hash && hash.charAt(0) !== '#') hash = '#' + hash;
-  if (search && search.charAt(0) !== '?') search = '?' + search;
-
-  pathname = pathname.replace(/[?#]/g, function(match) {
-    return encodeURIComponent(match);
-  });
-  search = search.replace('#', '%23');
-
-  return protocol + host + pathname + search + hash;
-};
-
-function urlResolve(source, relative) {
-  return urlParse(source, false, true).resolve(relative);
-}
-
-Url.prototype.resolve = function(relative) {
-  return this.resolveObject(urlParse(relative, false, true)).format();
-};
-
-function urlResolveObject(source, relative) {
-  if (!source) return relative;
-  return urlParse(source, false, true).resolveObject(relative);
-}
-
-Url.prototype.resolveObject = function(relative) {
-  if (util.isString(relative)) {
-    var rel = new Url();
-    rel.parse(relative, false, true);
-    relative = rel;
-  }
-
-  var result = new Url();
-  var tkeys = Object.keys(this);
-  for (var tk = 0; tk < tkeys.length; tk++) {
-    var tkey = tkeys[tk];
-    result[tkey] = this[tkey];
-  }
-
-  // hash is always overridden, no matter what.
-  // even href="" will remove it.
-  result.hash = relative.hash;
-
-  // if the relative url is empty, then there's nothing left to do here.
-  if (relative.href === '') {
-    result.href = result.format();
-    return result;
-  }
-
-  // hrefs like //foo/bar always cut to the protocol.
-  if (relative.slashes && !relative.protocol) {
-    // take everything except the protocol from relative
-    var rkeys = Object.keys(relative);
-    for (var rk = 0; rk < rkeys.length; rk++) {
-      var rkey = rkeys[rk];
-      if (rkey !== 'protocol')
-        result[rkey] = relative[rkey];
-    }
-
-    //urlParse appends trailing / to urls like http://www.example.com
-    if (slashedProtocol[result.protocol] &&
-        result.hostname && !result.pathname) {
-      result.path = result.pathname = '/';
-    }
-
-    result.href = result.format();
-    return result;
-  }
-
-  if (relative.protocol && relative.protocol !== result.protocol) {
-    // if it's a known url protocol, then changing
-    // the protocol does weird things
-    // first, if it's not file:, then we MUST have a host,
-    // and if there was a path
-    // to begin with, then we MUST have a path.
-    // if it is file:, then the host is dropped,
-    // because that's known to be hostless.
-    // anything else is assumed to be absolute.
-    if (!slashedProtocol[relative.protocol]) {
-      var keys = Object.keys(relative);
-      for (var v = 0; v < keys.length; v++) {
-        var k = keys[v];
-        result[k] = relative[k];
-      }
-      result.href = result.format();
-      return result;
-    }
-
-    result.protocol = relative.protocol;
-    if (!relative.host && !hostlessProtocol[relative.protocol]) {
-      var relPath = (relative.pathname || '').split('/');
-      while (relPath.length && !(relative.host = relPath.shift()));
-      if (!relative.host) relative.host = '';
-      if (!relative.hostname) relative.hostname = '';
-      if (relPath[0] !== '') relPath.unshift('');
-      if (relPath.length < 2) relPath.unshift('');
-      result.pathname = relPath.join('/');
-    } else {
-      result.pathname = relative.pathname;
-    }
-    result.search = relative.search;
-    result.query = relative.query;
-    result.host = relative.host || '';
-    result.auth = relative.auth;
-    result.hostname = relative.hostname || relative.host;
-    result.port = relative.port;
-    // to support http.request
-    if (result.pathname || result.search) {
-      var p = result.pathname || '';
-      var s = result.search || '';
-      result.path = p + s;
-    }
-    result.slashes = result.slashes || relative.slashes;
-    result.href = result.format();
-    return result;
-  }
-
-  var isSourceAbs = (result.pathname && result.pathname.charAt(0) === '/'),
-      isRelAbs = (
-          relative.host ||
-          relative.pathname && relative.pathname.charAt(0) === '/'
-      ),
-      mustEndAbs = (isRelAbs || isSourceAbs ||
-                    (result.host && relative.pathname)),
-      removeAllDots = mustEndAbs,
-      srcPath = result.pathname && result.pathname.split('/') || [],
-      relPath = relative.pathname && relative.pathname.split('/') || [],
-      psychotic = result.protocol && !slashedProtocol[result.protocol];
-
-  // if the url is a non-slashed url, then relative
-  // links like ../.. should be able
-  // to crawl up to the hostname, as well.  This is strange.
-  // result.protocol has already been set by now.
-  // Later on, put the first path part into the host field.
-  if (psychotic) {
-    result.hostname = '';
-    result.port = null;
-    if (result.host) {
-      if (srcPath[0] === '') srcPath[0] = result.host;
-      else srcPath.unshift(result.host);
-    }
-    result.host = '';
-    if (relative.protocol) {
-      relative.hostname = null;
-      relative.port = null;
-      if (relative.host) {
-        if (relPath[0] === '') relPath[0] = relative.host;
-        else relPath.unshift(relative.host);
-      }
-      relative.host = null;
-    }
-    mustEndAbs = mustEndAbs && (relPath[0] === '' || srcPath[0] === '');
-  }
-
-  if (isRelAbs) {
-    // it's absolute.
-    result.host = (relative.host || relative.host === '') ?
-                  relative.host : result.host;
-    result.hostname = (relative.hostname || relative.hostname === '') ?
-                      relative.hostname : result.hostname;
-    result.search = relative.search;
-    result.query = relative.query;
-    srcPath = relPath;
-    // fall through to the dot-handling below.
-  } else if (relPath.length) {
-    // it's relative
-    // throw away the existing file, and take the new path instead.
-    if (!srcPath) srcPath = [];
-    srcPath.pop();
-    srcPath = srcPath.concat(relPath);
-    result.search = relative.search;
-    result.query = relative.query;
-  } else if (!util.isNullOrUndefined(relative.search)) {
-    // just pull out the search.
-    // like href='?foo'.
-    // Put this after the other two cases because it simplifies the booleans
-    if (psychotic) {
-      result.hostname = result.host = srcPath.shift();
-      //occationaly the auth can get stuck only in host
-      //this especially happens in cases like
-      //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
-      var authInHost = result.host && result.host.indexOf('@') > 0 ?
-                       result.host.split('@') : false;
-      if (authInHost) {
-        result.auth = authInHost.shift();
-        result.host = result.hostname = authInHost.shift();
-      }
-    }
-    result.search = relative.search;
-    result.query = relative.query;
-    //to support http.request
-    if (!util.isNull(result.pathname) || !util.isNull(result.search)) {
-      result.path = (result.pathname ? result.pathname : '') +
-                    (result.search ? result.search : '');
-    }
-    result.href = result.format();
-    return result;
-  }
-
-  if (!srcPath.length) {
-    // no path at all.  easy.
-    // we've already handled the other stuff above.
-    result.pathname = null;
-    //to support http.request
-    if (result.search) {
-      result.path = '/' + result.search;
-    } else {
-      result.path = null;
-    }
-    result.href = result.format();
-    return result;
-  }
-
-  // if a url ENDs in . or .., then it must get a trailing slash.
-  // however, if it ends in anything else non-slashy,
-  // then it must NOT get a trailing slash.
-  var last = srcPath.slice(-1)[0];
-  var hasTrailingSlash = (
-      (result.host || relative.host || srcPath.length > 1) &&
-      (last === '.' || last === '..') || last === '');
-
-  // strip single dots, resolve double dots to parent dir
-  // if the path tries to go above the root, `up` ends up > 0
-  var up = 0;
-  for (var i = srcPath.length; i >= 0; i--) {
-    last = srcPath[i];
-    if (last === '.') {
-      srcPath.splice(i, 1);
-    } else if (last === '..') {
-      srcPath.splice(i, 1);
-      up++;
-    } else if (up) {
-      srcPath.splice(i, 1);
-      up--;
-    }
-  }
-
-  // if the path is allowed to go above the root, restore leading ..s
-  if (!mustEndAbs && !removeAllDots) {
-    for (; up--; up) {
-      srcPath.unshift('..');
-    }
-  }
-
-  if (mustEndAbs && srcPath[0] !== '' &&
-      (!srcPath[0] || srcPath[0].charAt(0) !== '/')) {
-    srcPath.unshift('');
-  }
-
-  if (hasTrailingSlash && (srcPath.join('/').substr(-1) !== '/')) {
-    srcPath.push('');
-  }
-
-  var isAbsolute = srcPath[0] === '' ||
-      (srcPath[0] && srcPath[0].charAt(0) === '/');
-
-  // put the host back
-  if (psychotic) {
-    result.hostname = result.host = isAbsolute ? '' :
-                                    srcPath.length ? srcPath.shift() : '';
-    //occationaly the auth can get stuck only in host
-    //this especially happens in cases like
-    //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
-    var authInHost = result.host && result.host.indexOf('@') > 0 ?
-                     result.host.split('@') : false;
-    if (authInHost) {
-      result.auth = authInHost.shift();
-      result.host = result.hostname = authInHost.shift();
-    }
-  }
-
-  mustEndAbs = mustEndAbs || (result.host && srcPath.length);
-
-  if (mustEndAbs && !isAbsolute) {
-    srcPath.unshift('');
-  }
-
-  if (!srcPath.length) {
-    result.pathname = null;
-    result.path = null;
-  } else {
-    result.pathname = srcPath.join('/');
-  }
-
-  //to support request.http
-  if (!util.isNull(result.pathname) || !util.isNull(result.search)) {
-    result.path = (result.pathname ? result.pathname : '') +
-                  (result.search ? result.search : '');
-  }
-  result.auth = relative.auth || result.auth;
-  result.slashes = result.slashes || relative.slashes;
-  result.href = result.format();
-  return result;
-};
-
-Url.prototype.parseHost = function() {
-  var host = this.host;
-  var port = portPattern.exec(host);
-  if (port) {
-    port = port[0];
-    if (port !== ':') {
-      this.port = port.substr(1);
-    }
-    host = host.substr(0, host.length - port.length);
-  }
-  if (host) this.hostname = host;
-};
-
-},{"./util":24,"punycode":19,"querystring":22}],24:[function(require,module,exports){
-'use strict';
-
-module.exports = {
-  isString: function(arg) {
-    return typeof(arg) === 'string';
-  },
-  isObject: function(arg) {
-    return typeof(arg) === 'object' && arg !== null;
-  },
-  isNull: function(arg) {
-    return arg === null;
-  },
-  isNullOrUndefined: function(arg) {
-    return arg == null;
-  }
-};
-
-},{}],25:[function(require,module,exports){
-/*istanbul ignore start*/"use strict";
-
-exports.__esModule = true;
-exports. /*istanbul ignore end*/convertChangesToDMP = convertChangesToDMP;
-// See: http://code.google.com/p/google-diff-match-patch/wiki/API
-function convertChangesToDMP(changes) {
-  var ret = [],
-      change = /*istanbul ignore start*/void 0 /*istanbul ignore end*/,
-      operation = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
-  for (var i = 0; i < changes.length; i++) {
-    change = changes[i];
-    if (change.added) {
-      operation = 1;
-    } else if (change.removed) {
-      operation = -1;
-    } else {
-      operation = 0;
-    }
-
-    ret.push([operation, change.value]);
-  }
-  return ret;
-}
-
-
-},{}],26:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports. /*istanbul ignore end*/convertChangesToXML = convertChangesToXML;
-function convertChangesToXML(changes) {
-  var ret = [];
-  for (var i = 0; i < changes.length; i++) {
-    var change = changes[i];
-    if (change.added) {
-      ret.push('<ins>');
-    } else if (change.removed) {
-      ret.push('<del>');
-    }
-
-    ret.push(escapeHTML(change.value));
-
-    if (change.added) {
-      ret.push('</ins>');
-    } else if (change.removed) {
-      ret.push('</del>');
-    }
-  }
-  return ret.join('');
-}
-
-function escapeHTML(s) {
-  var n = s;
-  n = n.replace(/&/g, '&amp;');
-  n = n.replace(/</g, '&lt;');
-  n = n.replace(/>/g, '&gt;');
-  n = n.replace(/"/g, '&quot;');
-
-  return n;
-}
-
-
-},{}],27:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports.default = /*istanbul ignore end*/Diff;
-function Diff() {}
-
-Diff.prototype = { /*istanbul ignore start*/
-  /*istanbul ignore end*/diff: function diff(oldString, newString) {
-    /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
-
-    var callback = options.callback;
-    if (typeof options === 'function') {
-      callback = options;
-      options = {};
-    }
-    this.options = options;
-
-    var self = this;
-
-    function done(value) {
-      if (callback) {
-        setTimeout(function () {
-          callback(undefined, value);
-        }, 0);
-        return true;
-      } else {
-        return value;
-      }
-    }
-
-    // Allow subclasses to massage the input prior to running
-    oldString = this.castInput(oldString);
-    newString = this.castInput(newString);
-
-    oldString = this.removeEmpty(this.tokenize(oldString));
-    newString = this.removeEmpty(this.tokenize(newString));
-
-    var newLen = newString.length,
-        oldLen = oldString.length;
-    var editLength = 1;
-    var maxEditLength = newLen + oldLen;
-    var bestPath = [{ newPos: -1, components: [] }];
-
-    // Seed editLength = 0, i.e. the content starts with the same values
-    var oldPos = this.extractCommon(bestPath[0], newString, oldString, 0);
-    if (bestPath[0].newPos + 1 >= newLen && oldPos + 1 >= oldLen) {
-      // Identity per the equality and tokenizer
-      return done([{ value: newString.join(''), count: newString.length }]);
-    }
-
-    // Main worker method. checks all permutations of a given edit length for acceptance.
-    function execEditLength() {
-      for (var diagonalPath = -1 * editLength; diagonalPath <= editLength; diagonalPath += 2) {
-        var basePath = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
-        var addPath = bestPath[diagonalPath - 1],
-            removePath = bestPath[diagonalPath + 1],
-            _oldPos = (removePath ? removePath.newPos : 0) - diagonalPath;
-        if (addPath) {
-          // No one else is going to attempt to use this value, clear it
-          bestPath[diagonalPath - 1] = undefined;
-        }
-
-        var canAdd = addPath && addPath.newPos + 1 < newLen,
-            canRemove = removePath && 0 <= _oldPos && _oldPos < oldLen;
-        if (!canAdd && !canRemove) {
-          // If this path is a terminal then prune
-          bestPath[diagonalPath] = undefined;
-          continue;
-        }
-
-        // Select the diagonal that we want to branch from. We select the prior
-        // path whose position in the new string is the farthest from the origin
-        // and does not pass the bounds of the diff graph
-        if (!canAdd || canRemove && addPath.newPos < removePath.newPos) {
-          basePath = clonePath(removePath);
-          self.pushComponent(basePath.components, undefined, true);
-        } else {
-          basePath = addPath; // No need to clone, we've pulled it from the list
-          basePath.newPos++;
-          self.pushComponent(basePath.components, true, undefined);
-        }
-
-        _oldPos = self.extractCommon(basePath, newString, oldString, diagonalPath);
-
-        // If we have hit the end of both strings, then we are done
-        if (basePath.newPos + 1 >= newLen && _oldPos + 1 >= oldLen) {
-          return done(buildValues(self, basePath.components, newString, oldString, self.useLongestToken));
-        } else {
-          // Otherwise track this path as a potential candidate and continue.
-          bestPath[diagonalPath] = basePath;
-        }
-      }
-
-      editLength++;
-    }
-
-    // Performs the length of edit iteration. Is a bit fugly as this has to support the
-    // sync and async mode which is never fun. Loops over execEditLength until a value
-    // is produced.
-    if (callback) {
-      (function exec() {
-        setTimeout(function () {
-          // This should not happen, but we want to be safe.
-          /* istanbul ignore next */
-          if (editLength > maxEditLength) {
-            return callback();
-          }
-
-          if (!execEditLength()) {
-            exec();
-          }
-        }, 0);
-      })();
-    } else {
-      while (editLength <= maxEditLength) {
-        var ret = execEditLength();
-        if (ret) {
-          return ret;
-        }
-      }
-    }
-  },
-  /*istanbul ignore start*/ /*istanbul ignore end*/pushComponent: function pushComponent(components, added, removed) {
-    var last = components[components.length - 1];
-    if (last && last.added === added && last.removed === removed) {
-      // We need to clone here as the component clone operation is just
-      // as shallow array clone
-      components[components.length - 1] = { count: last.count + 1, added: added, removed: removed };
-    } else {
-      components.push({ count: 1, added: added, removed: removed });
-    }
-  },
-  /*istanbul ignore start*/ /*istanbul ignore end*/extractCommon: function extractCommon(basePath, newString, oldString, diagonalPath) {
-    var newLen = newString.length,
-        oldLen = oldString.length,
-        newPos = basePath.newPos,
-        oldPos = newPos - diagonalPath,
-        commonCount = 0;
-    while (newPos + 1 < newLen && oldPos + 1 < oldLen && this.equals(newString[newPos + 1], oldString[oldPos + 1])) {
-      newPos++;
-      oldPos++;
-      commonCount++;
-    }
-
-    if (commonCount) {
-      basePath.components.push({ count: commonCount });
-    }
-
-    basePath.newPos = newPos;
-    return oldPos;
-  },
-  /*istanbul ignore start*/ /*istanbul ignore end*/equals: function equals(left, right) {
-    return left === right;
-  },
-  /*istanbul ignore start*/ /*istanbul ignore end*/removeEmpty: function removeEmpty(array) {
-    var ret = [];
-    for (var i = 0; i < array.length; i++) {
-      if (array[i]) {
-        ret.push(array[i]);
-      }
-    }
-    return ret;
-  },
-  /*istanbul ignore start*/ /*istanbul ignore end*/castInput: function castInput(value) {
-    return value;
-  },
-  /*istanbul ignore start*/ /*istanbul ignore end*/tokenize: function tokenize(value) {
-    return value.split('');
-  }
-};
-
-function buildValues(diff, components, newString, oldString, useLongestToken) {
-  var componentPos = 0,
-      componentLen = components.length,
-      newPos = 0,
-      oldPos = 0;
-
-  for (; componentPos < componentLen; componentPos++) {
-    var component = components[componentPos];
-    if (!component.removed) {
-      if (!component.added && useLongestToken) {
-        var value = newString.slice(newPos, newPos + component.count);
-        value = value.map(function (value, i) {
-          var oldValue = oldString[oldPos + i];
-          return oldValue.length > value.length ? oldValue : value;
-        });
-
-        component.value = value.join('');
-      } else {
-        component.value = newString.slice(newPos, newPos + component.count).join('');
-      }
-      newPos += component.count;
-
-      // Common case
-      if (!component.added) {
-        oldPos += component.count;
-      }
-    } else {
-      component.value = oldString.slice(oldPos, oldPos + component.count).join('');
-      oldPos += component.count;
-
-      // Reverse add and remove so removes are output first to match common convention
-      // The diffing algorithm is tied to add then remove output and this is the simplest
-      // route to get the desired output with minimal overhead.
-      if (componentPos && components[componentPos - 1].added) {
-        var tmp = components[componentPos - 1];
-        components[componentPos - 1] = components[componentPos];
-        components[componentPos] = tmp;
-      }
-    }
-  }
-
-  // Special case handle for when one terminal is ignored. For this case we merge the
-  // terminal into the prior string and drop the change.
-  var lastComponent = components[componentLen - 1];
-  if (componentLen > 1 && (lastComponent.added || lastComponent.removed) && diff.equals('', lastComponent.value)) {
-    components[componentLen - 2].value += lastComponent.value;
-    components.pop();
-  }
-
-  return components;
-}
-
-function clonePath(path) {
-  return { newPos: path.newPos, components: path.components.slice(0) };
-}
-
-
-},{}],28:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports.characterDiff = undefined;
-exports. /*istanbul ignore end*/diffChars = diffChars;
-
-var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-var _base2 = _interopRequireDefault(_base);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/*istanbul ignore end*/var characterDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/characterDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
-function diffChars(oldStr, newStr, callback) {
-  return characterDiff.diff(oldStr, newStr, callback);
-}
-
-
-},{"./base":27}],29:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports.cssDiff = undefined;
-exports. /*istanbul ignore end*/diffCss = diffCss;
-
-var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-var _base2 = _interopRequireDefault(_base);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/*istanbul ignore end*/var cssDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/cssDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
-cssDiff.tokenize = function (value) {
-  return value.split(/([{}:;,]|\s+)/);
-};
-
-function diffCss(oldStr, newStr, callback) {
-  return cssDiff.diff(oldStr, newStr, callback);
-}
-
-
-},{"./base":27}],30:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports.jsonDiff = undefined;
-
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
-
-exports. /*istanbul ignore end*/diffJson = diffJson;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = canonicalize;
-
-var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-var _base2 = _interopRequireDefault(_base);
-
-/*istanbul ignore end*/
-var /*istanbul ignore start*/_line = require('./line') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/*istanbul ignore end*/
-
-var objectPrototypeToString = Object.prototype.toString;
-
-var jsonDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/jsonDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
-// Discriminate between two lines of pretty-printed, serialized JSON where one of them has a
-// dangling comma and the other doesn't. Turns out including the dangling comma yields the nicest output:
-jsonDiff.useLongestToken = true;
-
-jsonDiff.tokenize = /*istanbul ignore start*/_line.lineDiff. /*istanbul ignore end*/tokenize;
-jsonDiff.castInput = function (value) {
-  return typeof value === 'string' ? value : JSON.stringify(canonicalize(value), undefined, '  ');
-};
-jsonDiff.equals = function (left, right) {
-  return (/*istanbul ignore start*/_base2.default. /*istanbul ignore end*/prototype.equals(left.replace(/,([\r\n])/g, '$1'), right.replace(/,([\r\n])/g, '$1'))
-  );
-};
-
-function diffJson(oldObj, newObj, callback) {
-  return jsonDiff.diff(oldObj, newObj, callback);
-}
-
-// This function handles the presence of circular references by bailing out when encountering an
-// object that is already on the "stack" of items being processed.
-function canonicalize(obj, stack, replacementStack) {
-  stack = stack || [];
-  replacementStack = replacementStack || [];
-
-  var i = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
-
-  for (i = 0; i < stack.length; i += 1) {
-    if (stack[i] === obj) {
-      return replacementStack[i];
-    }
-  }
-
-  var canonicalizedObj = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
-
-  if ('[object Array]' === objectPrototypeToString.call(obj)) {
-    stack.push(obj);
-    canonicalizedObj = new Array(obj.length);
-    replacementStack.push(canonicalizedObj);
-    for (i = 0; i < obj.length; i += 1) {
-      canonicalizedObj[i] = canonicalize(obj[i], stack, replacementStack);
-    }
-    stack.pop();
-    replacementStack.pop();
-    return canonicalizedObj;
-  }
-
-  if (obj && obj.toJSON) {
-    obj = obj.toJSON();
-  }
-
-  if ( /*istanbul ignore start*/(typeof /*istanbul ignore end*/obj === 'undefined' ? 'undefined' : _typeof(obj)) === 'object' && obj !== null) {
-    stack.push(obj);
-    canonicalizedObj = {};
-    replacementStack.push(canonicalizedObj);
-    var sortedKeys = [],
-        key = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
-    for (key in obj) {
-      /* istanbul ignore else */
-      if (obj.hasOwnProperty(key)) {
-        sortedKeys.push(key);
-      }
-    }
-    sortedKeys.sort();
-    for (i = 0; i < sortedKeys.length; i += 1) {
-      key = sortedKeys[i];
-      canonicalizedObj[key] = canonicalize(obj[key], stack, replacementStack);
-    }
-    stack.pop();
-    replacementStack.pop();
-  } else {
-    canonicalizedObj = obj;
-  }
-  return canonicalizedObj;
-}
-
-
-},{"./base":27,"./line":31}],31:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports.lineDiff = undefined;
-exports. /*istanbul ignore end*/diffLines = diffLines;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffTrimmedLines = diffTrimmedLines;
-
-var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-var _base2 = _interopRequireDefault(_base);
-
-/*istanbul ignore end*/
-var /*istanbul ignore start*/_params = require('../util/params') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/*istanbul ignore end*/var lineDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/lineDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
-lineDiff.tokenize = function (value) {
-  var retLines = [],
-      linesAndNewlines = value.split(/(\n|\r\n)/);
-
-  // Ignore the final empty token that occurs if the string ends with a new line
-  if (!linesAndNewlines[linesAndNewlines.length - 1]) {
-    linesAndNewlines.pop();
-  }
-
-  // Merge the content and line separators into single tokens
-  for (var i = 0; i < linesAndNewlines.length; i++) {
-    var line = linesAndNewlines[i];
-
-    if (i % 2 && !this.options.newlineIsToken) {
-      retLines[retLines.length - 1] += line;
-    } else {
-      if (this.options.ignoreWhitespace) {
-        line = line.trim();
-      }
-      retLines.push(line);
-    }
-  }
-
-  return retLines;
-};
-
-function diffLines(oldStr, newStr, callback) {
-  return lineDiff.diff(oldStr, newStr, callback);
-}
-function diffTrimmedLines(oldStr, newStr, callback) {
-  var options = /*istanbul ignore start*/(0, _params.generateOptions) /*istanbul ignore end*/(callback, { ignoreWhitespace: true });
-  return lineDiff.diff(oldStr, newStr, options);
-}
-
-
-},{"../util/params":39,"./base":27}],32:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports.sentenceDiff = undefined;
-exports. /*istanbul ignore end*/diffSentences = diffSentences;
-
-var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-var _base2 = _interopRequireDefault(_base);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/*istanbul ignore end*/var sentenceDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/sentenceDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
-sentenceDiff.tokenize = function (value) {
-  return value.split(/(\S.+?[.!?])(?=\s+|$)/);
-};
-
-function diffSentences(oldStr, newStr, callback) {
-  return sentenceDiff.diff(oldStr, newStr, callback);
-}
-
-
-},{"./base":27}],33:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports.wordDiff = undefined;
-exports. /*istanbul ignore end*/diffWords = diffWords;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWordsWithSpace = diffWordsWithSpace;
-
-var /*istanbul ignore start*/_base = require('./base') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-var _base2 = _interopRequireDefault(_base);
-
-/*istanbul ignore end*/
-var /*istanbul ignore start*/_params = require('../util/params') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/*istanbul ignore end*/
-
-// Based on https://en.wikipedia.org/wiki/Latin_script_in_Unicode
-//
-// Ranges and exceptions:
-// Latin-1 Supplement, 0080–00FF
-//  - U+00D7  × Multiplication sign
-//  - U+00F7  ÷ Division sign
-// Latin Extended-A, 0100–017F
-// Latin Extended-B, 0180–024F
-// IPA Extensions, 0250–02AF
-// Spacing Modifier Letters, 02B0–02FF
-//  - U+02C7  ˇ &#711;  Caron
-//  - U+02D8  ˘ &#728;  Breve
-//  - U+02D9  ˙ &#729;  Dot Above
-//  - U+02DA  ˚ &#730;  Ring Above
-//  - U+02DB  ˛ &#731;  Ogonek
-//  - U+02DC  ˜ &#732;  Small Tilde
-//  - U+02DD  ˝ &#733;  Double Acute Accent
-// Latin Extended Additional, 1E00–1EFF
-var extendedWordChars = /^[A-Za-z\xC0-\u02C6\u02C8-\u02D7\u02DE-\u02FF\u1E00-\u1EFF]+$/;
-
-var reWhitespace = /\S/;
-
-var wordDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/wordDiff = new /*istanbul ignore start*/_base2.default() /*istanbul ignore end*/;
-wordDiff.equals = function (left, right) {
-  return left === right || this.options.ignoreWhitespace && !reWhitespace.test(left) && !reWhitespace.test(right);
-};
-wordDiff.tokenize = function (value) {
-  var tokens = value.split(/(\s+|\b)/);
-
-  // Join the boundary splits that we do not consider to be boundaries. This is primarily the extended Latin character set.
-  for (var i = 0; i < tokens.length - 1; i++) {
-    // If we have an empty string in the next field and we have only word chars before and after, merge
-    if (!tokens[i + 1] && tokens[i + 2] && extendedWordChars.test(tokens[i]) && extendedWordChars.test(tokens[i + 2])) {
-      tokens[i] += tokens[i + 2];
-      tokens.splice(i + 1, 2);
-      i--;
-    }
-  }
-
-  return tokens;
-};
-
-function diffWords(oldStr, newStr, callback) {
-  var options = /*istanbul ignore start*/(0, _params.generateOptions) /*istanbul ignore end*/(callback, { ignoreWhitespace: true });
-  return wordDiff.diff(oldStr, newStr, options);
-}
-function diffWordsWithSpace(oldStr, newStr, callback) {
-  return wordDiff.diff(oldStr, newStr, callback);
-}
-
-
-},{"../util/params":39,"./base":27}],34:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports.canonicalize = exports.convertChangesToXML = exports.convertChangesToDMP = exports.parsePatch = exports.applyPatches = exports.applyPatch = exports.createPatch = exports.createTwoFilesPatch = exports.structuredPatch = exports.diffJson = exports.diffCss = exports.diffSentences = exports.diffTrimmedLines = exports.diffLines = exports.diffWordsWithSpace = exports.diffWords = exports.diffChars = exports.Diff = undefined;
-/*istanbul ignore end*/
-var /*istanbul ignore start*/_base = require('./diff/base') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-var _base2 = _interopRequireDefault(_base);
-
-/*istanbul ignore end*/
-var /*istanbul ignore start*/_character = require('./diff/character') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_word = require('./diff/word') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_line = require('./diff/line') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_sentence = require('./diff/sentence') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_css = require('./diff/css') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_json = require('./diff/json') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_apply = require('./patch/apply') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_parse = require('./patch/parse') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_create = require('./patch/create') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_dmp = require('./convert/dmp') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_xml = require('./convert/xml') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/* See LICENSE file for terms of use */
-
-/*
- * Text diff implementation.
- *
- * This library supports the following APIS:
- * JsDiff.diffChars: Character by character diff
- * JsDiff.diffWords: Word (as defined by \b regex) diff which ignores whitespace
- * JsDiff.diffLines: Line based diff
- *
- * JsDiff.diffCss: Diff targeted at CSS content
- *
- * These methods are based on the implementation proposed in
- * "An O(ND) Difference Algorithm and its Variations" (Myers, 1986).
- * http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.4.6927
- */
-exports. /*istanbul ignore end*/Diff = _base2.default;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffChars = _character.diffChars;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWords = _word.diffWords;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffWordsWithSpace = _word.diffWordsWithSpace;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffLines = _line.diffLines;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffTrimmedLines = _line.diffTrimmedLines;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffSentences = _sentence.diffSentences;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffCss = _css.diffCss;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/diffJson = _json.diffJson;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/structuredPatch = _create.structuredPatch;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/createTwoFilesPatch = _create.createTwoFilesPatch;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/createPatch = _create.createPatch;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatch = _apply.applyPatch;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatches = _apply.applyPatches;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/parsePatch = _parse.parsePatch;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/convertChangesToDMP = _dmp.convertChangesToDMP;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/convertChangesToXML = _xml.convertChangesToXML;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/canonicalize = _json.canonicalize;
-
-
-},{"./convert/dmp":25,"./convert/xml":26,"./diff/base":27,"./diff/character":28,"./diff/css":29,"./diff/json":30,"./diff/line":31,"./diff/sentence":32,"./diff/word":33,"./patch/apply":35,"./patch/create":36,"./patch/parse":37}],35:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports. /*istanbul ignore end*/applyPatch = applyPatch;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/applyPatches = applyPatches;
-
-var /*istanbul ignore start*/_parse = require('./parse') /*istanbul ignore end*/;
-
-var /*istanbul ignore start*/_distanceIterator = require('../util/distance-iterator') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-var _distanceIterator2 = _interopRequireDefault(_distanceIterator);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-/*istanbul ignore end*/function applyPatch(source, uniDiff) {
-  /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 2 || arguments[2] === undefined ? {} : arguments[2];
-
-  if (typeof uniDiff === 'string') {
-    uniDiff = /*istanbul ignore start*/(0, _parse.parsePatch) /*istanbul ignore end*/(uniDiff);
-  }
-
-  if (Array.isArray(uniDiff)) {
-    if (uniDiff.length > 1) {
-      throw new Error('applyPatch only works with a single input.');
-    }
-
-    uniDiff = uniDiff[0];
-  }
-
-  // Apply the diff to the input
-  var lines = source.split('\n'),
-      hunks = uniDiff.hunks,
-      compareLine = options.compareLine || function (lineNumber, line, operation, patchContent) /*istanbul ignore start*/{
-    return (/*istanbul ignore end*/line === patchContent
-    );
-  },
-      errorCount = 0,
-      fuzzFactor = options.fuzzFactor || 0,
-      minLine = 0,
-      offset = 0,
-      removeEOFNL = /*istanbul ignore start*/void 0 /*istanbul ignore end*/,
-      addEOFNL = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
-
-  /**
-   * Checks if the hunk exactly fits on the provided location
-   */
-  function hunkFits(hunk, toPos) {
-    for (var j = 0; j < hunk.lines.length; j++) {
-      var line = hunk.lines[j],
-          operation = line[0],
-          content = line.substr(1);
-
-      if (operation === ' ' || operation === '-') {
-        // Context sanity check
-        if (!compareLine(toPos + 1, lines[toPos], operation, content)) {
-          errorCount++;
-
-          if (errorCount > fuzzFactor) {
-            return false;
-          }
-        }
-        toPos++;
-      }
-    }
-
-    return true;
-  }
-
-  // Search best fit offsets for each hunk based on the previous ones
-  for (var i = 0; i < hunks.length; i++) {
-    var hunk = hunks[i],
-        maxLine = lines.length - hunk.oldLines,
-        localOffset = 0,
-        toPos = offset + hunk.oldStart - 1;
-
-    var iterator = /*istanbul ignore start*/(0, _distanceIterator2.default) /*istanbul ignore end*/(toPos, minLine, maxLine);
-
-    for (; localOffset !== undefined; localOffset = iterator()) {
-      if (hunkFits(hunk, toPos + localOffset)) {
-        hunk.offset = offset += localOffset;
-        break;
-      }
-    }
-
-    if (localOffset === undefined) {
-      return false;
-    }
-
-    // Set lower text limit to end of the current hunk, so next ones don't try
-    // to fit over already patched text
-    minLine = hunk.offset + hunk.oldStart + hunk.oldLines;
-  }
-
-  // Apply patch hunks
-  for (var _i = 0; _i < hunks.length; _i++) {
-    var _hunk = hunks[_i],
-        _toPos = _hunk.offset + _hunk.newStart - 1;
-    if (_hunk.newLines == 0) {
-      _toPos++;
-    }
-
-    for (var j = 0; j < _hunk.lines.length; j++) {
-      var line = _hunk.lines[j],
-          operation = line[0],
-          content = line.substr(1);
-
-      if (operation === ' ') {
-        _toPos++;
-      } else if (operation === '-') {
-        lines.splice(_toPos, 1);
-        /* istanbul ignore else */
-      } else if (operation === '+') {
-          lines.splice(_toPos, 0, content);
-          _toPos++;
-        } else if (operation === '\\') {
-          var previousOperation = _hunk.lines[j - 1] ? _hunk.lines[j - 1][0] : null;
-          if (previousOperation === '+') {
-            removeEOFNL = true;
-          } else if (previousOperation === '-') {
-            addEOFNL = true;
-          }
-        }
-    }
-  }
-
-  // Handle EOFNL insertion/removal
-  if (removeEOFNL) {
-    while (!lines[lines.length - 1]) {
-      lines.pop();
-    }
-  } else if (addEOFNL) {
-    lines.push('');
-  }
-  return lines.join('\n');
-}
-
-// Wrapper that supports multiple file patches via callbacks.
-function applyPatches(uniDiff, options) {
-  if (typeof uniDiff === 'string') {
-    uniDiff = /*istanbul ignore start*/(0, _parse.parsePatch) /*istanbul ignore end*/(uniDiff);
-  }
-
-  var currentIndex = 0;
-  function processIndex() {
-    var index = uniDiff[currentIndex++];
-    if (!index) {
-      return options.complete();
-    }
-
-    options.loadFile(index, function (err, data) {
-      if (err) {
-        return options.complete(err);
-      }
-
-      var updatedContent = applyPatch(data, index, options);
-      options.patched(index, updatedContent, function (err) {
-        if (err) {
-          return options.complete(err);
-        }
-
-        processIndex();
-      });
-    });
-  }
-  processIndex();
-}
-
-
-},{"../util/distance-iterator":38,"./parse":37}],36:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports. /*istanbul ignore end*/structuredPatch = structuredPatch;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/createTwoFilesPatch = createTwoFilesPatch;
-/*istanbul ignore start*/exports. /*istanbul ignore end*/createPatch = createPatch;
-
-var /*istanbul ignore start*/_line = require('../diff/line') /*istanbul ignore end*/;
-
-/*istanbul ignore start*/
-function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
-
-/*istanbul ignore end*/function structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
-  if (!options) {
-    options = { context: 4 };
-  }
-
-  var diff = /*istanbul ignore start*/(0, _line.diffLines) /*istanbul ignore end*/(oldStr, newStr);
-  diff.push({ value: '', lines: [] }); // Append an empty value to make cleanup easier
-
-  function contextLines(lines) {
-    return lines.map(function (entry) {
-      return ' ' + entry;
-    });
-  }
-
-  var hunks = [];
-  var oldRangeStart = 0,
-      newRangeStart = 0,
-      curRange = [],
-      oldLine = 1,
-      newLine = 1;
-  /*istanbul ignore start*/
-  var _loop = function _loop( /*istanbul ignore end*/i) {
-    var current = diff[i],
-        lines = current.lines || current.value.replace(/\n$/, '').split('\n');
-    current.lines = lines;
-
-    if (current.added || current.removed) {
-      /*istanbul ignore start*/
-      var _curRange;
-
-      /*istanbul ignore end*/
-      // If we have previous context, start with that
-      if (!oldRangeStart) {
-        var prev = diff[i - 1];
-        oldRangeStart = oldLine;
-        newRangeStart = newLine;
-
-        if (prev) {
-          curRange = options.context > 0 ? contextLines(prev.lines.slice(-options.context)) : [];
-          oldRangeStart -= curRange.length;
-          newRangeStart -= curRange.length;
-        }
-      }
-
-      // Output our changes
-      /*istanbul ignore start*/(_curRange = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/lines.map(function (entry) {
-        return (current.added ? '+' : '-') + entry;
-      })));
-
-      // Track the updated file position
-      if (current.added) {
-        newLine += lines.length;
-      } else {
-        oldLine += lines.length;
-      }
-    } else {
-      // Identical context lines. Track line changes
-      if (oldRangeStart) {
-        // Close out any changes that have been output (or join overlapping)
-        if (lines.length <= options.context * 2 && i < diff.length - 2) {
-          /*istanbul ignore start*/
-          var _curRange2;
-
-          /*istanbul ignore end*/
-          // Overlapping
-          /*istanbul ignore start*/(_curRange2 = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange2 /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/contextLines(lines)));
-        } else {
-          /*istanbul ignore start*/
-          var _curRange3;
-
-          /*istanbul ignore end*/
-          // end the range and output
-          var contextSize = Math.min(lines.length, options.context);
-          /*istanbul ignore start*/(_curRange3 = /*istanbul ignore end*/curRange).push. /*istanbul ignore start*/apply /*istanbul ignore end*/( /*istanbul ignore start*/_curRange3 /*istanbul ignore end*/, /*istanbul ignore start*/_toConsumableArray( /*istanbul ignore end*/contextLines(lines.slice(0, contextSize))));
-
-          var hunk = {
-            oldStart: oldRangeStart,
-            oldLines: oldLine - oldRangeStart + contextSize,
-            newStart: newRangeStart,
-            newLines: newLine - newRangeStart + contextSize,
-            lines: curRange
-          };
-          if (i >= diff.length - 2 && lines.length <= options.context) {
-            // EOF is inside this hunk
-            var oldEOFNewline = /\n$/.test(oldStr);
-            var newEOFNewline = /\n$/.test(newStr);
-            if (lines.length == 0 && !oldEOFNewline) {
-              // special case: old has no eol and no trailing context; no-nl can end up before adds
-              curRange.splice(hunk.oldLines, 0, '\\ No newline at end of file');
-            } else if (!oldEOFNewline || !newEOFNewline) {
-              curRange.push('\\ No newline at end of file');
-            }
-          }
-          hunks.push(hunk);
-
-          oldRangeStart = 0;
-          newRangeStart = 0;
-          curRange = [];
-        }
-      }
-      oldLine += lines.length;
-      newLine += lines.length;
-    }
-  };
-
-  for (var i = 0; i < diff.length; i++) {
-    /*istanbul ignore start*/
-    _loop( /*istanbul ignore end*/i);
-  }
-
-  return {
-    oldFileName: oldFileName, newFileName: newFileName,
-    oldHeader: oldHeader, newHeader: newHeader,
-    hunks: hunks
-  };
-}
-
-function createTwoFilesPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
-  var diff = structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options);
-
-  var ret = [];
-  if (oldFileName == newFileName) {
-    ret.push('Index: ' + oldFileName);
-  }
-  ret.push('===================================================================');
-  ret.push('--- ' + diff.oldFileName + (typeof diff.oldHeader === 'undefined' ? '' : '\t' + diff.oldHeader));
-  ret.push('+++ ' + diff.newFileName + (typeof diff.newHeader === 'undefined' ? '' : '\t' + diff.newHeader));
-
-  for (var i = 0; i < diff.hunks.length; i++) {
-    var hunk = diff.hunks[i];
-    ret.push('@@ -' + hunk.oldStart + ',' + hunk.oldLines + ' +' + hunk.newStart + ',' + hunk.newLines + ' @@');
-    ret.push.apply(ret, hunk.lines);
-  }
-
-  return ret.join('\n') + '\n';
-}
-
-function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
-  return createTwoFilesPatch(fileName, fileName, oldStr, newStr, oldHeader, newHeader, options);
-}
-
-
-},{"../diff/line":31}],37:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports. /*istanbul ignore end*/parsePatch = parsePatch;
-function parsePatch(uniDiff) {
-  /*istanbul ignore start*/var /*istanbul ignore end*/options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
-
-  var diffstr = uniDiff.split('\n'),
-      list = [],
-      i = 0;
-
-  function parseIndex() {
-    var index = {};
-    list.push(index);
-
-    // Parse diff metadata
-    while (i < diffstr.length) {
-      var line = diffstr[i];
-
-      // File header found, end parsing diff metadata
-      if (/^(\-\-\-|\+\+\+|@@)\s/.test(line)) {
-        break;
-      }
-
-      // Diff index
-      var header = /^(?:Index:|diff(?: -r \w+)+)\s+(.+?)\s*$/.exec(line);
-      if (header) {
-        index.index = header[1];
-      }
-
-      i++;
-    }
-
-    // Parse file headers if they are defined. Unified diff requires them, but
-    // there's no technical issues to have an isolated hunk without file header
-    parseFileHeader(index);
-    parseFileHeader(index);
-
-    // Parse hunks
-    index.hunks = [];
-
-    while (i < diffstr.length) {
-      var _line = diffstr[i];
-
-      if (/^(Index:|diff|\-\-\-|\+\+\+)\s/.test(_line)) {
-        break;
-      } else if (/^@@/.test(_line)) {
-        index.hunks.push(parseHunk());
-      } else if (_line && options.strict) {
-        // Ignore unexpected content unless in strict mode
-        throw new Error('Unknown line ' + (i + 1) + ' ' + JSON.stringify(_line));
-      } else {
-        i++;
-      }
-    }
-  }
-
-  // Parses the --- and +++ headers, if none are found, no lines
-  // are consumed.
-  function parseFileHeader(index) {
-    var headerPattern = /^(---|\+\+\+)\s+([\S ]*)(?:\t(.*?)\s*)?$/;
-    var fileHeader = headerPattern.exec(diffstr[i]);
-    if (fileHeader) {
-      var keyPrefix = fileHeader[1] === '---' ? 'old' : 'new';
-      index[keyPrefix + 'FileName'] = fileHeader[2];
-      index[keyPrefix + 'Header'] = fileHeader[3];
-
-      i++;
-    }
-  }
-
-  // Parses a hunk
-  // This assumes that we are at the start of a hunk.
-  function parseHunk() {
-    var chunkHeaderIndex = i,
-        chunkHeaderLine = diffstr[i++],
-        chunkHeader = chunkHeaderLine.split(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-
-    var hunk = {
-      oldStart: +chunkHeader[1],
-      oldLines: +chunkHeader[2] || 1,
-      newStart: +chunkHeader[3],
-      newLines: +chunkHeader[4] || 1,
-      lines: []
-    };
-
-    var addCount = 0,
-        removeCount = 0;
-    for (; i < diffstr.length; i++) {
-      var operation = diffstr[i][0];
-
-      if (operation === '+' || operation === '-' || operation === ' ' || operation === '\\') {
-        hunk.lines.push(diffstr[i]);
-
-        if (operation === '+') {
-          addCount++;
-        } else if (operation === '-') {
-          removeCount++;
-        } else if (operation === ' ') {
-          addCount++;
-          removeCount++;
-        }
-      } else {
-        break;
-      }
-    }
-
-    // Handle the empty block count case
-    if (!addCount && hunk.newLines === 1) {
-      hunk.newLines = 0;
-    }
-    if (!removeCount && hunk.oldLines === 1) {
-      hunk.oldLines = 0;
-    }
-
-    // Perform optional sanity checking
-    if (options.strict) {
-      if (addCount !== hunk.newLines) {
-        throw new Error('Added line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
-      }
-      if (removeCount !== hunk.oldLines) {
-        throw new Error('Removed line count did not match for hunk at line ' + (chunkHeaderIndex + 1));
-      }
-    }
-
-    return hunk;
-  }
-
-  while (i < diffstr.length) {
-    parseIndex();
-  }
-
-  return list;
-}
-
-
-},{}],38:[function(require,module,exports){
-/*istanbul ignore start*/"use strict";
-
-exports.__esModule = true;
-
-exports.default = /*istanbul ignore end*/function (start, minLine, maxLine) {
-  var wantForward = true,
-      backwardExhausted = false,
-      forwardExhausted = false,
-      localOffset = 1;
-
-  return function iterator() {
-    if (wantForward && !forwardExhausted) {
-      if (backwardExhausted) {
-        localOffset++;
-      } else {
-        wantForward = false;
-      }
-
-      // Check if trying to fit beyond text length, and if not, check it fits
-      // after offset location (or desired location on first iteration)
-      if (start + localOffset <= maxLine) {
-        return localOffset;
-      }
-
-      forwardExhausted = true;
-    }
-
-    if (!backwardExhausted) {
-      if (!forwardExhausted) {
-        wantForward = true;
-      }
-
-      // Check if trying to fit before text beginning, and if not, check it fits
-      // before offset location
-      if (minLine <= start - localOffset) {
-        return -localOffset++;
-      }
-
-      backwardExhausted = true;
-      return iterator();
-    }
-
-    // We tried to fit hunk before text beginning and beyond text lenght, then
-    // hunk can't fit on the text. Return undefined
-  };
-};
-
-
-},{}],39:[function(require,module,exports){
-/*istanbul ignore start*/'use strict';
-
-exports.__esModule = true;
-exports. /*istanbul ignore end*/generateOptions = generateOptions;
-function generateOptions(options, defaults) {
-  if (typeof options === 'function') {
-    defaults.callback = options;
-  } else if (options) {
-    for (var name in options) {
-      /* istanbul ignore else */
-      if (options.hasOwnProperty(name)) {
-        defaults[name] = options[name];
-      }
-    }
-  }
-  return defaults;
-}
-
-
-},{}],40:[function(require,module,exports){
-/*
-	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
-
-	Copyright (c) 2015 - 2016 Cédric Ronvel 
-	
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-
-
-/* global NamedNodeMap */
-
-// Load modules
-//var string = require( 'string-kit' ) ;
-
-
-
-var dom = {} ;
-module.exports = dom ;
-
-
-
-// Load the svg submodule
-dom.svg = require( './svg.js' ) ;
-
-
-
-// Like jQuery's $(document).ready()
-dom.ready = function ready( callback )
-{
-	document.addEventListener( 'DOMContentLoaded' , function internalCallback() {
-		document.removeEventListener( 'DOMContentLoaded' , internalCallback , false ) ;
-		callback() ;
-	} , false ) ;
-} ;
-
-
-
-// Return a fragment from html code
-dom.fromHtml = function fromHtml( html )
-{
-	var i , doc , fragment ;
-	
-	// Fragment allow us to return a collection that... well... is not a collection,
-	// and that's fine because the html code may contains multiple top-level element
-	fragment = document.createDocumentFragment() ;
-	
-	doc = document.createElement( 'div' ) ;	// whatever type...
-	
-	// either .innerHTML or .insertAdjacentHTML()
-	//doc.innerHTML = html ;
-	doc.insertAdjacentHTML( 'beforeend' , html ) ;
-	
-	for ( i = 0 ; i < doc.children.length ; i ++ )
-	{
-		fragment.appendChild( doc.children[ i ] ) ;
-	}
-	
-	return fragment ;
-} ;
-
-
-
-// Batch processing, like array, HTMLCollection, and so on...
-dom.batch = function batch( method , elements )
-{
-	var i , args = Array.prototype.slice.call( arguments , 1 ) ;
-	
-	if ( elements instanceof Element )
-	{
-		args[ 0 ] = elements ;
-		method.apply( this , args ) ;
-	}
-	else if ( Array.isArray( elements ) )
-	{
-		for ( i = 0 ; i < elements.length ; i ++ )
-		{
-			args[ 0 ] = elements[ i ] ;
-			method.apply( this , args ) ;
-		}
-	}
-	else if ( elements instanceof NodeList || elements instanceof NamedNodeMap )
-	{
-		for ( i = 0 ; i < elements.length ; i ++ )
-		{
-			args[ 0 ] = elements[ i ] ;
-			method.apply( this , args ) ;
-		}
-	}
-} ;
-
-
-
-// Set a bunch of css properties given as an object
-dom.css = function css( element , object )	// , deb )
-{
-	var key ;
-	
-	//if ( deb ) { console.log( 'css: ' + string.inspect( object ) ) ; }
-	
-	for ( key in object )
-	{
-		element.style[ key ] = object[ key ] ;
-	}
-} ;
-
-
-
-// Set a bunch of attributes given as an object
-dom.attr = function attr( element , object )	// , deb )
-{
-	var key ;
-	
-	//if ( deb ) { console.log( 'css: ' + string.inspect( object ) ) ; }
-	
-	for ( key in object )
-	{
-		//element.attributes[ key ] = object[ key ] ;
-		if ( object[ key ] === null ) { element.removeAttribute( key ) ; }
-		else { element.setAttribute( key , object[ key ] ) ; }
-	}
-} ;
-
-
-
-// Remove an element. A little shortcut that ease life...
-dom.remove = function remove( element ) { element.parentNode.removeChild( element ) ; } ;
-
-
-
-// Remove all children of an element
-dom.empty = function empty( element )
-{
-	// element.innerHTML = '' ;	// According to jsPerf, it is 96% slower
-	while ( element.firstChild ) { element.removeChild( element.firstChild ); }
-} ;
-
-
-
-// Clone a source DOM tree and replace children of the destination
-dom.cloneInto = function cloneInto( destination , source )
-{
-	dom.empty( destination ) ;
-	destination.appendChild( source.cloneNode( true ) ) ;
-} ;
-
-
-
-// Same than cloneInto() without cloning anything
-dom.insertInto = function insertInto( destination , source )
-{
-	dom.empty( destination ) ;
-	destination.appendChild( source ) ;
-} ;
-
-
-
-// Children of this element get all their ID namespaced, any url(#id) references are patched accordingly
-dom.idNamespace = function idNamespace( element , namespace )
-{
-	var elements , replacement = {} ;
-	
-	elements = element.querySelectorAll( '*' ) ;
-	
-	dom.batch( dom.idNamespace.idAttributePass , elements , namespace , replacement ) ;
-	dom.batch( dom.idNamespace.otherAttributesPass , elements , replacement ) ;
-} ;
-
-// Callbacks for dom.idNamespace(), cleanly hidden behind its namespace
-
-dom.idNamespace.idAttributePass = function idAttributePass( element , namespace , replacement ) {
-	replacement[ element.id ] = namespace + '.' + element.id ;
-	element.id = replacement[ element.id ] ;
-} ;
-
-dom.idNamespace.otherAttributesPass = function otherAttributesPass( element , replacement ) {
-	dom.batch( dom.idNamespace.oneAttributeSubPass , element.attributes , replacement ) ;
-} ;
-
-dom.idNamespace.oneAttributeSubPass = function oneAttributeSubPass( attr , replacement ) {
-	
-	// We have to search all url(#id) like substring in the current attribute's value
-	attr.value = attr.value.replace( /url\(#([^)]+)\)/g , function( match , id ) {
-		
-		// No replacement? return the matched string
-		if ( ! replacement[ id ] ) { return match ; }
-		
-		// Or return the replacement ID
-		return 'url(#' + replacement[ id ] + ')' ;
-	} ) ;
-} ;
-
-
-
-		/* Function useful for .batch() as callback */
-		/* ... to avoid defining again and again the same callback function */
-
-// Change id
-dom.id = function id( element , id ) { element.id = id ; } ;
-
-// Like jQuery .text().
-dom.text = function text( element , text ) { element.textContent = text ; } ;
-
-// Like jQuery .html().
-dom.html = function html( element , html ) { element.innerHTML = html ; } ;
-
-
-
-
-
-},{"./svg.js":41}],41:[function(require,module,exports){
-/*
-	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
-
-	Copyright (c) 2015 - 2016 Cédric Ronvel 
-	
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-
-
-// Load modules
-var fs = require( 'fs' ) ;
-//var string = require( 'string-kit' ) ;
-var dom = require( './dom.js' ) ;
-
-
-
-var domSvg = {} ;
-module.exports = domSvg ;
-
-
-
-/*
-	load( container , url , [options] , callback )
-	
-	* container: the DOM element where the <svg> tag will be put
-	* url: the URL of the .svg file
-	* options: an optional object with optional options
-		* id: the id attribute of the <svg> tag (recommanded)
-		* class: the class attribute of the <svg> tag
-		* hidden: inject the svg but make it hidden (useful to apply modification before the show)
-	* callback: completion callback
-*/
-domSvg.load = function load( container , url , options , callback )
-{
-	if ( typeof options === 'function' ) { callback = options ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
-	if ( url.substring( 0 , 7 ) === 'file://' )
-	{
-		// Use Node.js 'fs' module
-		
-		fs.readFile( url.slice( 7 ) , function( error , content ) {
-			
-			if ( error ) { callback( error ) ; return ; }
-			
-			var parser = new DOMParser() ;
-			var svg = parser.parseFromString( content.toString() , 'application/xml' ).documentElement ;
-			
-			try {
-				domSvg.attachXmlTo( container , svg , options ) ;
-			}
-			catch ( error ) {
-				callback( error ) ;
-				return ;
-			}
-			
-			callback( undefined , svg ) ;
-		} ) ;
-	}
-	else
-	{
-		// Use an AJAX HTTP Request
-		
-		domSvg.ajax( url , function( error , xmlDoc ) {
-			
-			var svg = xmlDoc.documentElement ;
-			
-			if ( error ) { callback( error ) ; return ; }
-			
-			try {
-				domSvg.attachXmlTo( container , svg , options ) ;
-			}
-			catch ( error ) {
-				callback( error ) ;
-				return ;
-			}
-			
-			callback( undefined , svg ) ;
-		} ) ;
-	}
-} ;
-
-
-
-// Dummy ATM...
-domSvg.attachXmlTo = function attachXmlTo( container , svg , options )
-{
-	domSvg.lightCleanup( svg ) ;
-	
-	// Fix id, if necessary
-	if ( options.id !== undefined )
-	{
-		if ( typeof options.id === 'string' ) { svg.setAttribute( 'id' , options.id ) ; }
-		else if ( ! options.id ) { svg.removeAttribute( 'id' ) ; }
-	}
-	
-	//if ( typeof options.class === 'string' ) { svg.classList.add( options.class ) ; }	// like jQuery .addClass()
-	if ( typeof options.class === 'string' ) { svg.setAttribute( 'class' , options.class ) ; }
-	
-	if ( options.idNamespace ) { dom.idNamespace( svg , options.idNamespace ) ; }
-	
-	if ( options.hidden ) { svg.style.visibility = 'hidden' ; }
-	
-	container.appendChild( svg ) ;
-} ;
-
-
-
-domSvg.lightCleanup = function lightCleanup( svgElement )
-{
-	removeAllTag( svgElement , 'metadata' ) ;
-	removeAllTag( svgElement , 'script' ) ;
-} ;
-
-
-
-// Should remove all tags and attributes that have non-registered namespace,
-// e.g.: sodipodi, inkscape, etc...
-//domSvg.heavyCleanup = function heavyCleanup( svgElement ) {} ;
-
-
-
-function removeAllTag( container , tag )
-{
-	var i , elements , element ;
-	
-	elements = container.getElementsByTagName( tag ) ;
-	
-	for ( i = 0 ; i < elements.length ; i ++ )
-	{
-		element = elements.item( i ) ;
-		element.parentNode.removeChild( element ) ;
-	}
-}
-
-
-
-
-
-
-domSvg.ajax = function ajax( url , callback )
-{
-	var xhr = new XMLHttpRequest() ;
-	
-	xhr.responseType = 'document' ;
-	xhr.onreadystatechange = domSvg.ajax.ajaxStatus.bind( xhr , callback ) ;
-	xhr.open( 'GET', url ) ;
-	xhr.send() ;
-} ;
-
-domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
-{
-	// From MDN: In the event of a communication error (such as the webserver going down),
-	// an exception will be thrown in the when attempting to access the 'status' property. 
-	
-	try {
-		if ( this.readyState === 4 )
-		{
-			if ( this.status === 200 )
-			{
-				callback( undefined , this.responseXML ) ;
-			}
-			else if ( this.status === 0 && this.responseXML )	// Yay, loading with file:// does not provide any status...
-			{
-				callback( undefined , this.responseXML ) ;
-			}
-			else
-			{
-				if ( this.status ) { callback( this.status ) ; }
-				else { callback( new Error( "[dom-kit.svg] ajaxStatus(): Error with falsy status" ) ) ; }
-			}
-		}
-	}
-	catch ( error ) {
-		callback( error ) ;
-	}
-} ;
-
-
-
-},{"./dom.js":40,"fs":15}],42:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 (function (global){
 /*
 	Next Gen Events
@@ -8861,7 +7423,7 @@ NextGenEvents.Proxy = require( './Proxy.js' ) ;
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":44,"./Proxy.js":43}],43:[function(require,module,exports){
+},{"../package.json":38,"./Proxy.js":37}],37:[function(require,module,exports){
 /*
 	Next Gen Events
 	
@@ -9464,16 +8026,72 @@ RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message )
 
 
 
-},{"./NextGenEvents.js":42}],44:[function(require,module,exports){
+},{"./NextGenEvents.js":36}],38:[function(require,module,exports){
 module.exports={
-  "name": "nextgen-events",
-  "version": "0.9.7",
-  "description": "The next generation of events handling for javascript! New: abstract away the network!",
-  "main": "lib/NextGenEvents.js",
-  "directories": {
-    "test": "test"
+  "_args": [
+    [
+      {
+        "raw": "nextgen-events@0.9.8",
+        "scope": null,
+        "escapedName": "nextgen-events",
+        "name": "nextgen-events",
+        "rawSpec": "0.9.8",
+        "spec": "0.9.8",
+        "type": "version"
+      },
+      "/home/cedric/inside/github/tea-time"
+    ]
+  ],
+  "_from": "nextgen-events@0.9.8",
+  "_id": "nextgen-events@0.9.8",
+  "_inCache": true,
+  "_location": "/nextgen-events",
+  "_nodeVersion": "4.5.0",
+  "_npmOperationalInternal": {
+    "host": "packages-16-east.internal.npmjs.com",
+    "tmp": "tmp/nextgen-events-0.9.8.tgz_1473951316005_0.2686476525850594"
+  },
+  "_npmUser": {
+    "name": "cronvel",
+    "email": "cedric.ronvel@gmail.com"
+  },
+  "_npmVersion": "2.15.9",
+  "_phantomChildren": {},
+  "_requested": {
+    "raw": "nextgen-events@0.9.8",
+    "scope": null,
+    "escapedName": "nextgen-events",
+    "name": "nextgen-events",
+    "rawSpec": "0.9.8",
+    "spec": "0.9.8",
+    "type": "version"
+  },
+  "_requiredBy": [
+    "#USER",
+    "/",
+    "/async-kit"
+  ],
+  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.9.8.tgz",
+  "_shasum": "ed1712c2b37dad55407b3e941672d1568c3a4630",
+  "_shrinkwrap": null,
+  "_spec": "nextgen-events@0.9.8",
+  "_where": "/home/cedric/inside/github/tea-time",
+  "author": {
+    "name": "Cédric Ronvel"
+  },
+  "bugs": {
+    "url": "https://github.com/cronvel/nextgen-events/issues"
+  },
+  "copyright": {
+    "title": "Next-Gen Events",
+    "years": [
+      2015,
+      2016
+    ],
+    "owner": "Cédric Ronvel"
   },
   "dependencies": {},
+  "description": "The next generation of events handling for javascript! New: abstract away the network!",
   "devDependencies": {
     "browserify": "^13.0.1",
     "expect.js": "^0.3.1",
@@ -9482,13 +8100,15 @@ module.exports={
     "uglify-js": "^2.6.2",
     "ws": "^1.1.1"
   },
-  "scripts": {
-    "test": "mocha -R dot"
+  "directories": {
+    "test": "test"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/cronvel/nextgen-events.git"
+  "dist": {
+    "shasum": "ed1712c2b37dad55407b3e941672d1568c3a4630",
+    "tarball": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.9.8.tgz"
   },
+  "gitHead": "e91559128a1653ed3b58dcadefcac62aa7056207",
+  "homepage": "https://github.com/cronvel/nextgen-events#readme",
   "keywords": [
     "events",
     "async",
@@ -9501,51 +8121,926 @@ module.exports={
     "proxy",
     "network"
   ],
-  "author": {
-    "name": "Cédric Ronvel"
-  },
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/cronvel/nextgen-events/issues"
-  },
-  "copyright": {
-    "title": "Next-Gen Events",
-    "years": [
-      2015,
-      2016
-    ],
-    "owner": "Cédric Ronvel"
-  },
-  "gitHead": "2175ae73d8dd5d66a6f7429e51a54de3117f9aa3",
-  "homepage": "https://github.com/cronvel/nextgen-events#readme",
-  "_id": "nextgen-events@0.9.7",
-  "_shasum": "4029428094d6e5fa7f33cb91c232c316468cd614",
-  "_from": "nextgen-events@0.9.7",
-  "_npmVersion": "2.15.9",
-  "_nodeVersion": "4.5.0",
-  "_npmUser": {
-    "name": "cronvel",
-    "email": "cedric.ronvel@gmail.com"
-  },
+  "main": "lib/NextGenEvents.js",
   "maintainers": [
     {
       "name": "cronvel",
       "email": "cedric.ronvel@gmail.com"
     }
   ],
-  "dist": {
-    "shasum": "4029428094d6e5fa7f33cb91c232c316468cd614",
-    "tarball": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.9.7.tgz"
+  "name": "nextgen-events",
+  "optionalDependencies": {},
+  "readme": "ERROR: No README data found!",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cronvel/nextgen-events.git"
   },
-  "_npmOperationalInternal": {
-    "host": "packages-12-west.internal.npmjs.com",
-    "tmp": "tmp/nextgen-events-0.9.7.tgz_1473940784348_0.5092023052275181"
+  "scripts": {
+    "test": "mocha -R dot"
   },
-  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.9.7.tgz",
-  "readme": "ERROR: No README data found!"
+  "version": "0.9.8"
 }
 
-},{}],45:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],40:[function(require,module,exports){
+(function (global){
+/*! https://mths.be/punycode v1.4.1 by @mathias */
+;(function(root) {
+
+	/** Detect free variables */
+	var freeExports = typeof exports == 'object' && exports &&
+		!exports.nodeType && exports;
+	var freeModule = typeof module == 'object' && module &&
+		!module.nodeType && module;
+	var freeGlobal = typeof global == 'object' && global;
+	if (
+		freeGlobal.global === freeGlobal ||
+		freeGlobal.window === freeGlobal ||
+		freeGlobal.self === freeGlobal
+	) {
+		root = freeGlobal;
+	}
+
+	/**
+	 * The `punycode` object.
+	 * @name punycode
+	 * @type Object
+	 */
+	var punycode,
+
+	/** Highest positive signed 32-bit float value */
+	maxInt = 2147483647, // aka. 0x7FFFFFFF or 2^31-1
+
+	/** Bootstring parameters */
+	base = 36,
+	tMin = 1,
+	tMax = 26,
+	skew = 38,
+	damp = 700,
+	initialBias = 72,
+	initialN = 128, // 0x80
+	delimiter = '-', // '\x2D'
+
+	/** Regular expressions */
+	regexPunycode = /^xn--/,
+	regexNonASCII = /[^\x20-\x7E]/, // unprintable ASCII chars + non-ASCII chars
+	regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g, // RFC 3490 separators
+
+	/** Error messages */
+	errors = {
+		'overflow': 'Overflow: input needs wider integers to process',
+		'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
+		'invalid-input': 'Invalid input'
+	},
+
+	/** Convenience shortcuts */
+	baseMinusTMin = base - tMin,
+	floor = Math.floor,
+	stringFromCharCode = String.fromCharCode,
+
+	/** Temporary variable */
+	key;
+
+	/*--------------------------------------------------------------------------*/
+
+	/**
+	 * A generic error utility function.
+	 * @private
+	 * @param {String} type The error type.
+	 * @returns {Error} Throws a `RangeError` with the applicable error message.
+	 */
+	function error(type) {
+		throw new RangeError(errors[type]);
+	}
+
+	/**
+	 * A generic `Array#map` utility function.
+	 * @private
+	 * @param {Array} array The array to iterate over.
+	 * @param {Function} callback The function that gets called for every array
+	 * item.
+	 * @returns {Array} A new array of values returned by the callback function.
+	 */
+	function map(array, fn) {
+		var length = array.length;
+		var result = [];
+		while (length--) {
+			result[length] = fn(array[length]);
+		}
+		return result;
+	}
+
+	/**
+	 * A simple `Array#map`-like wrapper to work with domain name strings or email
+	 * addresses.
+	 * @private
+	 * @param {String} domain The domain name or email address.
+	 * @param {Function} callback The function that gets called for every
+	 * character.
+	 * @returns {Array} A new string of characters returned by the callback
+	 * function.
+	 */
+	function mapDomain(string, fn) {
+		var parts = string.split('@');
+		var result = '';
+		if (parts.length > 1) {
+			// In email addresses, only the domain name should be punycoded. Leave
+			// the local part (i.e. everything up to `@`) intact.
+			result = parts[0] + '@';
+			string = parts[1];
+		}
+		// Avoid `split(regex)` for IE8 compatibility. See #17.
+		string = string.replace(regexSeparators, '\x2E');
+		var labels = string.split('.');
+		var encoded = map(labels, fn).join('.');
+		return result + encoded;
+	}
+
+	/**
+	 * Creates an array containing the numeric code points of each Unicode
+	 * character in the string. While JavaScript uses UCS-2 internally,
+	 * this function will convert a pair of surrogate halves (each of which
+	 * UCS-2 exposes as separate characters) into a single code point,
+	 * matching UTF-16.
+	 * @see `punycode.ucs2.encode`
+	 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+	 * @memberOf punycode.ucs2
+	 * @name decode
+	 * @param {String} string The Unicode input string (UCS-2).
+	 * @returns {Array} The new array of code points.
+	 */
+	function ucs2decode(string) {
+		var output = [],
+		    counter = 0,
+		    length = string.length,
+		    value,
+		    extra;
+		while (counter < length) {
+			value = string.charCodeAt(counter++);
+			if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+				// high surrogate, and there is a next character
+				extra = string.charCodeAt(counter++);
+				if ((extra & 0xFC00) == 0xDC00) { // low surrogate
+					output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
+				} else {
+					// unmatched surrogate; only append this code unit, in case the next
+					// code unit is the high surrogate of a surrogate pair
+					output.push(value);
+					counter--;
+				}
+			} else {
+				output.push(value);
+			}
+		}
+		return output;
+	}
+
+	/**
+	 * Creates a string based on an array of numeric code points.
+	 * @see `punycode.ucs2.decode`
+	 * @memberOf punycode.ucs2
+	 * @name encode
+	 * @param {Array} codePoints The array of numeric code points.
+	 * @returns {String} The new Unicode string (UCS-2).
+	 */
+	function ucs2encode(array) {
+		return map(array, function(value) {
+			var output = '';
+			if (value > 0xFFFF) {
+				value -= 0x10000;
+				output += stringFromCharCode(value >>> 10 & 0x3FF | 0xD800);
+				value = 0xDC00 | value & 0x3FF;
+			}
+			output += stringFromCharCode(value);
+			return output;
+		}).join('');
+	}
+
+	/**
+	 * Converts a basic code point into a digit/integer.
+	 * @see `digitToBasic()`
+	 * @private
+	 * @param {Number} codePoint The basic numeric code point value.
+	 * @returns {Number} The numeric value of a basic code point (for use in
+	 * representing integers) in the range `0` to `base - 1`, or `base` if
+	 * the code point does not represent a value.
+	 */
+	function basicToDigit(codePoint) {
+		if (codePoint - 48 < 10) {
+			return codePoint - 22;
+		}
+		if (codePoint - 65 < 26) {
+			return codePoint - 65;
+		}
+		if (codePoint - 97 < 26) {
+			return codePoint - 97;
+		}
+		return base;
+	}
+
+	/**
+	 * Converts a digit/integer into a basic code point.
+	 * @see `basicToDigit()`
+	 * @private
+	 * @param {Number} digit The numeric value of a basic code point.
+	 * @returns {Number} The basic code point whose value (when used for
+	 * representing integers) is `digit`, which needs to be in the range
+	 * `0` to `base - 1`. If `flag` is non-zero, the uppercase form is
+	 * used; else, the lowercase form is used. The behavior is undefined
+	 * if `flag` is non-zero and `digit` has no uppercase form.
+	 */
+	function digitToBasic(digit, flag) {
+		//  0..25 map to ASCII a..z or A..Z
+		// 26..35 map to ASCII 0..9
+		return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
+	}
+
+	/**
+	 * Bias adaptation function as per section 3.4 of RFC 3492.
+	 * https://tools.ietf.org/html/rfc3492#section-3.4
+	 * @private
+	 */
+	function adapt(delta, numPoints, firstTime) {
+		var k = 0;
+		delta = firstTime ? floor(delta / damp) : delta >> 1;
+		delta += floor(delta / numPoints);
+		for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
+			delta = floor(delta / baseMinusTMin);
+		}
+		return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
+	}
+
+	/**
+	 * Converts a Punycode string of ASCII-only symbols to a string of Unicode
+	 * symbols.
+	 * @memberOf punycode
+	 * @param {String} input The Punycode string of ASCII-only symbols.
+	 * @returns {String} The resulting string of Unicode symbols.
+	 */
+	function decode(input) {
+		// Don't use UCS-2
+		var output = [],
+		    inputLength = input.length,
+		    out,
+		    i = 0,
+		    n = initialN,
+		    bias = initialBias,
+		    basic,
+		    j,
+		    index,
+		    oldi,
+		    w,
+		    k,
+		    digit,
+		    t,
+		    /** Cached calculation results */
+		    baseMinusT;
+
+		// Handle the basic code points: let `basic` be the number of input code
+		// points before the last delimiter, or `0` if there is none, then copy
+		// the first basic code points to the output.
+
+		basic = input.lastIndexOf(delimiter);
+		if (basic < 0) {
+			basic = 0;
+		}
+
+		for (j = 0; j < basic; ++j) {
+			// if it's not a basic code point
+			if (input.charCodeAt(j) >= 0x80) {
+				error('not-basic');
+			}
+			output.push(input.charCodeAt(j));
+		}
+
+		// Main decoding loop: start just after the last delimiter if any basic code
+		// points were copied; start at the beginning otherwise.
+
+		for (index = basic > 0 ? basic + 1 : 0; index < inputLength; /* no final expression */) {
+
+			// `index` is the index of the next character to be consumed.
+			// Decode a generalized variable-length integer into `delta`,
+			// which gets added to `i`. The overflow checking is easier
+			// if we increase `i` as we go, then subtract off its starting
+			// value at the end to obtain `delta`.
+			for (oldi = i, w = 1, k = base; /* no condition */; k += base) {
+
+				if (index >= inputLength) {
+					error('invalid-input');
+				}
+
+				digit = basicToDigit(input.charCodeAt(index++));
+
+				if (digit >= base || digit > floor((maxInt - i) / w)) {
+					error('overflow');
+				}
+
+				i += digit * w;
+				t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+
+				if (digit < t) {
+					break;
+				}
+
+				baseMinusT = base - t;
+				if (w > floor(maxInt / baseMinusT)) {
+					error('overflow');
+				}
+
+				w *= baseMinusT;
+
+			}
+
+			out = output.length + 1;
+			bias = adapt(i - oldi, out, oldi == 0);
+
+			// `i` was supposed to wrap around from `out` to `0`,
+			// incrementing `n` each time, so we'll fix that now:
+			if (floor(i / out) > maxInt - n) {
+				error('overflow');
+			}
+
+			n += floor(i / out);
+			i %= out;
+
+			// Insert `n` at position `i` of the output
+			output.splice(i++, 0, n);
+
+		}
+
+		return ucs2encode(output);
+	}
+
+	/**
+	 * Converts a string of Unicode symbols (e.g. a domain name label) to a
+	 * Punycode string of ASCII-only symbols.
+	 * @memberOf punycode
+	 * @param {String} input The string of Unicode symbols.
+	 * @returns {String} The resulting Punycode string of ASCII-only symbols.
+	 */
+	function encode(input) {
+		var n,
+		    delta,
+		    handledCPCount,
+		    basicLength,
+		    bias,
+		    j,
+		    m,
+		    q,
+		    k,
+		    t,
+		    currentValue,
+		    output = [],
+		    /** `inputLength` will hold the number of code points in `input`. */
+		    inputLength,
+		    /** Cached calculation results */
+		    handledCPCountPlusOne,
+		    baseMinusT,
+		    qMinusT;
+
+		// Convert the input in UCS-2 to Unicode
+		input = ucs2decode(input);
+
+		// Cache the length
+		inputLength = input.length;
+
+		// Initialize the state
+		n = initialN;
+		delta = 0;
+		bias = initialBias;
+
+		// Handle the basic code points
+		for (j = 0; j < inputLength; ++j) {
+			currentValue = input[j];
+			if (currentValue < 0x80) {
+				output.push(stringFromCharCode(currentValue));
+			}
+		}
+
+		handledCPCount = basicLength = output.length;
+
+		// `handledCPCount` is the number of code points that have been handled;
+		// `basicLength` is the number of basic code points.
+
+		// Finish the basic string - if it is not empty - with a delimiter
+		if (basicLength) {
+			output.push(delimiter);
+		}
+
+		// Main encoding loop:
+		while (handledCPCount < inputLength) {
+
+			// All non-basic code points < n have been handled already. Find the next
+			// larger one:
+			for (m = maxInt, j = 0; j < inputLength; ++j) {
+				currentValue = input[j];
+				if (currentValue >= n && currentValue < m) {
+					m = currentValue;
+				}
+			}
+
+			// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
+			// but guard against overflow
+			handledCPCountPlusOne = handledCPCount + 1;
+			if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
+				error('overflow');
+			}
+
+			delta += (m - n) * handledCPCountPlusOne;
+			n = m;
+
+			for (j = 0; j < inputLength; ++j) {
+				currentValue = input[j];
+
+				if (currentValue < n && ++delta > maxInt) {
+					error('overflow');
+				}
+
+				if (currentValue == n) {
+					// Represent delta as a generalized variable-length integer
+					for (q = delta, k = base; /* no condition */; k += base) {
+						t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+						if (q < t) {
+							break;
+						}
+						qMinusT = q - t;
+						baseMinusT = base - t;
+						output.push(
+							stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
+						);
+						q = floor(qMinusT / baseMinusT);
+					}
+
+					output.push(stringFromCharCode(digitToBasic(q, 0)));
+					bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
+					delta = 0;
+					++handledCPCount;
+				}
+			}
+
+			++delta;
+			++n;
+
+		}
+		return output.join('');
+	}
+
+	/**
+	 * Converts a Punycode string representing a domain name or an email address
+	 * to Unicode. Only the Punycoded parts of the input will be converted, i.e.
+	 * it doesn't matter if you call it on a string that has already been
+	 * converted to Unicode.
+	 * @memberOf punycode
+	 * @param {String} input The Punycoded domain name or email address to
+	 * convert to Unicode.
+	 * @returns {String} The Unicode representation of the given Punycode
+	 * string.
+	 */
+	function toUnicode(input) {
+		return mapDomain(input, function(string) {
+			return regexPunycode.test(string)
+				? decode(string.slice(4).toLowerCase())
+				: string;
+		});
+	}
+
+	/**
+	 * Converts a Unicode string representing a domain name or an email address to
+	 * Punycode. Only the non-ASCII parts of the domain name will be converted,
+	 * i.e. it doesn't matter if you call it with a domain that's already in
+	 * ASCII.
+	 * @memberOf punycode
+	 * @param {String} input The domain name or email address to convert, as a
+	 * Unicode string.
+	 * @returns {String} The Punycode representation of the given domain name or
+	 * email address.
+	 */
+	function toASCII(input) {
+		return mapDomain(input, function(string) {
+			return regexNonASCII.test(string)
+				? 'xn--' + encode(string)
+				: string;
+		});
+	}
+
+	/*--------------------------------------------------------------------------*/
+
+	/** Define the public API */
+	punycode = {
+		/**
+		 * A string representing the current Punycode.js version number.
+		 * @memberOf punycode
+		 * @type String
+		 */
+		'version': '1.4.1',
+		/**
+		 * An object of methods to convert from JavaScript's internal character
+		 * representation (UCS-2) to Unicode code points, and back.
+		 * @see <https://mathiasbynens.be/notes/javascript-encoding>
+		 * @memberOf punycode
+		 * @type Object
+		 */
+		'ucs2': {
+			'decode': ucs2decode,
+			'encode': ucs2encode
+		},
+		'decode': decode,
+		'encode': encode,
+		'toASCII': toASCII,
+		'toUnicode': toUnicode
+	};
+
+	/** Expose `punycode` */
+	// Some AMD build optimizers, like r.js, check for specific condition patterns
+	// like the following:
+	if (
+		typeof define == 'function' &&
+		typeof define.amd == 'object' &&
+		define.amd
+	) {
+		define('punycode', function() {
+			return punycode;
+		});
+	} else if (freeExports && freeModule) {
+		if (module.exports == freeExports) {
+			// in Node.js, io.js, or RingoJS v0.8.0+
+			freeModule.exports = punycode;
+		} else {
+			// in Narwhal or RingoJS v0.7.0-
+			for (key in punycode) {
+				punycode.hasOwnProperty(key) && (freeExports[key] = punycode[key]);
+			}
+		}
+	} else {
+		// in Rhino or a web browser
+		root.punycode = punycode;
+	}
+
+}(this));
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],41:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+'use strict';
+
+// If obj.hasOwnProperty has been overridden, then calling
+// obj.hasOwnProperty(prop) will break.
+// See: https://github.com/joyent/node/issues/1707
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+module.exports = function(qs, sep, eq, options) {
+  sep = sep || '&';
+  eq = eq || '=';
+  var obj = {};
+
+  if (typeof qs !== 'string' || qs.length === 0) {
+    return obj;
+  }
+
+  var regexp = /\+/g;
+  qs = qs.split(sep);
+
+  var maxKeys = 1000;
+  if (options && typeof options.maxKeys === 'number') {
+    maxKeys = options.maxKeys;
+  }
+
+  var len = qs.length;
+  // maxKeys <= 0 means that we should not limit keys count
+  if (maxKeys > 0 && len > maxKeys) {
+    len = maxKeys;
+  }
+
+  for (var i = 0; i < len; ++i) {
+    var x = qs[i].replace(regexp, '%20'),
+        idx = x.indexOf(eq),
+        kstr, vstr, k, v;
+
+    if (idx >= 0) {
+      kstr = x.substr(0, idx);
+      vstr = x.substr(idx + 1);
+    } else {
+      kstr = x;
+      vstr = '';
+    }
+
+    k = decodeURIComponent(kstr);
+    v = decodeURIComponent(vstr);
+
+    if (!hasOwnProperty(obj, k)) {
+      obj[k] = v;
+    } else if (isArray(obj[k])) {
+      obj[k].push(v);
+    } else {
+      obj[k] = [obj[k], v];
+    }
+  }
+
+  return obj;
+};
+
+var isArray = Array.isArray || function (xs) {
+  return Object.prototype.toString.call(xs) === '[object Array]';
+};
+
+},{}],42:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+'use strict';
+
+var stringifyPrimitive = function(v) {
+  switch (typeof v) {
+    case 'string':
+      return v;
+
+    case 'boolean':
+      return v ? 'true' : 'false';
+
+    case 'number':
+      return isFinite(v) ? v : '';
+
+    default:
+      return '';
+  }
+};
+
+module.exports = function(obj, sep, eq, name) {
+  sep = sep || '&';
+  eq = eq || '=';
+  if (obj === null) {
+    obj = undefined;
+  }
+
+  if (typeof obj === 'object') {
+    return map(objectKeys(obj), function(k) {
+      var ks = encodeURIComponent(stringifyPrimitive(k)) + eq;
+      if (isArray(obj[k])) {
+        return map(obj[k], function(v) {
+          return ks + encodeURIComponent(stringifyPrimitive(v));
+        }).join(sep);
+      } else {
+        return ks + encodeURIComponent(stringifyPrimitive(obj[k]));
+      }
+    }).join(sep);
+
+  }
+
+  if (!name) return '';
+  return encodeURIComponent(stringifyPrimitive(name)) + eq +
+         encodeURIComponent(stringifyPrimitive(obj));
+};
+
+var isArray = Array.isArray || function (xs) {
+  return Object.prototype.toString.call(xs) === '[object Array]';
+};
+
+function map (xs, f) {
+  if (xs.map) return xs.map(f);
+  var res = [];
+  for (var i = 0; i < xs.length; i++) {
+    res.push(f(xs[i], i));
+  }
+  return res;
+}
+
+var objectKeys = Object.keys || function (obj) {
+  var res = [];
+  for (var key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) res.push(key);
+  }
+  return res;
+};
+
+},{}],43:[function(require,module,exports){
+'use strict';
+
+exports.decode = exports.parse = require('./decode');
+exports.encode = exports.stringify = require('./encode');
+
+},{"./decode":41,"./encode":42}],44:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -9605,7 +9100,7 @@ module.exports = {
 
 
 
-},{}],46:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -9704,7 +9199,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],47:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -10267,8 +9762,8 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 
-}).call(this,{"isBuffer":require("../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js")},require('_process'))
-},{"../../browserify/node_modules/insert-module-globals/node_modules/is-buffer/index.js":17,"./ansi.js":45,"./escape.js":46,"_process":18,"tree-kit/lib/extend.js":48}],48:[function(require,module,exports){
+}).call(this,{"isBuffer":require("../../is-buffer/index.js")},require('_process'))
+},{"../../is-buffer/index.js":35,"./ansi.js":44,"./escape.js":45,"_process":39,"tree-kit/lib/extend.js":47}],47:[function(require,module,exports){
 /*
 	Tree Kit
 	
@@ -10608,6 +10103,758 @@ function extendOne( runtime , options , target , source )
 	}
 }
 
+
+},{}],48:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+'use strict';
+
+var punycode = require('punycode');
+var util = require('./util');
+
+exports.parse = urlParse;
+exports.resolve = urlResolve;
+exports.resolveObject = urlResolveObject;
+exports.format = urlFormat;
+
+exports.Url = Url;
+
+function Url() {
+  this.protocol = null;
+  this.slashes = null;
+  this.auth = null;
+  this.host = null;
+  this.port = null;
+  this.hostname = null;
+  this.hash = null;
+  this.search = null;
+  this.query = null;
+  this.pathname = null;
+  this.path = null;
+  this.href = null;
+}
+
+// Reference: RFC 3986, RFC 1808, RFC 2396
+
+// define these here so at least they only have to be
+// compiled once on the first module load.
+var protocolPattern = /^([a-z0-9.+-]+:)/i,
+    portPattern = /:[0-9]*$/,
+
+    // Special case for a simple path URL
+    simplePathPattern = /^(\/\/?(?!\/)[^\?\s]*)(\?[^\s]*)?$/,
+
+    // RFC 2396: characters reserved for delimiting URLs.
+    // We actually just auto-escape these.
+    delims = ['<', '>', '"', '`', ' ', '\r', '\n', '\t'],
+
+    // RFC 2396: characters not allowed for various reasons.
+    unwise = ['{', '}', '|', '\\', '^', '`'].concat(delims),
+
+    // Allowed by RFCs, but cause of XSS attacks.  Always escape these.
+    autoEscape = ['\''].concat(unwise),
+    // Characters that are never ever allowed in a hostname.
+    // Note that any invalid chars are also handled, but these
+    // are the ones that are *expected* to be seen, so we fast-path
+    // them.
+    nonHostChars = ['%', '/', '?', ';', '#'].concat(autoEscape),
+    hostEndingChars = ['/', '?', '#'],
+    hostnameMaxLen = 255,
+    hostnamePartPattern = /^[+a-z0-9A-Z_-]{0,63}$/,
+    hostnamePartStart = /^([+a-z0-9A-Z_-]{0,63})(.*)$/,
+    // protocols that can allow "unsafe" and "unwise" chars.
+    unsafeProtocol = {
+      'javascript': true,
+      'javascript:': true
+    },
+    // protocols that never have a hostname.
+    hostlessProtocol = {
+      'javascript': true,
+      'javascript:': true
+    },
+    // protocols that always contain a // bit.
+    slashedProtocol = {
+      'http': true,
+      'https': true,
+      'ftp': true,
+      'gopher': true,
+      'file': true,
+      'http:': true,
+      'https:': true,
+      'ftp:': true,
+      'gopher:': true,
+      'file:': true
+    },
+    querystring = require('querystring');
+
+function urlParse(url, parseQueryString, slashesDenoteHost) {
+  if (url && util.isObject(url) && url instanceof Url) return url;
+
+  var u = new Url;
+  u.parse(url, parseQueryString, slashesDenoteHost);
+  return u;
+}
+
+Url.prototype.parse = function(url, parseQueryString, slashesDenoteHost) {
+  if (!util.isString(url)) {
+    throw new TypeError("Parameter 'url' must be a string, not " + typeof url);
+  }
+
+  // Copy chrome, IE, opera backslash-handling behavior.
+  // Back slashes before the query string get converted to forward slashes
+  // See: https://code.google.com/p/chromium/issues/detail?id=25916
+  var queryIndex = url.indexOf('?'),
+      splitter =
+          (queryIndex !== -1 && queryIndex < url.indexOf('#')) ? '?' : '#',
+      uSplit = url.split(splitter),
+      slashRegex = /\\/g;
+  uSplit[0] = uSplit[0].replace(slashRegex, '/');
+  url = uSplit.join(splitter);
+
+  var rest = url;
+
+  // trim before proceeding.
+  // This is to support parse stuff like "  http://foo.com  \n"
+  rest = rest.trim();
+
+  if (!slashesDenoteHost && url.split('#').length === 1) {
+    // Try fast path regexp
+    var simplePath = simplePathPattern.exec(rest);
+    if (simplePath) {
+      this.path = rest;
+      this.href = rest;
+      this.pathname = simplePath[1];
+      if (simplePath[2]) {
+        this.search = simplePath[2];
+        if (parseQueryString) {
+          this.query = querystring.parse(this.search.substr(1));
+        } else {
+          this.query = this.search.substr(1);
+        }
+      } else if (parseQueryString) {
+        this.search = '';
+        this.query = {};
+      }
+      return this;
+    }
+  }
+
+  var proto = protocolPattern.exec(rest);
+  if (proto) {
+    proto = proto[0];
+    var lowerProto = proto.toLowerCase();
+    this.protocol = lowerProto;
+    rest = rest.substr(proto.length);
+  }
+
+  // figure out if it's got a host
+  // user@server is *always* interpreted as a hostname, and url
+  // resolution will treat //foo/bar as host=foo,path=bar because that's
+  // how the browser resolves relative URLs.
+  if (slashesDenoteHost || proto || rest.match(/^\/\/[^@\/]+@[^@\/]+/)) {
+    var slashes = rest.substr(0, 2) === '//';
+    if (slashes && !(proto && hostlessProtocol[proto])) {
+      rest = rest.substr(2);
+      this.slashes = true;
+    }
+  }
+
+  if (!hostlessProtocol[proto] &&
+      (slashes || (proto && !slashedProtocol[proto]))) {
+
+    // there's a hostname.
+    // the first instance of /, ?, ;, or # ends the host.
+    //
+    // If there is an @ in the hostname, then non-host chars *are* allowed
+    // to the left of the last @ sign, unless some host-ending character
+    // comes *before* the @-sign.
+    // URLs are obnoxious.
+    //
+    // ex:
+    // http://a@b@c/ => user:a@b host:c
+    // http://a@b?@c => user:a host:c path:/?@c
+
+    // v0.12 TODO(isaacs): This is not quite how Chrome does things.
+    // Review our test case against browsers more comprehensively.
+
+    // find the first instance of any hostEndingChars
+    var hostEnd = -1;
+    for (var i = 0; i < hostEndingChars.length; i++) {
+      var hec = rest.indexOf(hostEndingChars[i]);
+      if (hec !== -1 && (hostEnd === -1 || hec < hostEnd))
+        hostEnd = hec;
+    }
+
+    // at this point, either we have an explicit point where the
+    // auth portion cannot go past, or the last @ char is the decider.
+    var auth, atSign;
+    if (hostEnd === -1) {
+      // atSign can be anywhere.
+      atSign = rest.lastIndexOf('@');
+    } else {
+      // atSign must be in auth portion.
+      // http://a@b/c@d => host:b auth:a path:/c@d
+      atSign = rest.lastIndexOf('@', hostEnd);
+    }
+
+    // Now we have a portion which is definitely the auth.
+    // Pull that off.
+    if (atSign !== -1) {
+      auth = rest.slice(0, atSign);
+      rest = rest.slice(atSign + 1);
+      this.auth = decodeURIComponent(auth);
+    }
+
+    // the host is the remaining to the left of the first non-host char
+    hostEnd = -1;
+    for (var i = 0; i < nonHostChars.length; i++) {
+      var hec = rest.indexOf(nonHostChars[i]);
+      if (hec !== -1 && (hostEnd === -1 || hec < hostEnd))
+        hostEnd = hec;
+    }
+    // if we still have not hit it, then the entire thing is a host.
+    if (hostEnd === -1)
+      hostEnd = rest.length;
+
+    this.host = rest.slice(0, hostEnd);
+    rest = rest.slice(hostEnd);
+
+    // pull out port.
+    this.parseHost();
+
+    // we've indicated that there is a hostname,
+    // so even if it's empty, it has to be present.
+    this.hostname = this.hostname || '';
+
+    // if hostname begins with [ and ends with ]
+    // assume that it's an IPv6 address.
+    var ipv6Hostname = this.hostname[0] === '[' &&
+        this.hostname[this.hostname.length - 1] === ']';
+
+    // validate a little.
+    if (!ipv6Hostname) {
+      var hostparts = this.hostname.split(/\./);
+      for (var i = 0, l = hostparts.length; i < l; i++) {
+        var part = hostparts[i];
+        if (!part) continue;
+        if (!part.match(hostnamePartPattern)) {
+          var newpart = '';
+          for (var j = 0, k = part.length; j < k; j++) {
+            if (part.charCodeAt(j) > 127) {
+              // we replace non-ASCII char with a temporary placeholder
+              // we need this to make sure size of hostname is not
+              // broken by replacing non-ASCII by nothing
+              newpart += 'x';
+            } else {
+              newpart += part[j];
+            }
+          }
+          // we test again with ASCII char only
+          if (!newpart.match(hostnamePartPattern)) {
+            var validParts = hostparts.slice(0, i);
+            var notHost = hostparts.slice(i + 1);
+            var bit = part.match(hostnamePartStart);
+            if (bit) {
+              validParts.push(bit[1]);
+              notHost.unshift(bit[2]);
+            }
+            if (notHost.length) {
+              rest = '/' + notHost.join('.') + rest;
+            }
+            this.hostname = validParts.join('.');
+            break;
+          }
+        }
+      }
+    }
+
+    if (this.hostname.length > hostnameMaxLen) {
+      this.hostname = '';
+    } else {
+      // hostnames are always lower case.
+      this.hostname = this.hostname.toLowerCase();
+    }
+
+    if (!ipv6Hostname) {
+      // IDNA Support: Returns a punycoded representation of "domain".
+      // It only converts parts of the domain name that
+      // have non-ASCII characters, i.e. it doesn't matter if
+      // you call it with a domain that already is ASCII-only.
+      this.hostname = punycode.toASCII(this.hostname);
+    }
+
+    var p = this.port ? ':' + this.port : '';
+    var h = this.hostname || '';
+    this.host = h + p;
+    this.href += this.host;
+
+    // strip [ and ] from the hostname
+    // the host field still retains them, though
+    if (ipv6Hostname) {
+      this.hostname = this.hostname.substr(1, this.hostname.length - 2);
+      if (rest[0] !== '/') {
+        rest = '/' + rest;
+      }
+    }
+  }
+
+  // now rest is set to the post-host stuff.
+  // chop off any delim chars.
+  if (!unsafeProtocol[lowerProto]) {
+
+    // First, make 100% sure that any "autoEscape" chars get
+    // escaped, even if encodeURIComponent doesn't think they
+    // need to be.
+    for (var i = 0, l = autoEscape.length; i < l; i++) {
+      var ae = autoEscape[i];
+      if (rest.indexOf(ae) === -1)
+        continue;
+      var esc = encodeURIComponent(ae);
+      if (esc === ae) {
+        esc = escape(ae);
+      }
+      rest = rest.split(ae).join(esc);
+    }
+  }
+
+
+  // chop off from the tail first.
+  var hash = rest.indexOf('#');
+  if (hash !== -1) {
+    // got a fragment string.
+    this.hash = rest.substr(hash);
+    rest = rest.slice(0, hash);
+  }
+  var qm = rest.indexOf('?');
+  if (qm !== -1) {
+    this.search = rest.substr(qm);
+    this.query = rest.substr(qm + 1);
+    if (parseQueryString) {
+      this.query = querystring.parse(this.query);
+    }
+    rest = rest.slice(0, qm);
+  } else if (parseQueryString) {
+    // no query string, but parseQueryString still requested
+    this.search = '';
+    this.query = {};
+  }
+  if (rest) this.pathname = rest;
+  if (slashedProtocol[lowerProto] &&
+      this.hostname && !this.pathname) {
+    this.pathname = '/';
+  }
+
+  //to support http.request
+  if (this.pathname || this.search) {
+    var p = this.pathname || '';
+    var s = this.search || '';
+    this.path = p + s;
+  }
+
+  // finally, reconstruct the href based on what has been validated.
+  this.href = this.format();
+  return this;
+};
+
+// format a parsed object into a url string
+function urlFormat(obj) {
+  // ensure it's an object, and not a string url.
+  // If it's an obj, this is a no-op.
+  // this way, you can call url_format() on strings
+  // to clean up potentially wonky urls.
+  if (util.isString(obj)) obj = urlParse(obj);
+  if (!(obj instanceof Url)) return Url.prototype.format.call(obj);
+  return obj.format();
+}
+
+Url.prototype.format = function() {
+  var auth = this.auth || '';
+  if (auth) {
+    auth = encodeURIComponent(auth);
+    auth = auth.replace(/%3A/i, ':');
+    auth += '@';
+  }
+
+  var protocol = this.protocol || '',
+      pathname = this.pathname || '',
+      hash = this.hash || '',
+      host = false,
+      query = '';
+
+  if (this.host) {
+    host = auth + this.host;
+  } else if (this.hostname) {
+    host = auth + (this.hostname.indexOf(':') === -1 ?
+        this.hostname :
+        '[' + this.hostname + ']');
+    if (this.port) {
+      host += ':' + this.port;
+    }
+  }
+
+  if (this.query &&
+      util.isObject(this.query) &&
+      Object.keys(this.query).length) {
+    query = querystring.stringify(this.query);
+  }
+
+  var search = this.search || (query && ('?' + query)) || '';
+
+  if (protocol && protocol.substr(-1) !== ':') protocol += ':';
+
+  // only the slashedProtocols get the //.  Not mailto:, xmpp:, etc.
+  // unless they had them to begin with.
+  if (this.slashes ||
+      (!protocol || slashedProtocol[protocol]) && host !== false) {
+    host = '//' + (host || '');
+    if (pathname && pathname.charAt(0) !== '/') pathname = '/' + pathname;
+  } else if (!host) {
+    host = '';
+  }
+
+  if (hash && hash.charAt(0) !== '#') hash = '#' + hash;
+  if (search && search.charAt(0) !== '?') search = '?' + search;
+
+  pathname = pathname.replace(/[?#]/g, function(match) {
+    return encodeURIComponent(match);
+  });
+  search = search.replace('#', '%23');
+
+  return protocol + host + pathname + search + hash;
+};
+
+function urlResolve(source, relative) {
+  return urlParse(source, false, true).resolve(relative);
+}
+
+Url.prototype.resolve = function(relative) {
+  return this.resolveObject(urlParse(relative, false, true)).format();
+};
+
+function urlResolveObject(source, relative) {
+  if (!source) return relative;
+  return urlParse(source, false, true).resolveObject(relative);
+}
+
+Url.prototype.resolveObject = function(relative) {
+  if (util.isString(relative)) {
+    var rel = new Url();
+    rel.parse(relative, false, true);
+    relative = rel;
+  }
+
+  var result = new Url();
+  var tkeys = Object.keys(this);
+  for (var tk = 0; tk < tkeys.length; tk++) {
+    var tkey = tkeys[tk];
+    result[tkey] = this[tkey];
+  }
+
+  // hash is always overridden, no matter what.
+  // even href="" will remove it.
+  result.hash = relative.hash;
+
+  // if the relative url is empty, then there's nothing left to do here.
+  if (relative.href === '') {
+    result.href = result.format();
+    return result;
+  }
+
+  // hrefs like //foo/bar always cut to the protocol.
+  if (relative.slashes && !relative.protocol) {
+    // take everything except the protocol from relative
+    var rkeys = Object.keys(relative);
+    for (var rk = 0; rk < rkeys.length; rk++) {
+      var rkey = rkeys[rk];
+      if (rkey !== 'protocol')
+        result[rkey] = relative[rkey];
+    }
+
+    //urlParse appends trailing / to urls like http://www.example.com
+    if (slashedProtocol[result.protocol] &&
+        result.hostname && !result.pathname) {
+      result.path = result.pathname = '/';
+    }
+
+    result.href = result.format();
+    return result;
+  }
+
+  if (relative.protocol && relative.protocol !== result.protocol) {
+    // if it's a known url protocol, then changing
+    // the protocol does weird things
+    // first, if it's not file:, then we MUST have a host,
+    // and if there was a path
+    // to begin with, then we MUST have a path.
+    // if it is file:, then the host is dropped,
+    // because that's known to be hostless.
+    // anything else is assumed to be absolute.
+    if (!slashedProtocol[relative.protocol]) {
+      var keys = Object.keys(relative);
+      for (var v = 0; v < keys.length; v++) {
+        var k = keys[v];
+        result[k] = relative[k];
+      }
+      result.href = result.format();
+      return result;
+    }
+
+    result.protocol = relative.protocol;
+    if (!relative.host && !hostlessProtocol[relative.protocol]) {
+      var relPath = (relative.pathname || '').split('/');
+      while (relPath.length && !(relative.host = relPath.shift()));
+      if (!relative.host) relative.host = '';
+      if (!relative.hostname) relative.hostname = '';
+      if (relPath[0] !== '') relPath.unshift('');
+      if (relPath.length < 2) relPath.unshift('');
+      result.pathname = relPath.join('/');
+    } else {
+      result.pathname = relative.pathname;
+    }
+    result.search = relative.search;
+    result.query = relative.query;
+    result.host = relative.host || '';
+    result.auth = relative.auth;
+    result.hostname = relative.hostname || relative.host;
+    result.port = relative.port;
+    // to support http.request
+    if (result.pathname || result.search) {
+      var p = result.pathname || '';
+      var s = result.search || '';
+      result.path = p + s;
+    }
+    result.slashes = result.slashes || relative.slashes;
+    result.href = result.format();
+    return result;
+  }
+
+  var isSourceAbs = (result.pathname && result.pathname.charAt(0) === '/'),
+      isRelAbs = (
+          relative.host ||
+          relative.pathname && relative.pathname.charAt(0) === '/'
+      ),
+      mustEndAbs = (isRelAbs || isSourceAbs ||
+                    (result.host && relative.pathname)),
+      removeAllDots = mustEndAbs,
+      srcPath = result.pathname && result.pathname.split('/') || [],
+      relPath = relative.pathname && relative.pathname.split('/') || [],
+      psychotic = result.protocol && !slashedProtocol[result.protocol];
+
+  // if the url is a non-slashed url, then relative
+  // links like ../.. should be able
+  // to crawl up to the hostname, as well.  This is strange.
+  // result.protocol has already been set by now.
+  // Later on, put the first path part into the host field.
+  if (psychotic) {
+    result.hostname = '';
+    result.port = null;
+    if (result.host) {
+      if (srcPath[0] === '') srcPath[0] = result.host;
+      else srcPath.unshift(result.host);
+    }
+    result.host = '';
+    if (relative.protocol) {
+      relative.hostname = null;
+      relative.port = null;
+      if (relative.host) {
+        if (relPath[0] === '') relPath[0] = relative.host;
+        else relPath.unshift(relative.host);
+      }
+      relative.host = null;
+    }
+    mustEndAbs = mustEndAbs && (relPath[0] === '' || srcPath[0] === '');
+  }
+
+  if (isRelAbs) {
+    // it's absolute.
+    result.host = (relative.host || relative.host === '') ?
+                  relative.host : result.host;
+    result.hostname = (relative.hostname || relative.hostname === '') ?
+                      relative.hostname : result.hostname;
+    result.search = relative.search;
+    result.query = relative.query;
+    srcPath = relPath;
+    // fall through to the dot-handling below.
+  } else if (relPath.length) {
+    // it's relative
+    // throw away the existing file, and take the new path instead.
+    if (!srcPath) srcPath = [];
+    srcPath.pop();
+    srcPath = srcPath.concat(relPath);
+    result.search = relative.search;
+    result.query = relative.query;
+  } else if (!util.isNullOrUndefined(relative.search)) {
+    // just pull out the search.
+    // like href='?foo'.
+    // Put this after the other two cases because it simplifies the booleans
+    if (psychotic) {
+      result.hostname = result.host = srcPath.shift();
+      //occationaly the auth can get stuck only in host
+      //this especially happens in cases like
+      //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
+      var authInHost = result.host && result.host.indexOf('@') > 0 ?
+                       result.host.split('@') : false;
+      if (authInHost) {
+        result.auth = authInHost.shift();
+        result.host = result.hostname = authInHost.shift();
+      }
+    }
+    result.search = relative.search;
+    result.query = relative.query;
+    //to support http.request
+    if (!util.isNull(result.pathname) || !util.isNull(result.search)) {
+      result.path = (result.pathname ? result.pathname : '') +
+                    (result.search ? result.search : '');
+    }
+    result.href = result.format();
+    return result;
+  }
+
+  if (!srcPath.length) {
+    // no path at all.  easy.
+    // we've already handled the other stuff above.
+    result.pathname = null;
+    //to support http.request
+    if (result.search) {
+      result.path = '/' + result.search;
+    } else {
+      result.path = null;
+    }
+    result.href = result.format();
+    return result;
+  }
+
+  // if a url ENDs in . or .., then it must get a trailing slash.
+  // however, if it ends in anything else non-slashy,
+  // then it must NOT get a trailing slash.
+  var last = srcPath.slice(-1)[0];
+  var hasTrailingSlash = (
+      (result.host || relative.host || srcPath.length > 1) &&
+      (last === '.' || last === '..') || last === '');
+
+  // strip single dots, resolve double dots to parent dir
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = srcPath.length; i >= 0; i--) {
+    last = srcPath[i];
+    if (last === '.') {
+      srcPath.splice(i, 1);
+    } else if (last === '..') {
+      srcPath.splice(i, 1);
+      up++;
+    } else if (up) {
+      srcPath.splice(i, 1);
+      up--;
+    }
+  }
+
+  // if the path is allowed to go above the root, restore leading ..s
+  if (!mustEndAbs && !removeAllDots) {
+    for (; up--; up) {
+      srcPath.unshift('..');
+    }
+  }
+
+  if (mustEndAbs && srcPath[0] !== '' &&
+      (!srcPath[0] || srcPath[0].charAt(0) !== '/')) {
+    srcPath.unshift('');
+  }
+
+  if (hasTrailingSlash && (srcPath.join('/').substr(-1) !== '/')) {
+    srcPath.push('');
+  }
+
+  var isAbsolute = srcPath[0] === '' ||
+      (srcPath[0] && srcPath[0].charAt(0) === '/');
+
+  // put the host back
+  if (psychotic) {
+    result.hostname = result.host = isAbsolute ? '' :
+                                    srcPath.length ? srcPath.shift() : '';
+    //occationaly the auth can get stuck only in host
+    //this especially happens in cases like
+    //url.resolveObject('mailto:local1@domain1', 'local2@domain2')
+    var authInHost = result.host && result.host.indexOf('@') > 0 ?
+                     result.host.split('@') : false;
+    if (authInHost) {
+      result.auth = authInHost.shift();
+      result.host = result.hostname = authInHost.shift();
+    }
+  }
+
+  mustEndAbs = mustEndAbs || (result.host && srcPath.length);
+
+  if (mustEndAbs && !isAbsolute) {
+    srcPath.unshift('');
+  }
+
+  if (!srcPath.length) {
+    result.pathname = null;
+    result.path = null;
+  } else {
+    result.pathname = srcPath.join('/');
+  }
+
+  //to support request.http
+  if (!util.isNull(result.pathname) || !util.isNull(result.search)) {
+    result.path = (result.pathname ? result.pathname : '') +
+                  (result.search ? result.search : '');
+  }
+  result.auth = relative.auth || result.auth;
+  result.slashes = result.slashes || relative.slashes;
+  result.href = result.format();
+  return result;
+};
+
+Url.prototype.parseHost = function() {
+  var host = this.host;
+  var port = portPattern.exec(host);
+  if (port) {
+    port = port[0];
+    if (port !== ':') {
+      this.port = port.substr(1);
+    }
+    host = host.substr(0, host.length - port.length);
+  }
+  if (host) this.hostname = host;
+};
+
+},{"./util":49,"punycode":40,"querystring":43}],49:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+  isString: function(arg) {
+    return typeof(arg) === 'string';
+  },
+  isObject: function(arg) {
+    return typeof(arg) === 'object' && arg !== null;
+  },
+  isNull: function(arg) {
+    return arg === null;
+  },
+  isNullOrUndefined: function(arg) {
+    return arg == null;
+  }
+};
 
 },{}]},{},[4])(4)
 });
