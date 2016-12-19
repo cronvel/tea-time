@@ -5,7 +5,7 @@
     "node": ">=4.5.0"
   },
   "description": "Unit test: Tea Time!",
-  "main": "lib/tea-time.js",
+  "main": "lib/TeaTime.js",
   "bin": {
     "tea-time": "./bin/tea-time"
   },
@@ -18,11 +18,12 @@
     "browserify": "^13.1.1",
     "diff": "^3.1.0",
     "dom-kit": "^0.1.2",
+    "falafel": "^2.0.0",
     "glob": "^7.1.1",
     "minimist": "^1.2.0",
     "nextgen-events": "^0.9.8",
-    "string-kit": "^0.5.12",
-    "terminal-kit": "^0.25.5",
+    "string-kit": "^0.5.14",
+    "terminal-kit": "^0.25.6",
     "tree-kit": "^0.5.26",
     "uglify-js": "^2.7.5",
     "ws": "^1.1.1"
@@ -54,6 +55,13 @@
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/cronvel/tea-time/issues"
+  },
+  "config": {
+    "tea-time": {
+      "coverDir": [
+        "sample"
+      ]
+    }
   },
   "copyright": {
     "title": "Tea Time!",
