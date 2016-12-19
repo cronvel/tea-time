@@ -2,6 +2,7 @@
 
 module.exports = function( arg )
 {
+	var bob ;
 	
 	if ( arg )
 	{
@@ -11,6 +12,9 @@ module.exports = function( arg )
 	else
 	{
 		// More comment
+		bob = "easy!" ;
+		bob = "easy!" ;
+		bob = "easy!" ;
 		return 'doh!' ;
 	}
 	
