@@ -78,11 +78,13 @@ Usage is: tea-time [*test files*] [*option1*] [*option2*] [...]
 Available options:
 ```
   -h , --help             Show this help
+  -C , --cover            Perform test coverage (beta feature, node.js only)
   -t , --timeout <time>   Set the default timeout for each test (default: 2000ms)
   -s , --slow <time>      Set the default slow time for each test (default: 75ms)
   -g , --grep <pattern>   Grep: filter in tests/suites by this pattern (can be used multiple times)
   -c , --console          Allow console.log() and friends
   -b , --bail             Bail after the first test failure
+  -O , --skip-optional    Skip optional tests
   -R , --reporter <name>  Set/add the reporter (can be used multiple times)
  --clientReporter <name>  Set/add the client reporter (see --browser, can be used multiple times)
        --html <file>      Build one HTML file for all input test files, to run the test in browsers
@@ -107,6 +109,7 @@ Available options:
 * **verbose**: *like classic, but more verbose*
 * **report**: *use in conjunction with another reporter, only output the final status report*
 * **error-report**: *use in conjunction with another reporter, only output the final error report*
+* **coverage-report**: *use in conjunction with another reporter, output all uncovered lines of code*
 * **notify**: *use in conjunction with another reporter, send a freedesktop.org notification with the final status report*
 
 

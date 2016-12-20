@@ -1,4 +1,5 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.createTeaTime = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function (process,global){
 /*
 	Tea Time!
 	
@@ -27,770 +28,442 @@
 
 "use strict" ;
 
-/* global document */
+
+
+// Load modules
+var falafel = require( 'falafel' ) ;
+var packageJson = require( '../package.json' ) ;
+var path = require( 'path' ) ;
+var fs = require( 'fs' ) ;
+var string = require( 'string-kit' ) ;
+var escape = string.escape ;
 
 
 
-//var Report = require( './report.js' ) ;
-//var ErrorReport = require( './error-report.js' ) ;
+function Cover() { throw new Error( 'Use TeaTime.create() instead' ) ; }
+//Cover.prototype = Object.create( NGEvents.prototype ) ;
+//Cover.prototype.constructor = Cover ;
+
+module.exports = Cover ;
 
 
-function Reporter( teaTime , self )
+
+Cover.create = function createCover( options )
 {
-	if ( ! self )
+	var self = Object.create( Cover.prototype , {
+		whiteList: { value: null , writable: true , enumerable: true } ,
+		blackList: { value: null , writable: true , enumerable: true } ,
+		ecmaVersion: { value: 6 , writable: true , enumerable: true } ,
+		tracking: { value: {} , writable: true , enumerable: true } ,
+		isTracking: { value: false , writable: true , enumerable: true } ,
+		package: { value: null , writable: true , enumerable: true } ,
+	} ) ;
+	
+	// Tmp:
+	var rootDir = process.cwd() ;
+	
+	// Require the package.json (mandatory)
+	try {
+		self.package = require( rootDir + '/package.json' ) ;
+	}
+	catch ( error ) {
+		if ( error.code === 'MODULE_NOT_FOUND' ) { throw new Error( "[Cover] No package.json found" ) ; }
+		else { throw new Error( "[Cover] Error in the package.json: " + error ) ; }
+	}
+	
+	if ( self.package.config && self.package.config['tea-time'] && self.package.config['tea-time'].coverDir )
 	{
-		self = Object.create( Reporter.prototype , {
-			teaTime: { value: teaTime , enumerable: true }
+		self.whiteList = self.package.config['tea-time'].coverDir.map( function( dirPath ) {
+			return rootDir + '/' + dirPath + '/' ;
 		} ) ;
 	}
 	
-	document.querySelector( 'body' )
-		.insertAdjacentHTML( 'beforeend' ,
-			'<div class="tea-time-classic-reporter" style="background-color:black;color:white"></div>'
+	require.extensions['.js'] = self.requireJs.bind( self ) ;
+	
+	global[ coverVarName ] = self ;
+	
+	return self ;
+} ;
+
+
+
+var nodeRequireJs = require.extensions['.js'] ;
+
+
+
+var nodeToTrack = [
+	"ExpressionStatement" ,
+	"BreakStatement" ,
+	"ContinueStatement" ,
+	"VariableDeclaration" ,
+	"ReturnStatement" ,
+	"ThrowStatement" ,
+	"TryStatement" ,
+	"FunctionDeclaration" ,
+	"IfStatement" ,
+	"WhileStatement" ,
+	"DoWhileStatement" ,
+	"ForStatement" ,
+	"ForInStatement" ,
+	"SwitchStatement" ,
+	"WithStatement"
+] ;
+
+
+
+var nodeNeedingBraces = [
+	"IfStatement" ,
+	"WhileStatement" ,
+	"DoWhileStatement" ,
+	"ForStatement" ,
+	"ForInStatement" ,
+	"WithStatement"
+] ;
+
+
+
+var coverVarName = '__TEA_TIME_COVER__' ;
+
+
+
+// This is the replacement for JS extension require
+Cover.prototype.requireJs = function requireJs( localModule , filePath )
+{
+	var isTrackingBkup = this.isTracking ;
+	
+	if ( ( ! this.whiteList || ! this.whiteList.length ) && ( ! this.blackList || ! this.blackList.length ) )
+	{
+		return nodeRequireJs( localModule , filePath ) ;
+	}
+	
+	if ( this.whiteList && this.whiteList.length )
+	{
+		if ( ! this.whiteList.some( function( dirPath ) { return filePath.indexOf( dirPath ) === 0 ; } ) )
+		{
+			//console.log( ">>>>>>>>>>>> Normal requireJs (not white-listed)" , filePath ) ;
+			return nodeRequireJs( localModule , filePath ) ;
+		}
+	}
+	
+	if ( this.blackList && this.blackList.length )
+	{
+		if ( this.blackList.some( function( dirPath ) { return filePath.indexOf( dirPath ) === 0 ; } ) )
+		{
+			//console.log( ">>>>>>>>>>>> Normal requireJs (black-listed)" , filePath ) ;
+			return nodeRequireJs( localModule , filePath ) ;
+		}
+	}
+	
+	//console.log( ">>>>>>>>>>>> Hi-jacked requireJs" , filePath ) ;
+	nodeRequireJs( localModule , filePath ) ;
+	
+	// This is the original require.extensions['.js'] function, as of node v6:
+	
+	/*
+	var content = fs.readFileSync( filePath , 'utf8' ) ;
+	module._compile( internalModule.stripBOM( content ) , filePath ) ;
+	*/
+	
+	var content = fs.readFileSync( filePath , 'utf8' ) ;
+	var instrumentedContent = this.instrument( content , filePath ) ;
+	
+	//console.log( "Instrumented content:\n" + instrumentedContent + "\n\n\n" ) ;
+	
+	// Force the tracking activation during module loading:
+	// tests cannot re-trigger global/top-level module exec,
+	// if not, it would always report low coverage
+	this.isTracking = true ;
+	localModule._compile( instrumentedContent , filePath ) ;
+	this.isTracking = isTrackingBkup ;
+} ;
+
+
+
+// instrument the file synchronously
+// `next` is optional callback which will be called
+// with instrumented code when present
+Cover.prototype.instrument = function instrument( content , filePath ) //config, next)
+{
+	this.tracking[ filePath ] = {
+		area: [] ,
+		charCount: content.length ,
+		sourceLines: content.split( '\n' ) ,
+	} ;
+	
+	// It seems that falafel/acorn counts lines starting at 1, not 0
+	this.tracking[ filePath ].sourceLines.unshift( '' ) ;
+	
+	// Remove shebang: not needed anymore since allowHashBang option exists in acorn
+	//content = content.replace( /^\#\!.*/ , '' ) ;
+	
+	var instrumented = falafel( content , {
+			locations: true ,
+			comment: true ,
+			ecmaVersion: this.ecmaVersion ,
+			
+			allowHashBang: true ,
+			
+			//sourceType: 'module' ,
+			allowReturnOutsideFunction: true ,
+			
+			// important or conditional tracking may fail with code like:
+			// if ( var1 && ( var2 = expression ) )
+			preserveParens: true ,
+			
+		} , this.injectTrackingCode.bind( this , filePath )
+	) ;
+	
+	return instrumented ;
+} ;
+
+
+
+Cover.prototype.start = function start() { this.isTracking = true ; } ;
+Cover.prototype.stop = function stop() { this.isTracking = false ; } ;
+
+
+
+Cover.prototype.track = function track( filePath , index )
+{
+	if ( ! this.isTracking ) { return ; }
+	
+	this.tracking[ filePath ].area[ index ].count ++ ;
+	//console.log( "Tracked:" , filePath , this.tracking[ filePath ].area[ index ].location.start.line ) ;
+} ;
+
+
+
+Cover.prototype.initTracking = function initTracking( filePath , node )
+{
+	var index = this.tracking[ filePath ].area.length ;
+	
+	this.tracking[ filePath ].area[ index ] = {
+		count: 0 ,
+		location: node.loc
+	} ;
+	
+	return index ;
+} ;
+
+
+
+Cover.prototype.injectTrackingCode = function injectTrackingCode( filePath , node )
+{
+	//console.log( "node type ["+filePath+"]:" , node.type ) ;
+	
+	// From Blanket, but does it really happen?
+	if ( ! node.loc || ! node.loc.start ) { throw new Error( "Node without location" ) ; }
+	
+	this.injectBraces( node ) ;
+	
+	//this.injectBlockTrackingCode( filePath , node ) ;
+	this.injectStatementTrackingCode( filePath , node ) ;
+	this.injectConditionTrackingCode( filePath , node ) ;
+} ;
+
+
+
+Cover.prototype.injectBraces = function injectBraces( node )
+{
+	var index ;
+	
+	if ( nodeNeedingBraces.indexOf( node.type ) !== -1 )
+	{
+		if ( node.consequent && node.consequent.type !== "BlockStatement" )
+		{
+			// The 'then' statement
+			node.consequent.update( "{\n" + node.consequent.source() + "}\n" ) ;
+		}
+		else if ( node.body && node.body.type !== "BlockStatement" )
+		{
+			// Dunno what node.body is supposed to be...
+			node.body.update( "{\n" + node.body.source() + "}\n" ) ;
+		}
+		
+		//if ( node.alternate && node.alternate.type !== "BlockStatement" && node.alternate.type !== "IfStatement" )
+		if ( node.alternate && node.alternate.type !== "BlockStatement" )
+		{
+			// The 'else/else if' node
+			node.alternate.update( "{\n" + node.alternate.source() + "}\n" ) ;
+		}
+	}
+	
+	return false ;
+} ;
+
+
+
+Cover.prototype.injectStatementTrackingCode = function injectStatementTrackingCode( filePath , node )
+{
+	var index ;
+	
+	if ( nodeToTrack.indexOf( node.type ) !== -1 && node.parent.type !== 'LabeledStatement' )
+	{
+		if (
+			node.type === "VariableDeclaration" &&
+			( node.parent.type === "ForStatement" || node.parent.type === "ForInStatement" )
+		)
+		{
+			return false ;
+		}
+		
+		index = this.initTracking( filePath , node ) ;
+		
+		node.update( 
+			//'/*' + node.type + '*/' +
+			coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) ;\n" +
+			node.source()
 		) ;
-	
-	self.container = document.querySelector( 'div.tea-time-classic-reporter' ) ;
-	
-	self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
-	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
-	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
-	self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
-	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
-	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
-	self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
-	
-	return self ;
-}
-
-module.exports = Reporter ;
-
-
-
-function scrollDown()
-{
-	( document.querySelector( 'div.tea-time-classic-reporter p:last-child' ) ||
-		document.querySelector( 'div.tea-time-classic-reporter h4:last-child' ) ||
-		document.querySelector( 'div.tea-time-classic-reporter pre:last-child' ) )
-			.scrollIntoView() ;
-}
-
-
-
-function indentStyle( depth )
-{
-	return 'margin-left:' + ( 1 + 2 * depth ) + '%;' ;
-}
-
-
-
-var timeStyle = "color:grey;" ;
-var passingStyle = "color:green;" ;
-var failingStyle = "color:red;" ;
-var optionalFailingStyle = "color:brown;" ;
-var pendingStyle = "color:blue;" ;
-
-var fastStyle = "color:grey;" ;
-var slowStyle = "color:yellow;" ;
-var slowerStyle = "color:red;" ;
-
-var optionalErrorStyle = "color:brown;font-weight:bold;" ;
-var errorStyle = "color:red;font-weight:bold;" ;
-var hookErrorStyle = "background-color:red;color:white;font-weight:bold;" ;
-
-var expectedStyle = "background-color:green;color:white;font-weight:bold;" ;
-var actualStyle = "background-color:red;color:white;font-weight:bold;" ;
-
-
-
-
-Reporter.enterSuite = function enterSuite( suiteName , depth )
-{
-	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<h4 class="tea-time-classic-reporter" style="' + indentStyle( depth ) + '">' + suiteName + '</h4>'
-	) ;
-	
-	scrollDown() ;
-} ;
-
-
-
-Reporter.ok = function ok( testName , depth , time , slow )
-{
-	var content = '✔ ' + testName ;
-	
-	if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
-	else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
-	else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
-	
-	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<p class="tea-time-classic-reporter" style="' + passingStyle + indentStyle( depth ) + '">' + content + '</p>'
-	) ;
-	
-	scrollDown() ;
-} ;
-
-
-
-Reporter.fail = function fail( testName , depth , time , slow , error )
-{
-	var content = '✘ ' + testName ;
-	
-	if ( time !== undefined )
-	{
-		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
-		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
-		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
-	}
-	
-	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<p class="tea-time-classic-reporter" style="' + failingStyle + indentStyle( depth ) + '">' + content + '</p>'
-	) ;
-	
-	scrollDown() ;
-} ;
-
-
-
-Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error )
-{
-	var content = '✘ ' + testName ;
-	
-	if ( time !== undefined )
-	{
-		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
-		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
-		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
-	}
-	
-	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<p class="tea-time-classic-reporter" style="' + optionalFailingStyle + indentStyle( depth ) + '">' + content + '</p>'
-	) ;
-	
-	scrollDown() ;
-} ;
-
-
-
-Reporter.skip = function skip( testName , depth )
-{
-	var content = '· ' + testName ;
-	
-	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<p class="tea-time-classic-reporter" style="' + pendingStyle + indentStyle( depth ) + '">' + content + '</p>'
-	) ;
-	
-	scrollDown() ;
-} ;
-
-
-
-Reporter.report = function report( ok , fail , optionalFail , skip , time )
-{
-	this.container.insertAdjacentHTML(
-		'beforeend' ,
-		'<hr />' +
-		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + ok + ' passing ' +
-		( time < 2000 ?
-			'<span style="' + timeStyle + '">(' + Math.round( time ) + 'ms)</span>' :
-			'<span style="' + timeStyle + '">(' + Math.round( time / 1000 ) + 's)</span>'
-		) +
-		'</p>' +
-		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + failingStyle + indentStyle( 1 ) + '">' + fail + ' failing</p>' +
-		( optionalFail ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + optionalFailingStyle + indentStyle( 1 ) + '">' + optionalFail + ' opt failing</p>' : '' ) +
-		( skip ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + skip + ' pending</p>' : '' )
-	) ;
-	
-	scrollDown() ;
-} ;
-
-
-
-Reporter.errorReport = function errorReport( errors )
-{
-	var i , error , content = '' ;
-	
-	content += '<h4 class="tea-time-classic-reporter" style="' + errorStyle + indentStyle( 0 ) + '">== Errors ==</h4>' ;
-	
-	for ( i = 0 ; i < errors.length ; i ++ )
-	{
-		error = errors[ i ] ;
-		content += '<p class="tea-time-classic-reporter" style="' +
-			( error.optional ? optionalErrorStyle : errorStyle ) +
-			indentStyle( 1 ) + '">' + ( i + 1 ) + ' ) ' ;
 		
-		switch ( error.type )
+		return true ;
+	}
+	
+	return false ;
+} ;
+
+
+
+Cover.prototype.injectConditionTrackingCode = function injectConditionTrackingCode( filePath , node )
+{
+	var index ;
+	
+	if ( node.type === 'LogicalExpression' && ( node.operator === '&&' || node.operator === '||' ) )
+	{
+		//console.log( "#######" , node ) ;
+		
+		if ( node.left.type !== 'LogicalExpression' )
 		{
-			case 'test' :
-				if ( error.error.testTimeout ) { content += '<span style="' + hookErrorStyle + '">TEST TIMEOUT</span> ' ; }
-				break ;
-			case 'setup' :
-				content += '<span style="' + hookErrorStyle + '">SETUP HOOK</span> ' ;
-				break ;
-			case 'teardown' :
-				content += '<span style="' + hookErrorStyle + '">TEARDOWN HOOK</span> ' ;
-				break ;
-			case 'suiteSetup' :
-				content += '<span style="' + hookErrorStyle + '">SUITE SETUP HOOK</span> ' ;
-				break ;
-			case 'suiteTeardown' :
-				content += '<span style="' + hookErrorStyle + '">SUITE TEARDOWN HOOK</span> ' ;
-				break ;
+			index = this.initTracking( filePath , node.left ) ;
+			
+			node.left.update( 
+				//'/*' + node.type + '/' + node.left.type + '*/' +
+				'(' + coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) || " +
+				node.left.source() + ')'
+			) ;
 		}
 		
-		if ( error.error.uncaught ) { content += '<span style="' + hookErrorStyle + '">UNCAUGHT EXCEPTION</span> ' ; }
-		
-		content += error.name ;
-		content += '</p>' ;
-		content += this.reportOneError( error.error ) ;
-	}
-	
-	this.container.insertAdjacentHTML( 'beforeend' , '<hr />' + content ) ;
-	
-	scrollDown() ;
-} ;
-
-
-
-Reporter.prototype.reportOneError = function reportOneError( error )
-{
-	var content = '' ;
-	
-	if ( ( 'expected' in error ) && ( 'actual' in error ) )
-	{
-		content += '<p class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
-			'<span style="' + expectedStyle + '">expected</span><span style="' + actualStyle + '">actual</span>' +
-			'</p>' ;
-		
-		content += '<pre class="tea-time-classic-reporter"; style="' + indentStyle( 2 ) + '">' ;
-		content += this.teaTime.htmlColorDiff( error.actual , error.expected ) ;
-		content += '</pre>' ;
-	}
-	
-	content += 
-		'<pre class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' + 
-		this.teaTime.inspect.inspectError( { style: 'html' } , error ) +
-		'</pre>' ;
-	
-	return content ;
-} ;
-
-
-
-},{}],2:[function(require,module,exports){
-/*
-	Tea Time!
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-function Reporter( teaTime , self )
-{
-	if ( ! self )
-	{
-		self = Object.create( Reporter.prototype , {
-			teaTime: { value: teaTime , enumerable: true }
-		} ) ;
-	}
-	
-	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
-	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
-	self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
-	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
-	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
-	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
-	
-	return self ;
-}
-
-module.exports = Reporter ;
-
-
-
-Reporter.ok = function ok( testName , depth , time , slow )
-{
-	console.log( 'OK:' , testName , '(' + time + ')' ) ;
-} ;
-
-
-
-Reporter.fail = function fail( testName , depth , time , slow , error )
-{
-	console.log( 'Fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
-} ;
-
-
-
-Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error )
-{
-	console.log( 'Opt fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
-} ;
-
-
-
-Reporter.skip = function skip( testName , depth )
-{
-	console.log( 'Pending:' , testName ) ;
-} ;
-
-
-
-Reporter.report = function report( ok , fail , optionalFail , skip )
-{
-	console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' opt fail:' , optionalFail , ' pending:' , skip ) ;
-} ;
-
-
-
-},{}],3:[function(require,module,exports){
-/*
-	Tea Time!
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-/* global document, WebSocket */
-
-
-
-function Reporter( teaTime , self )
-{
-	if ( ! self )
-	{
-		self = Object.create( Reporter.prototype , {
-			teaTime: { value: teaTime , enumerable: true }
-		} ) ;
-	}
-	
-	self.teaTime.on( 'ready' , { fn: Reporter.ready.bind( self ) , async: true } ) ;
-	
-	self.teaTime.on( 'run' , Reporter.forward.bind( self , 'run' ) ) ;
-	self.teaTime.on( 'enterSuite' , Reporter.forward.bind( self , 'enterSuite' ) ) ;
-	self.teaTime.on( 'exitSuite' , Reporter.forward.bind( self , 'exitSuite' ) ) ;
-	self.teaTime.on( 'enterTest' , Reporter.forward.bind( self , 'enterTest' ) ) ;
-	self.teaTime.on( 'exitTest' , Reporter.forward.bind( self , 'exitTest' ) ) ;
-	self.teaTime.on( 'ok' , Reporter.forward.bind( self , 'ok' ) ) ;
-	self.teaTime.on( 'fail' , Reporter.forward.bind( self , 'fail' ) ) ;
-	self.teaTime.on( 'optionalFail' , Reporter.forward.bind( self , 'optionalFail' ) ) ;
-	self.teaTime.on( 'skip' , Reporter.forward.bind( self , 'skip' ) ) ;
-	self.teaTime.on( 'report' , Reporter.forward.bind( self , 'report' ) ) ;
-	self.teaTime.on( 'errorReport' , Reporter.forward.bind( self , 'errorReport' ) ) ;
-	self.teaTime.on( 'exit' , Reporter.exit.bind( self , 'exit' ) ) ;
-	
-	
-	//self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
-	//self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
-	//self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
-	//self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
-	//self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
-	//self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
-	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
-	
-	return self ;
-}
-
-module.exports = Reporter ;
-
-
-
-Reporter.ready = function ready( callback )
-{
-	var self = this ;
-	
-	//console.log( "Ready event received!" , this.teaTime.token ) ;
-	this.ws = new WebSocket( 'ws://127.0.0.1:7357/' + this.teaTime.token ) ;
-	
-	this.ws.onopen = function onOpen()
-	{
-		Reporter.forward.call( self , 'ready' ) ;
-		console.log( "Websocket opened!" ) ;
-		callback() ;
-	} ;
-	
-	this.ws.onclose = function onClose()
-	{
-		console.log( "Websocket closed!" ) ;
-	} ;
-} ;
-
-
-
-Reporter.forward = function forward( event )
-{
-	var args = Array.prototype.slice.call( arguments , 1 ) ;
-	
-	this.teaTime.prepareSerialize( args ) ;
-	
-	this.ws.send(
-		JSON.stringify( {
-			event: event ,
-			args: args
-		} )
-	) ;
-} ;
-
-
-
-Reporter.exit = function exit( callback )
-{
-	Reporter.forward.call( this , 'exit' ) ;
-	//console.log( "Exit event received!" ) ;
-	this.ws.close() ;
-} ;
-
-
-
-
-},{}],4:[function(require,module,exports){
-/*
-	Tea Time!
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-/* global window */
-
-
-
-var TeaTime = require( './tea-time.js' ) ;
-var diff = require( './diff.js' ) ;
-var htmlColorDiff = require( './htmlColorDiff.js' ) ;
-var inspect = require( 'string-kit/lib/inspect.js' ) ;
-var dom = require( 'dom-kit' ) ;
-var url = require( 'url' ) ;
-
-
-
-function createTeaTime()
-{
-	var options = {
-		microTimeout: function( callback ) {
-			setTimeout( callback , 0 ) ;
-		} ,
-		onceUncaughtException: function( callback ) {
-			window.onerror = function( message , source , lineno , colno , error ) {
-				window.onerror = function() {} ;
-				callback( error ) ;
-				return true ;	// prevent the event propagation
-			} ;
-		} ,
-		offUncaughtException: function() {
-			window.onerror = function() {} ;
-		} ,
-		allowConsole: true
-	} ;
-	
-	TeaTime.populateOptionsWithArgs( options , url.parse( window.location.href , true ).query ) ;
-	
-	window.teaTime = TeaTime.create( options ) ;
-	
-	window.teaTime.init() ;
-	window.teaTime.diff = diff ;
-	window.teaTime.htmlColorDiff = htmlColorDiff ;
-	window.teaTime.inspect = inspect ;
-	window.teaTime.prepareSerialize = prepareSerialize ;
-	
-	window.teaTime.reporters = {
-		console: require( './browser-reporters/console.js' ) ,
-		classic: require( './browser-reporters/classic.js' ) ,
-		websocket: require( './browser-reporters/websocket.js' )
-	} ;
-	
-	options.reporters.forEach( function( reporter ) {
-		window.teaTime.reporters[ reporter ]( window.teaTime ) ;
-	} ) ;
-	
-	if ( options.ws )
-	{
-		window.teaTime.ws = true ;
-	}
-	
-	return window.teaTime ;
-}
-
-module.exports = createTeaTime ;
-
-
-
-function prepareSerialize( object )
-{
-	var i , iMax , keys , prototypeName ;
-	
-	if ( ! object || typeof object !== 'object' ) { return ; }
-	
-	
-	if ( Array.isArray( object ) )
-	{
-		for ( i = 0 , iMax = object.length ; i < iMax ; i ++ )
+		if ( node.right.type !== 'LogicalExpression' )
 		{
-			prepareSerialize( object[ i ] ) ;
+			index = this.initTracking( filePath , node.right ) ;
+			
+			node.right.update( 
+				//'/*' + node.type + '/' + node.right.type + '*/' +
+				'(' + coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) || " +
+				node.right.source() + ')'
+			) ;
 		}
 		
-		return ;
+		return true ;
 	}
 	
-	prototypeName = object.__proto__ && object.__proto__.constructor.name ; // jshint ignore:line
-	
-	if ( prototypeName && prototypeName !== 'Object' ) { object.__prototype = prototypeName ; }
-	
-	if ( object instanceof Error )
-	{
-		// Make things enumerable, so JSON.stringify() will serialize them like it should
-		Object.defineProperties( object , {
-			__prototype: { value: object.constructor.name , enumerable: true , writable: true } ,
-			name: { value: object.name , enumerable: true , writable: true } ,
-			message: { value: object.message , enumerable: true , writable: true } ,
-			type: { value: object.type || object.constructor.name , enumerable: true , writable: true } ,
-			stack: { value: object.stack , enumerable: true , writable: true }
-		} ) ;
-	}
-	
-	keys = Object.keys( object ) ;
-	
-	for ( i = 0 , iMax = keys.length ; i < iMax ; i ++ )
-	{
-		prepareSerialize( object[ keys[ i ] ] ) ;
-	}
-}
+	return false ;
+} ;
 
 
 
-createTeaTime() ;
-
-dom.ready( function() {
-	window.teaTime.run() ;
-} ) ;
-
-
-
-
-},{"./browser-reporters/classic.js":1,"./browser-reporters/console.js":2,"./browser-reporters/websocket.js":3,"./diff.js":5,"./htmlColorDiff.js":6,"./tea-time.js":7,"dom-kit":32,"string-kit/lib/inspect.js":46,"url":48}],5:[function(require,module,exports){
-/*
-	Tea Time!
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-var inspect = require( 'string-kit/lib/inspect.js' ) ;
-var jsdiff = require( 'diff' ) ;
-
-
-
-var inspectOptions = { minimal: true , depth: 10 , sort: true } ;
-
-
-
-function textDiff( oldValue , newValue )
+Cover.prototype.injectBlockTrackingCode = function injectBlockTrackingCode( filePath , node )
 {
-	var str = '' ,
-		diff = textDiff.raw( oldValue , newValue , true ) ;
+	var index ;
 	
-	diff.forEach( function( part ) {
-		
-		str += part.value.replace( /^(?!$)/mg , function() {
-			if ( part.added ) { return '++' ; }
-			else if ( part.removed ) { return '--' ; }
-			else { return '  ' ; }
-		} ) ;
-	} ) ;
-	
-	return str ;
-}
-
-module.exports = textDiff ;
-
-
-
-textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
-{
-	var diff , score = 0 ;
-	
-	var oldStr = inspect.inspect( inspectOptions , oldValue ) ;
-	var newStr = inspect.inspect( inspectOptions , newValue ) ;
-	
-	if ( ! noCharMode && Math.max( oldStr.length , newStr.length ) < 2000 )
+	if ( node.type === "Program" )
 	{
-		// First try the diffChars algorithm, it looks great if there are only few changes
-		diff = jsdiff.diffChars( oldStr , newStr ) ;
+		index = this.initTracking( filePath , node ) ;
 		
-		// Try to evaluate the weirdness
-		diff.forEach( function( part ) {
-			if ( part.added || part.removed )
+		node.update( 
+			//'/*' + node.type + '*/' +
+			coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) ;" +
+			node.source()
+		) ;
+		
+		return true ;
+	}
+	else if ( node.type === "BlockStatement" )
+	{
+		index = this.initTracking( filePath , node ) ;
+		
+		node.update( 
+			'{' +
+			//'/*' + node.type + '*/' +
+			coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) ;" +
+			node.source().slice( 1 )
+		) ;
+		
+		return true ;
+	}
+	
+	return false ;
+} ;
+
+
+
+Cover.prototype.getCoverage = function getCoverage()
+{
+	var filePath , i , iMax , j , oneData ;
+	
+	var coverage = {
+		uncoveredFiles: {} ,
+		lineCount: 0 ,
+		uncoveredLineCount: 0 ,
+		areaCount: 0 ,
+		uncoveredAreaCount: 0
+	} ;
+	
+	for ( filePath in this.tracking )
+	{
+		//charCount += this.tracking[ filePath ].charCount ;
+		coverage.lineCount += this.tracking[ filePath ].sourceLines.length - 1 ;	// substract empty line 0
+		
+		for ( i = 0 , iMax = this.tracking[ filePath ].area.length ; i < iMax ; i ++ )
+		{
+			oneData = this.tracking[ filePath ].area[ i ] ;
+			coverage.areaCount ++ ;
+			
+			if ( ! oneData.count )
 			{
-				score += 15 + part.value.length ;
+				coverage.uncoveredAreaCount ++ ;
+				
+				if ( ! coverage.uncoveredFiles[ filePath ] )
+				{
+					coverage.uncoveredFiles[ filePath ] = {
+						source: this.tracking[ filePath ].sourceLines ,
+						lines: ( new Array( this.tracking[ filePath ].sourceLines.length ) ).fill( false )
+					} ;
+				}
+				
+				// Flags the lines as uncovered
+				for ( j = oneData.location.start.line ; j <= oneData.location.end.line ; j ++ )
+				{
+					coverage.uncoveredFiles[ filePath ].lines[ j ] = true ;
+				}
+				
+				/*
+				console.log( "\n\n>>> Not covered:" , filePath , i , oneData , "\nline:" , oneData.location.start.line ,
+					'\n' + escape.control( this.tracking[ filePath ].sourceLines[ oneData.location.start.line - 1 ] ) ,
+					'\n' + escape.control( this.tracking[ filePath ].sourceLines[ oneData.location.start.line ] ) ,
+					'\n' + escape.control( this.tracking[ filePath ].sourceLines[ oneData.location.start.line + 1 ] )
+				) ;
+				*/
 			}
-		} ) ;
+		}
 		
-		// If too much weirdness, fallback to line mode
-		if ( score < 80 ) { return diff ; }
+		if ( coverage.uncoveredFiles[ filePath ] )
+		{
+			coverage.uncoveredLineCount += coverage.uncoveredFiles[ filePath ].lines.reduce(
+				function( accu , element ) { return accu + ( element ? 1 : 0 ) ; } , 0
+			) ;
+		}
 	}
 	
-	diff = jsdiff.diffLines( oldStr , newStr ) ;
+	//coverage.rate = 1 - coverage.uncoveredAreaCount / coverage.areaCount ;
+	coverage.rate = 1 - coverage.uncoveredLineCount / coverage.lineCount ;
 	
-	return diff ;
+	return coverage ;
 } ;
 
 
 
-},{"diff":26,"string-kit/lib/inspect.js":46}],6:[function(require,module,exports){
-/*
-	Tea Time!
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-var rawDiff = require( './diff.js' ).raw ;
-
-
-
-module.exports = function htmlColorDiff( oldValue , newValue )
-{
-	var str = '' ,
-		diff = rawDiff( oldValue , newValue ) ;
-	
-	diff.forEach( function( part ) {
-		
-		if ( part.added )
-		{
-			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , function( match , pre , value , after ) {
-				return pre + '<span style="background-color:green;color:white">' + value + '</span>' + after ;
-			} ) ;
-		}
-		else if ( part.removed )
-		{
-			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , function( match , pre , value , after ) {
-				return pre + '<span style="background-color:red;color:white">' + value + '</span>' + after ;
-			} ) ;
-		}
-		else
-		{  
-			str += '<span style="color:grey">' + part.value + '</span>' ;
-		}
-	} ) ;
-	
-	return str ;
-} ;
-
-
-
-
-
-},{"./diff.js":5}],7:[function(require,module,exports){
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../package.json":76,"_process":47,"falafel":36,"fs":16,"path":46,"string-kit":62}],2:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -826,6 +499,7 @@ module.exports = function htmlColorDiff( oldValue , newValue )
 var async = require( 'async-kit' ) ;
 var NGEvents = require( 'nextgen-events' ) ;
 var asyncTry = require( 'async-try-catch' ).try ;
+var Cover = require( './Cover.js' ) ;
 
 
 
@@ -847,6 +521,7 @@ TeaTime.create = function createTeaTime( options )
 		allowConsole: { value: !! options.allowConsole , writable: true , enumerable: true } ,
 		bail: { value: !! options.bail , writable: true , enumerable: true } ,
 		skipOptional: { value: !! options.skipOptional , writable: true , enumerable: true } ,
+		cover: { value: options.cover && Cover.create( options.cover ) , writable: true , enumerable: true } ,
 		
 		token: { value: options.token || null , writable: true , enumerable: true } , // for slave instance
 		acceptTokens: { value: options.acceptTokens || null , writable: true , enumerable: true } , // for master instance
@@ -879,7 +554,14 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 {
 	var i , iMax , v ;
 	
-	if ( ! options.reporters ) { options.reporters = [ 'classic' ] ; }
+	options.cover = args.cover || args.C ;
+	
+	if ( ! options.reporters )
+	{
+		if ( options.cover ) { options.reporters = [ 'classic' , 'coverage-report' ] ; }
+		else { options.reporters = [ 'classic' ] ; }
+	}
+	
 	if ( ! options.clientReporters ) { options.clientReporters = [ 'classic' ] ; }
 	
 	if ( args.console !== undefined ) { options.allowConsole = args.console ; }
@@ -924,26 +606,16 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	// Turn string into regexp for the "grep" feature
 	options.grep = [] ;
 	options.sourceGrep = [] ;
-	if ( args.g )
-	{
-		if ( ! Array.isArray( args.g ) ) { args.g = [ args.g ] ; }
-		
-		for ( i = 0 , iMax = args.g.length ; i < iMax ; i ++ )
-		{
-			options.grep.push( new RegExp( args.g[ i ] , 'i' ) ) ;
-			options.sourceGrep.push( args.g[ i ] ) ;
-		}
-	}
 	
-	if ( args.grep )
+	if ( ! args.grep ) { args.grep = [] ; }
+	else if ( args.grep && ! Array.isArray( args.grep ) ) { args.grep = [ args.grep ] ; }
+	
+	if ( args.g ) { args.grep = args.grep.concat( args.g ) ; }
+	
+	for ( i = 0 , iMax = args.grep.length ; i < iMax ; i ++ )
 	{
-		if ( ! Array.isArray( args.grep ) ) { args.grep = [ args.grep ] ; }
-		
-		for ( i = 0 , iMax = args.grep.length ; i < iMax ; i ++ )
-		{
-			options.grep.push( new RegExp( args.grep[ i ] , 'i' ) ) ;
-			options.sourceGrep.push( args.grep[ i ] ) ;
-		}
+		options.grep.push( new RegExp( args.grep[ i ] , 'i' ) ) ;
+		options.sourceGrep.push( args.grep[ i ] ) ;
 	}
 	
 	
@@ -1045,21 +717,32 @@ TeaTime.prototype.run = function run( callback )
 	
 	this.emit( 'ready' , function() {
 	
-		self.emit( 'run' , self.testCount ) ;
+		self.emit( 'start' , self.testCount ) ;
 		
 		var triggerCallback = function() {
 			if ( callbackTriggered ) { return ; }
 			if ( typeof callback === 'function' ) { callback() ; }
 		} ;
 		
+		// Start coverage tracking NOW!
+		if ( self.cover ) { self.cover.start() ; }
+		
 		self.startTime = Date.now() ;
 		
 		self.runSuite( self.suite , 0 , function() {
 			
-			self.emit( 'report' , self.ok , self.fail , self.optionalFail , self.skip , Date.now() - self.startTime ) ;
+			var duration = Date.now() - self.startTime ;
+			var coverage ;
+			
+			if ( self.cover ) { coverage = self.cover.getCoverage() ; }
+			
+			self.emit( 'report' , self.ok , self.fail , self.optionalFail , self.skip , coverage && coverage.rate , duration ) ;
 			
 			if ( self.fail + self.optionalFail ) { self.emit( 'errorReport' , self.errors ) ; }
 			
+			if ( self.cover ) { self.emit( 'coverageReport' , coverage ) ; }
+			
+			self.emit( 'end' ) ;
 			self.emit( 'exit' , triggerCallback ) ;
 			
 			// Exit anyway after 10 seconds
@@ -1263,7 +946,7 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 
 		testWrapper( testFn , function( testError , time , slow ) {
 			
-			self.emit( 'exitTest' , testFn.testName , depth ) ;
+			self.emit( 'exitTest' , testFn.testName , depth , time , slow , testError ) ;
 			
 			self.runHooks( teardown , depth , function( teardownError , teardownResults ) {
 				
@@ -1299,15 +982,25 @@ TeaTime.syncTest = function syncTest( testFn , callback )
 	} ;
 	
 	try {
+		// Start coverage tracking NOW!
+		if ( this.cover ) { this.cover.start() ; }
+		
 		startTime = Date.now() ;
 		testFn.call( context ) ;
 		time = Date.now() - startTime ;
 	}
 	catch ( error ) {
 		time = Date.now() - startTime ;
+		
+		// Stop coverage tracking
+		if ( this.cover ) { this.cover.stop() ; }
+		
 		callback( error , time , Math.floor( time / slowTime ) ) ;
 		return ;
 	}
+	
+	// Stop coverage tracking
+	if ( this.cover ) { this.cover.stop() ; }
 	
 	callback( undefined , time , Math.floor( time / slowTime ) ) ;
 } ;
@@ -1349,6 +1042,10 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		if ( callbackTriggered ) { return ; }
 		
 		time = Date.now() - startTime ;
+		
+		// Stop coverage tracking
+		if ( self.cover ) { self.cover.stop() ; }
+		
 		callbackTriggered = true ;
 		if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
 		
@@ -1364,6 +1061,9 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 	} , self.timeout ) ;
 	
 	asyncTry( function() {
+		// Start coverage tracking NOW!
+		if ( self.cover ) { self.cover.start() ; }
+		
 		startTime = Date.now() ;
 		testFn.call( context , triggerCallback ) ;
 	} )
@@ -1623,7 +1323,803 @@ TeaTime.prototype.patchError = function patchError( error )
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"async-kit":8,"async-try-catch":13,"nextgen-events":36}],8:[function(require,module,exports){
+},{"./Cover.js":1,"async-kit":9,"async-try-catch":14,"nextgen-events":41}],3:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+/* global document */
+
+
+
+//var Report = require( './report.js' ) ;
+//var ErrorReport = require( './error-report.js' ) ;
+
+
+function Reporter( teaTime , self )
+{
+	if ( ! self )
+	{
+		self = Object.create( Reporter.prototype , {
+			teaTime: { value: teaTime , enumerable: true }
+		} ) ;
+	}
+	
+	document.querySelector( 'body' )
+		.insertAdjacentHTML( 'beforeend' ,
+			'<div class="tea-time-classic-reporter" style="background-color:black;color:white"></div>'
+		) ;
+	
+	self.container = document.querySelector( 'div.tea-time-classic-reporter' ) ;
+	
+	self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
+	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
+	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
+	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
+	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
+	self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
+	
+	return self ;
+}
+
+module.exports = Reporter ;
+
+
+
+function scrollDown()
+{
+	( document.querySelector( 'div.tea-time-classic-reporter p:last-child' ) ||
+		document.querySelector( 'div.tea-time-classic-reporter h4:last-child' ) ||
+		document.querySelector( 'div.tea-time-classic-reporter pre:last-child' ) )
+			.scrollIntoView() ;
+}
+
+
+
+function indentStyle( depth )
+{
+	return 'margin-left:' + ( 1 + 2 * depth ) + '%;' ;
+}
+
+
+
+var timeStyle = "color:grey;" ;
+var passingStyle = "color:green;" ;
+var failingStyle = "color:red;" ;
+var optionalFailingStyle = "color:brown;" ;
+var pendingStyle = "color:blue;" ;
+var coverageStyle = "color:magenta;" ;
+
+var fastStyle = "color:grey;" ;
+var slowStyle = "color:yellow;" ;
+var slowerStyle = "color:red;" ;
+
+var optionalErrorStyle = "color:brown;font-weight:bold;" ;
+var errorStyle = "color:red;font-weight:bold;" ;
+var hookErrorStyle = "background-color:red;color:white;font-weight:bold;" ;
+
+var expectedStyle = "background-color:green;color:white;font-weight:bold;" ;
+var actualStyle = "background-color:red;color:white;font-weight:bold;" ;
+
+
+
+
+Reporter.enterSuite = function enterSuite( suiteName , depth )
+{
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<h4 class="tea-time-classic-reporter" style="' + indentStyle( depth ) + '">' + suiteName + '</h4>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.ok = function ok( testName , depth , time , slow )
+{
+	var content = '✔ ' + testName ;
+	
+	if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
+	else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
+	else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<p class="tea-time-classic-reporter" style="' + passingStyle + indentStyle( depth ) + '">' + content + '</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.fail = function fail( testName , depth , time , slow , error )
+{
+	var content = '✘ ' + testName ;
+	
+	if ( time !== undefined )
+	{
+		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
+		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
+		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	}
+	
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<p class="tea-time-classic-reporter" style="' + failingStyle + indentStyle( depth ) + '">' + content + '</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error )
+{
+	var content = '✘ ' + testName ;
+	
+	if ( time !== undefined )
+	{
+		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
+		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
+		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	}
+	
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<p class="tea-time-classic-reporter" style="' + optionalFailingStyle + indentStyle( depth ) + '">' + content + '</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.skip = function skip( testName , depth )
+{
+	var content = '· ' + testName ;
+	
+	this.container.insertAdjacentHTML( 'beforeend' ,
+		'<p class="tea-time-classic-reporter" style="' + pendingStyle + indentStyle( depth ) + '">' + content + '</p>'
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.report = function report( ok , fail , optionalFail , skip , coverageRate , time )
+{
+	this.container.insertAdjacentHTML(
+		'beforeend' ,
+		'<hr />' +
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + ok + ' passing ' +
+		( time < 2000 ?
+			'<span style="' + timeStyle + '">(' + Math.round( time ) + 'ms)</span>' :
+			'<span style="' + timeStyle + '">(' + Math.round( time / 1000 ) + 's)</span>'
+		) +
+		'</p>' +
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + failingStyle + indentStyle( 1 ) + '">' + fail + ' failing</p>' +
+		( optionalFail ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + optionalFailingStyle + indentStyle( 1 ) + '">' + optionalFail + ' opt failing</p>' : '' ) +
+		( skip ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + skip + ' pending</p>' : '' ) +
+		( coverageRate !== undefined ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + coverageStyle + indentStyle( 1 ) + '">' + Math.round( coverageRate * 100 ) + '% coverage</p>' : '' )
+	) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.errorReport = function errorReport( errors )
+{
+	var i , error , content = '' ;
+	
+	content += '<h4 class="tea-time-classic-reporter" style="' + errorStyle + indentStyle( 0 ) + '">== Errors ==</h4>' ;
+	
+	for ( i = 0 ; i < errors.length ; i ++ )
+	{
+		error = errors[ i ] ;
+		content += '<p class="tea-time-classic-reporter" style="' +
+			( error.optional ? optionalErrorStyle : errorStyle ) +
+			indentStyle( 1 ) + '">' + ( i + 1 ) + ' ) ' ;
+		
+		switch ( error.type )
+		{
+			case 'test' :
+				if ( error.error.testTimeout ) { content += '<span style="' + hookErrorStyle + '">TEST TIMEOUT</span> ' ; }
+				break ;
+			case 'setup' :
+				content += '<span style="' + hookErrorStyle + '">SETUP HOOK</span> ' ;
+				break ;
+			case 'teardown' :
+				content += '<span style="' + hookErrorStyle + '">TEARDOWN HOOK</span> ' ;
+				break ;
+			case 'suiteSetup' :
+				content += '<span style="' + hookErrorStyle + '">SUITE SETUP HOOK</span> ' ;
+				break ;
+			case 'suiteTeardown' :
+				content += '<span style="' + hookErrorStyle + '">SUITE TEARDOWN HOOK</span> ' ;
+				break ;
+		}
+		
+		if ( error.error.uncaught ) { content += '<span style="' + hookErrorStyle + '">UNCAUGHT EXCEPTION</span> ' ; }
+		
+		content += error.name ;
+		content += '</p>' ;
+		content += this.reportOneError( error.error ) ;
+	}
+	
+	this.container.insertAdjacentHTML( 'beforeend' , '<hr />' + content ) ;
+	
+	scrollDown() ;
+} ;
+
+
+
+Reporter.prototype.reportOneError = function reportOneError( error )
+{
+	var content = '' ;
+	
+	if ( ( 'expected' in error ) && ( 'actual' in error ) )
+	{
+		content += '<p class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
+			'<span style="' + expectedStyle + '">expected</span><span style="' + actualStyle + '">actual</span>' +
+			'</p>' ;
+		
+		content += '<pre class="tea-time-classic-reporter"; style="' + indentStyle( 2 ) + '">' ;
+		content += this.teaTime.htmlColorDiff( error.actual , error.expected ) ;
+		content += '</pre>' ;
+	}
+	
+	content += 
+		'<pre class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' + 
+		this.teaTime.inspect.inspectError( { style: 'html' } , error ) +
+		'</pre>' ;
+	
+	return content ;
+} ;
+
+
+
+},{}],4:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+function Reporter( teaTime , self )
+{
+	if ( ! self )
+	{
+		self = Object.create( Reporter.prototype , {
+			teaTime: { value: teaTime , enumerable: true }
+		} ) ;
+	}
+	
+	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
+	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
+	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
+	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
+	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
+	
+	return self ;
+}
+
+module.exports = Reporter ;
+
+
+
+Reporter.ok = function ok( testName , depth , time , slow )
+{
+	console.log( 'OK:' , testName , '(' + time + ')' ) ;
+} ;
+
+
+
+Reporter.fail = function fail( testName , depth , time , slow , error )
+{
+	console.log( 'Fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
+} ;
+
+
+
+Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error )
+{
+	console.log( 'Opt fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
+} ;
+
+
+
+Reporter.skip = function skip( testName , depth )
+{
+	console.log( 'Pending:' , testName ) ;
+} ;
+
+
+
+Reporter.report = function report( ok , fail , optionalFail , skip , coverageRate )
+{
+	console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' opt fail:' , optionalFail , ' pending:' , skip ,
+		' coverage:' , coverageRate !== undefined ? Math.round( coverageRate * 100 ) + '%' : 'n/a'
+	) ;
+} ;
+
+
+
+},{}],5:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+/* global document, WebSocket */
+
+
+
+function Reporter( teaTime , self )
+{
+	if ( ! self )
+	{
+		self = Object.create( Reporter.prototype , {
+			teaTime: { value: teaTime , enumerable: true }
+		} ) ;
+	}
+	
+	self.teaTime.on( 'ready' , { fn: Reporter.ready.bind( self ) , async: true } ) ;
+	
+	self.teaTime.on( 'start' , Reporter.forward.bind( self , 'start' ) ) ;
+	self.teaTime.on( 'enterSuite' , Reporter.forward.bind( self , 'enterSuite' ) ) ;
+	self.teaTime.on( 'exitSuite' , Reporter.forward.bind( self , 'exitSuite' ) ) ;
+	self.teaTime.on( 'enterTest' , Reporter.forward.bind( self , 'enterTest' ) ) ;
+	self.teaTime.on( 'exitTest' , Reporter.forward.bind( self , 'exitTest' ) ) ;
+	self.teaTime.on( 'ok' , Reporter.forward.bind( self , 'ok' ) ) ;
+	self.teaTime.on( 'fail' , Reporter.forward.bind( self , 'fail' ) ) ;
+	self.teaTime.on( 'optionalFail' , Reporter.forward.bind( self , 'optionalFail' ) ) ;
+	self.teaTime.on( 'skip' , Reporter.forward.bind( self , 'skip' ) ) ;
+	self.teaTime.on( 'report' , Reporter.forward.bind( self , 'report' ) ) ;
+	self.teaTime.on( 'errorReport' , Reporter.forward.bind( self , 'errorReport' ) ) ;
+	self.teaTime.on( 'exit' , Reporter.exit.bind( self , 'exit' ) ) ;
+	
+	
+	//self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
+	//self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
+	//self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
+	//self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
+	//self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
+	//self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
+	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
+	
+	return self ;
+}
+
+module.exports = Reporter ;
+
+
+
+Reporter.ready = function ready( callback )
+{
+	var self = this ;
+	
+	//console.log( "Ready event received!" , this.teaTime.token ) ;
+	this.ws = new WebSocket( 'ws://127.0.0.1:7357/' + this.teaTime.token ) ;
+	
+	this.ws.onopen = function onOpen()
+	{
+		Reporter.forward.call( self , 'ready' ) ;
+		console.log( "Websocket opened!" ) ;
+		callback() ;
+	} ;
+	
+	this.ws.onclose = function onClose()
+	{
+		console.log( "Websocket closed!" ) ;
+	} ;
+} ;
+
+
+
+Reporter.forward = function forward( event )
+{
+	var args = Array.prototype.slice.call( arguments , 1 ) ;
+	
+	this.teaTime.prepareSerialize( args ) ;
+	
+	this.ws.send(
+		JSON.stringify( {
+			event: event ,
+			args: args
+		} )
+	) ;
+} ;
+
+
+
+Reporter.exit = function exit( callback )
+{
+	Reporter.forward.call( this , 'exit' ) ;
+	//console.log( "Exit event received!" ) ;
+	this.ws.close() ;
+} ;
+
+
+
+
+},{}],6:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+/* global window */
+
+
+
+var TeaTime = require( './TeaTime.js' ) ;
+var diff = require( './diff.js' ) ;
+var htmlColorDiff = require( './htmlColorDiff.js' ) ;
+var inspect = require( 'string-kit/lib/inspect.js' ) ;
+var dom = require( 'dom-kit' ) ;
+var url = require( 'url' ) ;
+
+
+
+function createTeaTime()
+{
+	var options = {
+		microTimeout: function( callback ) {
+			setTimeout( callback , 0 ) ;
+		} ,
+		onceUncaughtException: function( callback ) {
+			window.onerror = function( message , source , lineno , colno , error ) {
+				window.onerror = function() {} ;
+				callback( error ) ;
+				return true ;	// prevent the event propagation
+			} ;
+		} ,
+		offUncaughtException: function() {
+			window.onerror = function() {} ;
+		} ,
+		allowConsole: true
+	} ;
+	
+	TeaTime.populateOptionsWithArgs( options , url.parse( window.location.href , true ).query ) ;
+	
+	window.teaTime = TeaTime.create( options ) ;
+	
+	window.teaTime.init() ;
+	window.teaTime.diff = diff ;
+	window.teaTime.htmlColorDiff = htmlColorDiff ;
+	window.teaTime.inspect = inspect ;
+	window.teaTime.prepareSerialize = prepareSerialize ;
+	
+	window.teaTime.reporters = {
+		console: require( './browser-reporters/console.js' ) ,
+		classic: require( './browser-reporters/classic.js' ) ,
+		websocket: require( './browser-reporters/websocket.js' )
+	} ;
+	
+	options.reporters.forEach( function( reporter ) {
+		window.teaTime.reporters[ reporter ]( window.teaTime ) ;
+	} ) ;
+	
+	if ( options.ws )
+	{
+		window.teaTime.ws = true ;
+	}
+	
+	return window.teaTime ;
+}
+
+module.exports = createTeaTime ;
+
+
+
+function prepareSerialize( object )
+{
+	var i , iMax , keys , prototypeName ;
+	
+	if ( ! object || typeof object !== 'object' ) { return ; }
+	
+	
+	if ( Array.isArray( object ) )
+	{
+		for ( i = 0 , iMax = object.length ; i < iMax ; i ++ )
+		{
+			prepareSerialize( object[ i ] ) ;
+		}
+		
+		return ;
+	}
+	
+	prototypeName = object.__proto__ && object.__proto__.constructor.name ; // jshint ignore:line
+	
+	if ( prototypeName && prototypeName !== 'Object' ) { object.__prototype = prototypeName ; }
+	
+	if ( object instanceof Error )
+	{
+		// Make things enumerable, so JSON.stringify() will serialize them like it should
+		Object.defineProperties( object , {
+			__prototype: { value: object.constructor.name , enumerable: true , writable: true } ,
+			name: { value: object.name , enumerable: true , writable: true } ,
+			message: { value: object.message , enumerable: true , writable: true } ,
+			type: { value: object.type || object.constructor.name , enumerable: true , writable: true } ,
+			stack: { value: object.stack , enumerable: true , writable: true }
+		} ) ;
+	}
+	
+	keys = Object.keys( object ) ;
+	
+	for ( i = 0 , iMax = keys.length ; i < iMax ; i ++ )
+	{
+		prepareSerialize( object[ keys[ i ] ] ) ;
+	}
+}
+
+
+
+createTeaTime() ;
+
+dom.ready( function() {
+	window.teaTime.run() ;
+} ) ;
+
+
+
+
+},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":33,"string-kit/lib/inspect.js":56,"url":71}],7:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var inspect = require( 'string-kit/lib/inspect.js' ) ;
+var jsdiff = require( 'diff' ) ;
+
+
+
+var inspectOptions = { minimal: true , depth: 10 , sort: true } ;
+
+
+
+function textDiff( oldValue , newValue )
+{
+	var str = '' ,
+		diff = textDiff.raw( oldValue , newValue , true ) ;
+	
+	diff.forEach( function( part ) {
+		
+		str += part.value.replace( /^(?!$)/mg , function() {
+			if ( part.added ) { return '++' ; }
+			else if ( part.removed ) { return '--' ; }
+			else { return '  ' ; }
+		} ) ;
+	} ) ;
+	
+	return str ;
+}
+
+module.exports = textDiff ;
+
+
+
+textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
+{
+	var diff , score = 0 ;
+	
+	var oldStr = inspect.inspect( inspectOptions , oldValue ) ;
+	var newStr = inspect.inspect( inspectOptions , newValue ) ;
+	
+	if ( ! noCharMode && Math.max( oldStr.length , newStr.length ) < 2000 )
+	{
+		// First try the diffChars algorithm, it looks great if there are only few changes
+		diff = jsdiff.diffChars( oldStr , newStr ) ;
+		
+		// Try to evaluate the weirdness
+		diff.forEach( function( part ) {
+			if ( part.added || part.removed )
+			{
+				score += 15 + part.value.length ;
+			}
+		} ) ;
+		
+		// If too much weirdness, fallback to line mode
+		if ( score < 80 ) { return diff ; }
+	}
+	
+	diff = jsdiff.diffLines( oldStr , newStr ) ;
+	
+	return diff ;
+} ;
+
+
+
+},{"diff":27,"string-kit/lib/inspect.js":56}],8:[function(require,module,exports){
+/*
+	Tea Time!
+	
+	Copyright (c) 2015 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var rawDiff = require( './diff.js' ).raw ;
+
+
+
+module.exports = function htmlColorDiff( oldValue , newValue )
+{
+	var str = '' ,
+		diff = rawDiff( oldValue , newValue ) ;
+	
+	diff.forEach( function( part ) {
+		
+		if ( part.added )
+		{
+			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , function( match , pre , value , after ) {
+				return pre + '<span style="background-color:green;color:white">' + value + '</span>' + after ;
+			} ) ;
+		}
+		else if ( part.removed )
+		{
+			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , function( match , pre , value , after ) {
+				return pre + '<span style="background-color:red;color:white">' + value + '</span>' + after ;
+			} ) ;
+		}
+		else
+		{  
+			str += '<span style="color:grey">' + part.value + '</span>' ;
+		}
+	} ) ;
+	
+	return str ;
+} ;
+
+
+
+
+
+},{"./diff.js":7}],9:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -1666,7 +2162,7 @@ async.clearSafeTimeout = safeTimeout.clearSafeTimeout ;
 
 
 
-},{"./core.js":9,"./exit.js":10,"./safeTimeout.js":11,"./wrapper.js":12}],9:[function(require,module,exports){
+},{"./core.js":10,"./exit.js":11,"./safeTimeout.js":12,"./wrapper.js":13}],10:[function(require,module,exports){
 (function (process,global){
 /*
 	Async Kit
@@ -3662,7 +4158,7 @@ function execLogicFinal( execContext , result )
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":39,"nextgen-events":36,"tree-kit/lib/extend.js":47}],10:[function(require,module,exports){
+},{"_process":47,"nextgen-events":41,"tree-kit/lib/extend.js":66}],11:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -3752,7 +4248,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":8,"_process":39}],11:[function(require,module,exports){
+},{"./async.js":9,"_process":47}],12:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3820,7 +4316,7 @@ exports.clearSafeTimeout = function clearSafeTimeout( timer )
 
 
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -3887,7 +4383,7 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 (function (process,global){
 /*
 	Async Try-Catch
@@ -4268,7 +4764,7 @@ AsyncTryCatch.restore = function restore()
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":14,"_process":39,"events":34}],14:[function(require,module,exports){
+},{"../package.json":15,"_process":47,"events":35}],15:[function(require,module,exports){
 module.exports={
   "name": "async-try-catch",
   "version": "0.3.4",
@@ -4322,9 +4818,9 @@ module.exports={
   "_from": "async-try-catch@0.3.4"
 }
 
-},{}],15:[function(require,module,exports){
-
 },{}],16:[function(require,module,exports){
+
+},{}],17:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -4350,7 +4846,7 @@ function convertChangesToDMP(changes) {
 }
 
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4387,7 +4883,7 @@ function escapeHTML(s) {
 }
 
 
-},{}],18:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4411,7 +4907,7 @@ function diffArrays(oldArr, newArr, callback) {
 }
 
 
-},{"./base":19}],19:[function(require,module,exports){
+},{"./base":20}],20:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4643,7 +5139,7 @@ function clonePath(path) {
 }
 
 
-},{}],20:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4663,7 +5159,7 @@ function diffChars(oldStr, newStr, callback) {
 }
 
 
-},{"./base":19}],21:[function(require,module,exports){
+},{"./base":20}],22:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4687,7 +5183,7 @@ function diffCss(oldStr, newStr, callback) {
 }
 
 
-},{"./base":19}],22:[function(require,module,exports){
+},{"./base":20}],23:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4789,7 +5285,7 @@ function canonicalize(obj, stack, replacementStack) {
 }
 
 
-},{"./base":19,"./line":23}],23:[function(require,module,exports){
+},{"./base":20,"./line":24}],24:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4844,7 +5340,7 @@ function diffTrimmedLines(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":31,"./base":19}],24:[function(require,module,exports){
+},{"../util/params":32,"./base":20}],25:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4868,7 +5364,7 @@ function diffSentences(oldStr, newStr, callback) {
 }
 
 
-},{"./base":19}],25:[function(require,module,exports){
+},{"./base":20}],26:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -4940,7 +5436,7 @@ function diffWordsWithSpace(oldStr, newStr, callback) {
 }
 
 
-},{"../util/params":31,"./base":19}],26:[function(require,module,exports){
+},{"../util/params":32,"./base":20}],27:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5015,7 +5511,7 @@ exports. /*istanbul ignore end*/Diff = _base2['default'];
  */
 
 
-},{"./convert/dmp":16,"./convert/xml":17,"./diff/array":18,"./diff/base":19,"./diff/character":20,"./diff/css":21,"./diff/json":22,"./diff/line":23,"./diff/sentence":24,"./diff/word":25,"./patch/apply":27,"./patch/create":28,"./patch/parse":29}],27:[function(require,module,exports){
+},{"./convert/dmp":17,"./convert/xml":18,"./diff/array":19,"./diff/base":20,"./diff/character":21,"./diff/css":22,"./diff/json":23,"./diff/line":24,"./diff/sentence":25,"./diff/word":26,"./patch/apply":28,"./patch/create":29,"./patch/parse":30}],28:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5194,7 +5690,7 @@ function applyPatches(uniDiff, options) {
 }
 
 
-},{"../util/distance-iterator":30,"./parse":29}],28:[function(require,module,exports){
+},{"../util/distance-iterator":31,"./parse":30}],29:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5349,7 +5845,7 @@ function createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options) {
 }
 
 
-},{"../diff/line":23}],29:[function(require,module,exports){
+},{"../diff/line":24}],30:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5494,7 +5990,7 @@ function parsePatch(uniDiff) {
 }
 
 
-},{}],30:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 /*istanbul ignore start*/"use strict";
 
 exports.__esModule = true;
@@ -5543,7 +6039,7 @@ exports["default"] = /*istanbul ignore end*/function (start, minLine, maxLine) {
 };
 
 
-},{}],31:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 /*istanbul ignore start*/'use strict';
 
 exports.__esModule = true;
@@ -5563,7 +6059,7 @@ function generateOptions(options, defaults) {
 }
 
 
-},{}],32:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
 
@@ -5801,7 +6297,7 @@ dom.html = function html( element , html ) { element.innerHTML = html ; } ;
 
 
 
-},{"./svg.js":33}],33:[function(require,module,exports){
+},{"./svg.js":34}],34:[function(require,module,exports){
 (function (process){
 /*
 	The Cedric's Swiss Knife (CSK) - CSK DOM toolbox
@@ -6031,7 +6527,7 @@ domSvg.ajax.ajaxStatus = function ajaxStatus( callback )
 
 
 }).call(this,require('_process'))
-},{"./dom.js":32,"_process":39,"fs":15}],34:[function(require,module,exports){
+},{"./dom.js":33,"_process":47,"fs":16}],35:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -6335,7 +6831,3255 @@ function isUndefined(arg) {
   return arg === void 0;
 }
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
+var parse = require('acorn').parse;
+var isArray = require('isarray');
+var objectKeys = require('object-keys');
+var forEach = require('foreach');
+
+module.exports = function (src, opts, fn) {
+    if (typeof opts === 'function') {
+        fn = opts;
+        opts = {};
+    }
+    if (src && typeof src === 'object' && src.constructor.name === 'Buffer') {
+        src = src.toString();
+    }
+    else if (src && typeof src === 'object') {
+        opts = src;
+        src = opts.source;
+        delete opts.source;
+    }
+    src = src === undefined ? opts.source : src;
+    if (typeof src !== 'string') src = String(src);
+    if (opts.parser) parse = opts.parser.parse;
+    var ast = parse(src, opts);
+    
+    var result = {
+        chunks : src.split(''),
+        toString : function () { return result.chunks.join('') },
+        inspect : function () { return result.toString() }
+    };
+    var index = 0;
+    
+    (function walk (node, parent) {
+        insertHelpers(node, parent, result.chunks);
+        
+        forEach(objectKeys(node), function (key) {
+            if (key === 'parent') return;
+            
+            var child = node[key];
+            if (isArray(child)) {
+                forEach(child, function (c) {
+                    if (c && typeof c.type === 'string') {
+                        walk(c, node);
+                    }
+                });
+            }
+            else if (child && typeof child.type === 'string') {
+                walk(child, node);
+            }
+        });
+        fn(node);
+    })(ast, undefined);
+    
+    return result;
+};
+ 
+function insertHelpers (node, parent, chunks) {
+    node.parent = parent;
+    
+    node.source = function () {
+        return chunks.slice(node.start, node.end).join('');
+    };
+    
+    if (node.update && typeof node.update === 'object') {
+        var prev = node.update;
+        forEach(objectKeys(prev), function (key) {
+            update[key] = prev[key];
+        });
+        node.update = update;
+    }
+    else {
+        node.update = update;
+    }
+    
+    function update (s) {
+        chunks[node.start] = s;
+        for (var i = node.start + 1; i < node.end; i++) {
+            chunks[i] = '';
+        }
+    }
+}
+
+},{"acorn":37,"foreach":38,"isarray":40,"object-keys":44}],37:[function(require,module,exports){
+(function (global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
+  typeof define === 'function' && define.amd ? define(['exports'], factory) :
+  (factory((global.acorn = global.acorn || {})));
+}(this, function (exports) { 'use strict';
+
+  // Reserved word lists for various dialects of the language
+
+  var reservedWords = {
+    3: "abstract boolean byte char class double enum export extends final float goto implements import int interface long native package private protected public short static super synchronized throws transient volatile",
+    5: "class enum extends super const export import",
+    6: "enum",
+    7: "enum",
+    strict: "implements interface let package private protected public static yield",
+    strictBind: "eval arguments"
+  }
+
+  // And the keywords
+
+  var ecma5AndLessKeywords = "break case catch continue debugger default do else finally for function if return switch throw try var while with null true false instanceof typeof void delete new in this"
+
+  var keywords = {
+    5: ecma5AndLessKeywords,
+    6: ecma5AndLessKeywords + " const class extends export import super"
+  }
+
+  // ## Character categories
+
+  // Big ugly regular expressions that match characters in the
+  // whitespace, identifier, and identifier-start categories. These
+  // are only applied when a character is found to actually have a
+  // code point above 128.
+  // Generated by `bin/generate-identifier-regex.js`.
+
+  var nonASCIIidentifierStartChars = "\xaa\xb5\xba\xc0-\xd6\xd8-\xf6\xf8-\u02c1\u02c6-\u02d1\u02e0-\u02e4\u02ec\u02ee\u0370-\u0374\u0376\u0377\u037a-\u037d\u037f\u0386\u0388-\u038a\u038c\u038e-\u03a1\u03a3-\u03f5\u03f7-\u0481\u048a-\u052f\u0531-\u0556\u0559\u0561-\u0587\u05d0-\u05ea\u05f0-\u05f2\u0620-\u064a\u066e\u066f\u0671-\u06d3\u06d5\u06e5\u06e6\u06ee\u06ef\u06fa-\u06fc\u06ff\u0710\u0712-\u072f\u074d-\u07a5\u07b1\u07ca-\u07ea\u07f4\u07f5\u07fa\u0800-\u0815\u081a\u0824\u0828\u0840-\u0858\u08a0-\u08b4\u08b6-\u08bd\u0904-\u0939\u093d\u0950\u0958-\u0961\u0971-\u0980\u0985-\u098c\u098f\u0990\u0993-\u09a8\u09aa-\u09b0\u09b2\u09b6-\u09b9\u09bd\u09ce\u09dc\u09dd\u09df-\u09e1\u09f0\u09f1\u0a05-\u0a0a\u0a0f\u0a10\u0a13-\u0a28\u0a2a-\u0a30\u0a32\u0a33\u0a35\u0a36\u0a38\u0a39\u0a59-\u0a5c\u0a5e\u0a72-\u0a74\u0a85-\u0a8d\u0a8f-\u0a91\u0a93-\u0aa8\u0aaa-\u0ab0\u0ab2\u0ab3\u0ab5-\u0ab9\u0abd\u0ad0\u0ae0\u0ae1\u0af9\u0b05-\u0b0c\u0b0f\u0b10\u0b13-\u0b28\u0b2a-\u0b30\u0b32\u0b33\u0b35-\u0b39\u0b3d\u0b5c\u0b5d\u0b5f-\u0b61\u0b71\u0b83\u0b85-\u0b8a\u0b8e-\u0b90\u0b92-\u0b95\u0b99\u0b9a\u0b9c\u0b9e\u0b9f\u0ba3\u0ba4\u0ba8-\u0baa\u0bae-\u0bb9\u0bd0\u0c05-\u0c0c\u0c0e-\u0c10\u0c12-\u0c28\u0c2a-\u0c39\u0c3d\u0c58-\u0c5a\u0c60\u0c61\u0c80\u0c85-\u0c8c\u0c8e-\u0c90\u0c92-\u0ca8\u0caa-\u0cb3\u0cb5-\u0cb9\u0cbd\u0cde\u0ce0\u0ce1\u0cf1\u0cf2\u0d05-\u0d0c\u0d0e-\u0d10\u0d12-\u0d3a\u0d3d\u0d4e\u0d54-\u0d56\u0d5f-\u0d61\u0d7a-\u0d7f\u0d85-\u0d96\u0d9a-\u0db1\u0db3-\u0dbb\u0dbd\u0dc0-\u0dc6\u0e01-\u0e30\u0e32\u0e33\u0e40-\u0e46\u0e81\u0e82\u0e84\u0e87\u0e88\u0e8a\u0e8d\u0e94-\u0e97\u0e99-\u0e9f\u0ea1-\u0ea3\u0ea5\u0ea7\u0eaa\u0eab\u0ead-\u0eb0\u0eb2\u0eb3\u0ebd\u0ec0-\u0ec4\u0ec6\u0edc-\u0edf\u0f00\u0f40-\u0f47\u0f49-\u0f6c\u0f88-\u0f8c\u1000-\u102a\u103f\u1050-\u1055\u105a-\u105d\u1061\u1065\u1066\u106e-\u1070\u1075-\u1081\u108e\u10a0-\u10c5\u10c7\u10cd\u10d0-\u10fa\u10fc-\u1248\u124a-\u124d\u1250-\u1256\u1258\u125a-\u125d\u1260-\u1288\u128a-\u128d\u1290-\u12b0\u12b2-\u12b5\u12b8-\u12be\u12c0\u12c2-\u12c5\u12c8-\u12d6\u12d8-\u1310\u1312-\u1315\u1318-\u135a\u1380-\u138f\u13a0-\u13f5\u13f8-\u13fd\u1401-\u166c\u166f-\u167f\u1681-\u169a\u16a0-\u16ea\u16ee-\u16f8\u1700-\u170c\u170e-\u1711\u1720-\u1731\u1740-\u1751\u1760-\u176c\u176e-\u1770\u1780-\u17b3\u17d7\u17dc\u1820-\u1877\u1880-\u18a8\u18aa\u18b0-\u18f5\u1900-\u191e\u1950-\u196d\u1970-\u1974\u1980-\u19ab\u19b0-\u19c9\u1a00-\u1a16\u1a20-\u1a54\u1aa7\u1b05-\u1b33\u1b45-\u1b4b\u1b83-\u1ba0\u1bae\u1baf\u1bba-\u1be5\u1c00-\u1c23\u1c4d-\u1c4f\u1c5a-\u1c7d\u1c80-\u1c88\u1ce9-\u1cec\u1cee-\u1cf1\u1cf5\u1cf6\u1d00-\u1dbf\u1e00-\u1f15\u1f18-\u1f1d\u1f20-\u1f45\u1f48-\u1f4d\u1f50-\u1f57\u1f59\u1f5b\u1f5d\u1f5f-\u1f7d\u1f80-\u1fb4\u1fb6-\u1fbc\u1fbe\u1fc2-\u1fc4\u1fc6-\u1fcc\u1fd0-\u1fd3\u1fd6-\u1fdb\u1fe0-\u1fec\u1ff2-\u1ff4\u1ff6-\u1ffc\u2071\u207f\u2090-\u209c\u2102\u2107\u210a-\u2113\u2115\u2118-\u211d\u2124\u2126\u2128\u212a-\u2139\u213c-\u213f\u2145-\u2149\u214e\u2160-\u2188\u2c00-\u2c2e\u2c30-\u2c5e\u2c60-\u2ce4\u2ceb-\u2cee\u2cf2\u2cf3\u2d00-\u2d25\u2d27\u2d2d\u2d30-\u2d67\u2d6f\u2d80-\u2d96\u2da0-\u2da6\u2da8-\u2dae\u2db0-\u2db6\u2db8-\u2dbe\u2dc0-\u2dc6\u2dc8-\u2dce\u2dd0-\u2dd6\u2dd8-\u2dde\u3005-\u3007\u3021-\u3029\u3031-\u3035\u3038-\u303c\u3041-\u3096\u309b-\u309f\u30a1-\u30fa\u30fc-\u30ff\u3105-\u312d\u3131-\u318e\u31a0-\u31ba\u31f0-\u31ff\u3400-\u4db5\u4e00-\u9fd5\ua000-\ua48c\ua4d0-\ua4fd\ua500-\ua60c\ua610-\ua61f\ua62a\ua62b\ua640-\ua66e\ua67f-\ua69d\ua6a0-\ua6ef\ua717-\ua71f\ua722-\ua788\ua78b-\ua7ae\ua7b0-\ua7b7\ua7f7-\ua801\ua803-\ua805\ua807-\ua80a\ua80c-\ua822\ua840-\ua873\ua882-\ua8b3\ua8f2-\ua8f7\ua8fb\ua8fd\ua90a-\ua925\ua930-\ua946\ua960-\ua97c\ua984-\ua9b2\ua9cf\ua9e0-\ua9e4\ua9e6-\ua9ef\ua9fa-\ua9fe\uaa00-\uaa28\uaa40-\uaa42\uaa44-\uaa4b\uaa60-\uaa76\uaa7a\uaa7e-\uaaaf\uaab1\uaab5\uaab6\uaab9-\uaabd\uaac0\uaac2\uaadb-\uaadd\uaae0-\uaaea\uaaf2-\uaaf4\uab01-\uab06\uab09-\uab0e\uab11-\uab16\uab20-\uab26\uab28-\uab2e\uab30-\uab5a\uab5c-\uab65\uab70-\uabe2\uac00-\ud7a3\ud7b0-\ud7c6\ud7cb-\ud7fb\uf900-\ufa6d\ufa70-\ufad9\ufb00-\ufb06\ufb13-\ufb17\ufb1d\ufb1f-\ufb28\ufb2a-\ufb36\ufb38-\ufb3c\ufb3e\ufb40\ufb41\ufb43\ufb44\ufb46-\ufbb1\ufbd3-\ufd3d\ufd50-\ufd8f\ufd92-\ufdc7\ufdf0-\ufdfb\ufe70-\ufe74\ufe76-\ufefc\uff21-\uff3a\uff41-\uff5a\uff66-\uffbe\uffc2-\uffc7\uffca-\uffcf\uffd2-\uffd7\uffda-\uffdc"
+  var nonASCIIidentifierChars = "\u200c\u200d\xb7\u0300-\u036f\u0387\u0483-\u0487\u0591-\u05bd\u05bf\u05c1\u05c2\u05c4\u05c5\u05c7\u0610-\u061a\u064b-\u0669\u0670\u06d6-\u06dc\u06df-\u06e4\u06e7\u06e8\u06ea-\u06ed\u06f0-\u06f9\u0711\u0730-\u074a\u07a6-\u07b0\u07c0-\u07c9\u07eb-\u07f3\u0816-\u0819\u081b-\u0823\u0825-\u0827\u0829-\u082d\u0859-\u085b\u08d4-\u08e1\u08e3-\u0903\u093a-\u093c\u093e-\u094f\u0951-\u0957\u0962\u0963\u0966-\u096f\u0981-\u0983\u09bc\u09be-\u09c4\u09c7\u09c8\u09cb-\u09cd\u09d7\u09e2\u09e3\u09e6-\u09ef\u0a01-\u0a03\u0a3c\u0a3e-\u0a42\u0a47\u0a48\u0a4b-\u0a4d\u0a51\u0a66-\u0a71\u0a75\u0a81-\u0a83\u0abc\u0abe-\u0ac5\u0ac7-\u0ac9\u0acb-\u0acd\u0ae2\u0ae3\u0ae6-\u0aef\u0b01-\u0b03\u0b3c\u0b3e-\u0b44\u0b47\u0b48\u0b4b-\u0b4d\u0b56\u0b57\u0b62\u0b63\u0b66-\u0b6f\u0b82\u0bbe-\u0bc2\u0bc6-\u0bc8\u0bca-\u0bcd\u0bd7\u0be6-\u0bef\u0c00-\u0c03\u0c3e-\u0c44\u0c46-\u0c48\u0c4a-\u0c4d\u0c55\u0c56\u0c62\u0c63\u0c66-\u0c6f\u0c81-\u0c83\u0cbc\u0cbe-\u0cc4\u0cc6-\u0cc8\u0cca-\u0ccd\u0cd5\u0cd6\u0ce2\u0ce3\u0ce6-\u0cef\u0d01-\u0d03\u0d3e-\u0d44\u0d46-\u0d48\u0d4a-\u0d4d\u0d57\u0d62\u0d63\u0d66-\u0d6f\u0d82\u0d83\u0dca\u0dcf-\u0dd4\u0dd6\u0dd8-\u0ddf\u0de6-\u0def\u0df2\u0df3\u0e31\u0e34-\u0e3a\u0e47-\u0e4e\u0e50-\u0e59\u0eb1\u0eb4-\u0eb9\u0ebb\u0ebc\u0ec8-\u0ecd\u0ed0-\u0ed9\u0f18\u0f19\u0f20-\u0f29\u0f35\u0f37\u0f39\u0f3e\u0f3f\u0f71-\u0f84\u0f86\u0f87\u0f8d-\u0f97\u0f99-\u0fbc\u0fc6\u102b-\u103e\u1040-\u1049\u1056-\u1059\u105e-\u1060\u1062-\u1064\u1067-\u106d\u1071-\u1074\u1082-\u108d\u108f-\u109d\u135d-\u135f\u1369-\u1371\u1712-\u1714\u1732-\u1734\u1752\u1753\u1772\u1773\u17b4-\u17d3\u17dd\u17e0-\u17e9\u180b-\u180d\u1810-\u1819\u18a9\u1920-\u192b\u1930-\u193b\u1946-\u194f\u19d0-\u19da\u1a17-\u1a1b\u1a55-\u1a5e\u1a60-\u1a7c\u1a7f-\u1a89\u1a90-\u1a99\u1ab0-\u1abd\u1b00-\u1b04\u1b34-\u1b44\u1b50-\u1b59\u1b6b-\u1b73\u1b80-\u1b82\u1ba1-\u1bad\u1bb0-\u1bb9\u1be6-\u1bf3\u1c24-\u1c37\u1c40-\u1c49\u1c50-\u1c59\u1cd0-\u1cd2\u1cd4-\u1ce8\u1ced\u1cf2-\u1cf4\u1cf8\u1cf9\u1dc0-\u1df5\u1dfb-\u1dff\u203f\u2040\u2054\u20d0-\u20dc\u20e1\u20e5-\u20f0\u2cef-\u2cf1\u2d7f\u2de0-\u2dff\u302a-\u302f\u3099\u309a\ua620-\ua629\ua66f\ua674-\ua67d\ua69e\ua69f\ua6f0\ua6f1\ua802\ua806\ua80b\ua823-\ua827\ua880\ua881\ua8b4-\ua8c5\ua8d0-\ua8d9\ua8e0-\ua8f1\ua900-\ua909\ua926-\ua92d\ua947-\ua953\ua980-\ua983\ua9b3-\ua9c0\ua9d0-\ua9d9\ua9e5\ua9f0-\ua9f9\uaa29-\uaa36\uaa43\uaa4c\uaa4d\uaa50-\uaa59\uaa7b-\uaa7d\uaab0\uaab2-\uaab4\uaab7\uaab8\uaabe\uaabf\uaac1\uaaeb-\uaaef\uaaf5\uaaf6\uabe3-\uabea\uabec\uabed\uabf0-\uabf9\ufb1e\ufe00-\ufe0f\ufe20-\ufe2f\ufe33\ufe34\ufe4d-\ufe4f\uff10-\uff19\uff3f"
+
+  var nonASCIIidentifierStart = new RegExp("[" + nonASCIIidentifierStartChars + "]")
+  var nonASCIIidentifier = new RegExp("[" + nonASCIIidentifierStartChars + nonASCIIidentifierChars + "]")
+
+  nonASCIIidentifierStartChars = nonASCIIidentifierChars = null
+
+  // These are a run-length and offset encoded representation of the
+  // >0xffff code points that are a valid part of identifiers. The
+  // offset starts at 0x10000, and each pair of numbers represents an
+  // offset to the next range, and then a size of the range. They were
+  // generated by bin/generate-identifier-regex.js
+  var astralIdentifierStartCodes = [0,11,2,25,2,18,2,1,2,14,3,13,35,122,70,52,268,28,4,48,48,31,17,26,6,37,11,29,3,35,5,7,2,4,43,157,19,35,5,35,5,39,9,51,157,310,10,21,11,7,153,5,3,0,2,43,2,1,4,0,3,22,11,22,10,30,66,18,2,1,11,21,11,25,71,55,7,1,65,0,16,3,2,2,2,26,45,28,4,28,36,7,2,27,28,53,11,21,11,18,14,17,111,72,56,50,14,50,785,52,76,44,33,24,27,35,42,34,4,0,13,47,15,3,22,0,2,0,36,17,2,24,85,6,2,0,2,3,2,14,2,9,8,46,39,7,3,1,3,21,2,6,2,1,2,4,4,0,19,0,13,4,159,52,19,3,54,47,21,1,2,0,185,46,42,3,37,47,21,0,60,42,86,25,391,63,32,0,449,56,264,8,2,36,18,0,50,29,881,921,103,110,18,195,2749,1070,4050,582,8634,568,8,30,114,29,19,47,17,3,32,20,6,18,881,68,12,0,67,12,65,0,32,6124,20,754,9486,1,3071,106,6,12,4,8,8,9,5991,84,2,70,2,1,3,0,3,1,3,3,2,11,2,0,2,6,2,64,2,3,3,7,2,6,2,27,2,3,2,4,2,0,4,6,2,339,3,24,2,24,2,30,2,24,2,30,2,24,2,30,2,24,2,30,2,24,2,7,4149,196,60,67,1213,3,2,26,2,1,2,0,3,0,2,9,2,3,2,0,2,0,7,0,5,0,2,0,2,0,2,2,2,1,2,0,3,0,2,0,2,0,2,0,2,0,2,1,2,0,3,3,2,6,2,3,2,3,2,0,2,9,2,16,6,2,2,4,2,16,4421,42710,42,4148,12,221,3,5761,10591,541]
+  var astralIdentifierCodes = [509,0,227,0,150,4,294,9,1368,2,2,1,6,3,41,2,5,0,166,1,1306,2,54,14,32,9,16,3,46,10,54,9,7,2,37,13,2,9,52,0,13,2,49,13,10,2,4,9,83,11,7,0,161,11,6,9,7,3,57,0,2,6,3,1,3,2,10,0,11,1,3,6,4,4,193,17,10,9,87,19,13,9,214,6,3,8,28,1,83,16,16,9,82,12,9,9,84,14,5,9,423,9,838,7,2,7,17,9,57,21,2,13,19882,9,135,4,60,6,26,9,1016,45,17,3,19723,1,5319,4,4,5,9,7,3,6,31,3,149,2,1418,49,513,54,5,49,9,0,15,0,23,4,2,14,1361,6,2,16,3,6,2,1,2,4,2214,6,110,6,6,9,792487,239]
+
+  // This has a complexity linear to the value of the code. The
+  // assumption is that looking up astral identifier characters is
+  // rare.
+  function isInAstralSet(code, set) {
+    var pos = 0x10000
+    for (var i = 0; i < set.length; i += 2) {
+      pos += set[i]
+      if (pos > code) return false
+      pos += set[i + 1]
+      if (pos >= code) return true
+    }
+  }
+
+  // Test whether a given character code starts an identifier.
+
+  function isIdentifierStart(code, astral) {
+    if (code < 65) return code === 36
+    if (code < 91) return true
+    if (code < 97) return code === 95
+    if (code < 123) return true
+    if (code <= 0xffff) return code >= 0xaa && nonASCIIidentifierStart.test(String.fromCharCode(code))
+    if (astral === false) return false
+    return isInAstralSet(code, astralIdentifierStartCodes)
+  }
+
+  // Test whether a given character is part of an identifier.
+
+  function isIdentifierChar(code, astral) {
+    if (code < 48) return code === 36
+    if (code < 58) return true
+    if (code < 65) return false
+    if (code < 91) return true
+    if (code < 97) return code === 95
+    if (code < 123) return true
+    if (code <= 0xffff) return code >= 0xaa && nonASCIIidentifier.test(String.fromCharCode(code))
+    if (astral === false) return false
+    return isInAstralSet(code, astralIdentifierStartCodes) || isInAstralSet(code, astralIdentifierCodes)
+  }
+
+  // ## Token types
+
+  // The assignment of fine-grained, information-carrying type objects
+  // allows the tokenizer to store the information it has about a
+  // token in a way that is very cheap for the parser to look up.
+
+  // All token type variables start with an underscore, to make them
+  // easy to recognize.
+
+  // The `beforeExpr` property is used to disambiguate between regular
+  // expressions and divisions. It is set on all token types that can
+  // be followed by an expression (thus, a slash after them would be a
+  // regular expression).
+  //
+  // The `startsExpr` property is used to check if the token ends a
+  // `yield` expression. It is set on all token types that either can
+  // directly start an expression (like a quotation mark) or can
+  // continue an expression (like the body of a string).
+  //
+  // `isLoop` marks a keyword as starting a loop, which is important
+  // to know when parsing a label, in order to allow or disallow
+  // continue jumps to that label.
+
+  var TokenType = function TokenType(label, conf) {
+    if ( conf === void 0 ) conf = {};
+
+    this.label = label
+    this.keyword = conf.keyword
+    this.beforeExpr = !!conf.beforeExpr
+    this.startsExpr = !!conf.startsExpr
+    this.isLoop = !!conf.isLoop
+    this.isAssign = !!conf.isAssign
+    this.prefix = !!conf.prefix
+    this.postfix = !!conf.postfix
+    this.binop = conf.binop || null
+    this.updateContext = null
+  };
+
+  function binop(name, prec) {
+    return new TokenType(name, {beforeExpr: true, binop: prec})
+  }
+  var beforeExpr = {beforeExpr: true};
+  var startsExpr = {startsExpr: true};
+  // Map keyword names to token types.
+
+  var keywordTypes = {}
+
+  // Succinct definitions of keyword token types
+  function kw(name, options) {
+    if ( options === void 0 ) options = {};
+
+    options.keyword = name
+    return keywordTypes[name] = new TokenType(name, options)
+  }
+
+  var tt = {
+    num: new TokenType("num", startsExpr),
+    regexp: new TokenType("regexp", startsExpr),
+    string: new TokenType("string", startsExpr),
+    name: new TokenType("name", startsExpr),
+    eof: new TokenType("eof"),
+
+    // Punctuation token types.
+    bracketL: new TokenType("[", {beforeExpr: true, startsExpr: true}),
+    bracketR: new TokenType("]"),
+    braceL: new TokenType("{", {beforeExpr: true, startsExpr: true}),
+    braceR: new TokenType("}"),
+    parenL: new TokenType("(", {beforeExpr: true, startsExpr: true}),
+    parenR: new TokenType(")"),
+    comma: new TokenType(",", beforeExpr),
+    semi: new TokenType(";", beforeExpr),
+    colon: new TokenType(":", beforeExpr),
+    dot: new TokenType("."),
+    question: new TokenType("?", beforeExpr),
+    arrow: new TokenType("=>", beforeExpr),
+    template: new TokenType("template"),
+    ellipsis: new TokenType("...", beforeExpr),
+    backQuote: new TokenType("`", startsExpr),
+    dollarBraceL: new TokenType("${", {beforeExpr: true, startsExpr: true}),
+
+    // Operators. These carry several kinds of properties to help the
+    // parser use them properly (the presence of these properties is
+    // what categorizes them as operators).
+    //
+    // `binop`, when present, specifies that this operator is a binary
+    // operator, and will refer to its precedence.
+    //
+    // `prefix` and `postfix` mark the operator as a prefix or postfix
+    // unary operator.
+    //
+    // `isAssign` marks all of `=`, `+=`, `-=` etcetera, which act as
+    // binary operators with a very low precedence, that should result
+    // in AssignmentExpression nodes.
+
+    eq: new TokenType("=", {beforeExpr: true, isAssign: true}),
+    assign: new TokenType("_=", {beforeExpr: true, isAssign: true}),
+    incDec: new TokenType("++/--", {prefix: true, postfix: true, startsExpr: true}),
+    prefix: new TokenType("prefix", {beforeExpr: true, prefix: true, startsExpr: true}),
+    logicalOR: binop("||", 1),
+    logicalAND: binop("&&", 2),
+    bitwiseOR: binop("|", 3),
+    bitwiseXOR: binop("^", 4),
+    bitwiseAND: binop("&", 5),
+    equality: binop("==/!=", 6),
+    relational: binop("</>", 7),
+    bitShift: binop("<</>>", 8),
+    plusMin: new TokenType("+/-", {beforeExpr: true, binop: 9, prefix: true, startsExpr: true}),
+    modulo: binop("%", 10),
+    star: binop("*", 10),
+    slash: binop("/", 10),
+    starstar: new TokenType("**", {beforeExpr: true}),
+
+    // Keyword token types.
+    _break: kw("break"),
+    _case: kw("case", beforeExpr),
+    _catch: kw("catch"),
+    _continue: kw("continue"),
+    _debugger: kw("debugger"),
+    _default: kw("default", beforeExpr),
+    _do: kw("do", {isLoop: true, beforeExpr: true}),
+    _else: kw("else", beforeExpr),
+    _finally: kw("finally"),
+    _for: kw("for", {isLoop: true}),
+    _function: kw("function", startsExpr),
+    _if: kw("if"),
+    _return: kw("return", beforeExpr),
+    _switch: kw("switch"),
+    _throw: kw("throw", beforeExpr),
+    _try: kw("try"),
+    _var: kw("var"),
+    _const: kw("const"),
+    _while: kw("while", {isLoop: true}),
+    _with: kw("with"),
+    _new: kw("new", {beforeExpr: true, startsExpr: true}),
+    _this: kw("this", startsExpr),
+    _super: kw("super", startsExpr),
+    _class: kw("class"),
+    _extends: kw("extends", beforeExpr),
+    _export: kw("export"),
+    _import: kw("import"),
+    _null: kw("null", startsExpr),
+    _true: kw("true", startsExpr),
+    _false: kw("false", startsExpr),
+    _in: kw("in", {beforeExpr: true, binop: 7}),
+    _instanceof: kw("instanceof", {beforeExpr: true, binop: 7}),
+    _typeof: kw("typeof", {beforeExpr: true, prefix: true, startsExpr: true}),
+    _void: kw("void", {beforeExpr: true, prefix: true, startsExpr: true}),
+    _delete: kw("delete", {beforeExpr: true, prefix: true, startsExpr: true})
+  }
+
+  // Matches a whole line break (where CRLF is considered a single
+  // line break). Used to count lines.
+
+  var lineBreak = /\r\n?|\n|\u2028|\u2029/
+  var lineBreakG = new RegExp(lineBreak.source, "g")
+
+  function isNewLine(code) {
+    return code === 10 || code === 13 || code === 0x2028 || code == 0x2029
+  }
+
+  var nonASCIIwhitespace = /[\u1680\u180e\u2000-\u200a\u202f\u205f\u3000\ufeff]/
+
+  var skipWhiteSpace = /(?:\s|\/\/.*|\/\*[^]*?\*\/)*/g
+
+  function isArray(obj) {
+    return Object.prototype.toString.call(obj) === "[object Array]"
+  }
+
+  // Checks if an object has a property.
+
+  function has(obj, propName) {
+    return Object.prototype.hasOwnProperty.call(obj, propName)
+  }
+
+  // These are used when `options.locations` is on, for the
+  // `startLoc` and `endLoc` properties.
+
+  var Position = function Position(line, col) {
+    this.line = line
+    this.column = col
+  };
+
+  Position.prototype.offset = function offset (n) {
+    return new Position(this.line, this.column + n)
+  };
+
+  var SourceLocation = function SourceLocation(p, start, end) {
+    this.start = start
+    this.end = end
+    if (p.sourceFile !== null) this.source = p.sourceFile
+  };
+
+  // The `getLineInfo` function is mostly useful when the
+  // `locations` option is off (for performance reasons) and you
+  // want to find the line/column position for a given character
+  // offset. `input` should be the code string that the offset refers
+  // into.
+
+  function getLineInfo(input, offset) {
+    for (var line = 1, cur = 0;;) {
+      lineBreakG.lastIndex = cur
+      var match = lineBreakG.exec(input)
+      if (match && match.index < offset) {
+        ++line
+        cur = match.index + match[0].length
+      } else {
+        return new Position(line, offset - cur)
+      }
+    }
+  }
+
+  // A second optional argument can be given to further configure
+  // the parser process. These options are recognized:
+
+  var defaultOptions = {
+    // `ecmaVersion` indicates the ECMAScript version to parse. Must
+    // be either 3, or 5, or 6. This influences support for strict
+    // mode, the set of reserved words, support for getters and
+    // setters and other features. The default is 6.
+    ecmaVersion: 6,
+    // Source type ("script" or "module") for different semantics
+    sourceType: "script",
+    // `onInsertedSemicolon` can be a callback that will be called
+    // when a semicolon is automatically inserted. It will be passed
+    // th position of the comma as an offset, and if `locations` is
+    // enabled, it is given the location as a `{line, column}` object
+    // as second argument.
+    onInsertedSemicolon: null,
+    // `onTrailingComma` is similar to `onInsertedSemicolon`, but for
+    // trailing commas.
+    onTrailingComma: null,
+    // By default, reserved words are only enforced if ecmaVersion >= 5.
+    // Set `allowReserved` to a boolean value to explicitly turn this on
+    // an off. When this option has the value "never", reserved words
+    // and keywords can also not be used as property names.
+    allowReserved: null,
+    // When enabled, a return at the top level is not considered an
+    // error.
+    allowReturnOutsideFunction: false,
+    // When enabled, import/export statements are not constrained to
+    // appearing at the top of the program.
+    allowImportExportEverywhere: false,
+    // When enabled, hashbang directive in the beginning of file
+    // is allowed and treated as a line comment.
+    allowHashBang: false,
+    // When `locations` is on, `loc` properties holding objects with
+    // `start` and `end` properties in `{line, column}` form (with
+    // line being 1-based and column 0-based) will be attached to the
+    // nodes.
+    locations: false,
+    // A function can be passed as `onToken` option, which will
+    // cause Acorn to call that function with object in the same
+    // format as tokens returned from `tokenizer().getToken()`. Note
+    // that you are not allowed to call the parser from the
+    // callback—that will corrupt its internal state.
+    onToken: null,
+    // A function can be passed as `onComment` option, which will
+    // cause Acorn to call that function with `(block, text, start,
+    // end)` parameters whenever a comment is skipped. `block` is a
+    // boolean indicating whether this is a block (`/* */`) comment,
+    // `text` is the content of the comment, and `start` and `end` are
+    // character offsets that denote the start and end of the comment.
+    // When the `locations` option is on, two more parameters are
+    // passed, the full `{line, column}` locations of the start and
+    // end of the comments. Note that you are not allowed to call the
+    // parser from the callback—that will corrupt its internal state.
+    onComment: null,
+    // Nodes have their start and end characters offsets recorded in
+    // `start` and `end` properties (directly on the node, rather than
+    // the `loc` object, which holds line/column data. To also add a
+    // [semi-standardized][range] `range` property holding a `[start,
+    // end]` array with the same numbers, set the `ranges` option to
+    // `true`.
+    //
+    // [range]: https://bugzilla.mozilla.org/show_bug.cgi?id=745678
+    ranges: false,
+    // It is possible to parse multiple files into a single AST by
+    // passing the tree produced by parsing the first file as
+    // `program` option in subsequent parses. This will add the
+    // toplevel forms of the parsed file to the `Program` (top) node
+    // of an existing parse tree.
+    program: null,
+    // When `locations` is on, you can pass this to record the source
+    // file in every node's `loc` object.
+    sourceFile: null,
+    // This value, if given, is stored in every node, whether
+    // `locations` is on or off.
+    directSourceFile: null,
+    // When enabled, parenthesized expressions are represented by
+    // (non-standard) ParenthesizedExpression nodes
+    preserveParens: false,
+    plugins: {}
+  }
+
+  // Interpret and default an options object
+
+  function getOptions(opts) {
+    var options = {}
+    for (var opt in defaultOptions)
+      options[opt] = opts && has(opts, opt) ? opts[opt] : defaultOptions[opt]
+    if (options.allowReserved == null)
+      options.allowReserved = options.ecmaVersion < 5
+
+    if (isArray(options.onToken)) {
+      var tokens = options.onToken
+      options.onToken = function (token) { return tokens.push(token); }
+    }
+    if (isArray(options.onComment))
+      options.onComment = pushComment(options, options.onComment)
+
+    return options
+  }
+
+  function pushComment(options, array) {
+    return function (block, text, start, end, startLoc, endLoc) {
+      var comment = {
+        type: block ? 'Block' : 'Line',
+        value: text,
+        start: start,
+        end: end
+      }
+      if (options.locations)
+        comment.loc = new SourceLocation(this, startLoc, endLoc)
+      if (options.ranges)
+        comment.range = [start, end]
+      array.push(comment)
+    }
+  }
+
+  // Registered plugins
+  var plugins = {}
+
+  function keywordRegexp(words) {
+    return new RegExp("^(" + words.replace(/ /g, "|") + ")$")
+  }
+
+  var Parser = function Parser(options, input, startPos) {
+    this.options = options = getOptions(options)
+    this.sourceFile = options.sourceFile
+    this.keywords = keywordRegexp(keywords[options.ecmaVersion >= 6 ? 6 : 5])
+    var reserved = options.allowReserved ? "" :
+        reservedWords[options.ecmaVersion] + (options.sourceType == "module" ? " await" : "")
+    this.reservedWords = keywordRegexp(reserved)
+    var reservedStrict = (reserved ? reserved + " " : "") + reservedWords.strict
+    this.reservedWordsStrict = keywordRegexp(reservedStrict)
+    this.reservedWordsStrictBind = keywordRegexp(reservedStrict + " " + reservedWords.strictBind)
+    this.input = String(input)
+
+    // Used to signal to callers of `readWord1` whether the word
+    // contained any escape sequences. This is needed because words with
+    // escape sequences must not be interpreted as keywords.
+    this.containsEsc = false
+
+    // Load plugins
+    this.loadPlugins(options.plugins)
+
+    // Set up token state
+
+    // The current position of the tokenizer in the input.
+    if (startPos) {
+      this.pos = startPos
+      this.lineStart = Math.max(0, this.input.lastIndexOf("\n", startPos))
+      this.curLine = this.input.slice(0, this.lineStart).split(lineBreak).length
+    } else {
+      this.pos = this.lineStart = 0
+      this.curLine = 1
+    }
+
+    // Properties of the current token:
+    // Its type
+    this.type = tt.eof
+    // For tokens that include more information than their type, the value
+    this.value = null
+    // Its start and end offset
+    this.start = this.end = this.pos
+    // And, if locations are used, the {line, column} object
+    // corresponding to those offsets
+    this.startLoc = this.endLoc = this.curPosition()
+
+    // Position information for the previous token
+    this.lastTokEndLoc = this.lastTokStartLoc = null
+    this.lastTokStart = this.lastTokEnd = this.pos
+
+    // The context stack is used to superficially track syntactic
+    // context to predict whether a regular expression is allowed in a
+    // given position.
+    this.context = this.initialContext()
+    this.exprAllowed = true
+
+    // Figure out if it's a module code.
+    this.strict = this.inModule = options.sourceType === "module"
+
+    // Used to signify the start of a potential arrow function
+    this.potentialArrowAt = -1
+
+    // Flags to track whether we are in a function, a generator.
+    this.inFunction = this.inGenerator = false
+    // Labels in scope.
+    this.labels = []
+
+    // If enabled, skip leading hashbang line.
+    if (this.pos === 0 && options.allowHashBang && this.input.slice(0, 2) === '#!')
+      this.skipLineComment(2)
+  };
+
+  // DEPRECATED Kept for backwards compatibility until 3.0 in case a plugin uses them
+  Parser.prototype.isKeyword = function isKeyword (word) { return this.keywords.test(word) };
+  Parser.prototype.isReservedWord = function isReservedWord (word) { return this.reservedWords.test(word) };
+
+  Parser.prototype.extend = function extend (name, f) {
+    this[name] = f(this[name])
+  };
+
+  Parser.prototype.loadPlugins = function loadPlugins (pluginConfigs) {
+      var this$1 = this;
+
+    for (var name in pluginConfigs) {
+      var plugin = plugins[name]
+      if (!plugin) throw new Error("Plugin '" + name + "' not found")
+      plugin(this$1, pluginConfigs[name])
+    }
+  };
+
+  Parser.prototype.parse = function parse () {
+    var node = this.options.program || this.startNode()
+    this.nextToken()
+    return this.parseTopLevel(node)
+  };
+
+  var pp = Parser.prototype
+
+  // ## Parser utilities
+
+  // Test whether a statement node is the string literal `"use strict"`.
+
+  pp.isUseStrict = function(stmt) {
+    return this.options.ecmaVersion >= 5 && stmt.type === "ExpressionStatement" &&
+      stmt.expression.type === "Literal" &&
+      stmt.expression.raw.slice(1, -1) === "use strict"
+  }
+
+  // Predicate that tests whether the next token is of the given
+  // type, and if yes, consumes it as a side effect.
+
+  pp.eat = function(type) {
+    if (this.type === type) {
+      this.next()
+      return true
+    } else {
+      return false
+    }
+  }
+
+  // Tests whether parsed token is a contextual keyword.
+
+  pp.isContextual = function(name) {
+    return this.type === tt.name && this.value === name
+  }
+
+  // Consumes contextual keyword if possible.
+
+  pp.eatContextual = function(name) {
+    return this.value === name && this.eat(tt.name)
+  }
+
+  // Asserts that following token is given contextual keyword.
+
+  pp.expectContextual = function(name) {
+    if (!this.eatContextual(name)) this.unexpected()
+  }
+
+  // Test whether a semicolon can be inserted at the current position.
+
+  pp.canInsertSemicolon = function() {
+    return this.type === tt.eof ||
+      this.type === tt.braceR ||
+      lineBreak.test(this.input.slice(this.lastTokEnd, this.start))
+  }
+
+  pp.insertSemicolon = function() {
+    if (this.canInsertSemicolon()) {
+      if (this.options.onInsertedSemicolon)
+        this.options.onInsertedSemicolon(this.lastTokEnd, this.lastTokEndLoc)
+      return true
+    }
+  }
+
+  // Consume a semicolon, or, failing that, see if we are allowed to
+  // pretend that there is a semicolon at this position.
+
+  pp.semicolon = function() {
+    if (!this.eat(tt.semi) && !this.insertSemicolon()) this.unexpected()
+  }
+
+  pp.afterTrailingComma = function(tokType) {
+    if (this.type == tokType) {
+      if (this.options.onTrailingComma)
+        this.options.onTrailingComma(this.lastTokStart, this.lastTokStartLoc)
+      this.next()
+      return true
+    }
+  }
+
+  // Expect a token of a given type. If found, consume it, otherwise,
+  // raise an unexpected token error.
+
+  pp.expect = function(type) {
+    this.eat(type) || this.unexpected()
+  }
+
+  // Raise an unexpected token error.
+
+  pp.unexpected = function(pos) {
+    this.raise(pos != null ? pos : this.start, "Unexpected token")
+  }
+
+  var DestructuringErrors = function DestructuringErrors() {
+    this.shorthandAssign = 0
+    this.trailingComma = 0
+  };
+
+  pp.checkPatternErrors = function(refDestructuringErrors, andThrow) {
+    var trailing = refDestructuringErrors && refDestructuringErrors.trailingComma
+    if (!andThrow) return !!trailing
+    if (trailing) this.raise(trailing, "Comma is not permitted after the rest element")
+  }
+
+  pp.checkExpressionErrors = function(refDestructuringErrors, andThrow) {
+    var pos = refDestructuringErrors && refDestructuringErrors.shorthandAssign
+    if (!andThrow) return !!pos
+    if (pos) this.raise(pos, "Shorthand property assignments are valid only in destructuring patterns")
+  }
+
+  var pp$1 = Parser.prototype
+
+  // ### Statement parsing
+
+  // Parse a program. Initializes the parser, reads any number of
+  // statements, and wraps them in a Program node.  Optionally takes a
+  // `program` argument.  If present, the statements will be appended
+  // to its body instead of creating a new node.
+
+  pp$1.parseTopLevel = function(node) {
+    var this$1 = this;
+
+    var first = true
+    if (!node.body) node.body = []
+    while (this.type !== tt.eof) {
+      var stmt = this$1.parseStatement(true, true)
+      node.body.push(stmt)
+      if (first) {
+        if (this$1.isUseStrict(stmt)) this$1.setStrict(true)
+        first = false
+      }
+    }
+    this.next()
+    if (this.options.ecmaVersion >= 6) {
+      node.sourceType = this.options.sourceType
+    }
+    return this.finishNode(node, "Program")
+  }
+
+  var loopLabel = {kind: "loop"};
+  var switchLabel = {kind: "switch"};
+  pp$1.isLet = function() {
+    if (this.type !== tt.name || this.options.ecmaVersion < 6 || this.value != "let") return false
+    skipWhiteSpace.lastIndex = this.pos
+    var skip = skipWhiteSpace.exec(this.input)
+    var next = this.pos + skip[0].length, nextCh = this.input.charCodeAt(next)
+    if (nextCh === 91 || nextCh == 123) return true // '{' and '['
+    if (isIdentifierStart(nextCh, true)) {
+      for (var pos = next + 1; isIdentifierChar(this.input.charCodeAt(pos), true); ++pos) {}
+      var ident = this.input.slice(next, pos)
+      if (!this.isKeyword(ident)) return true
+    }
+    return false
+  }
+
+  // Parse a single statement.
+  //
+  // If expecting a statement and finding a slash operator, parse a
+  // regular expression literal. This is to handle cases like
+  // `if (foo) /blah/.exec(foo)`, where looking at the previous token
+  // does not help.
+
+  pp$1.parseStatement = function(declaration, topLevel) {
+    var starttype = this.type, node = this.startNode(), kind
+
+    if (this.isLet()) {
+      starttype = tt._var
+      kind = "let"
+    }
+
+    // Most types of statements are recognized by the keyword they
+    // start with. Many are trivial to parse, some require a bit of
+    // complexity.
+
+    switch (starttype) {
+    case tt._break: case tt._continue: return this.parseBreakContinueStatement(node, starttype.keyword)
+    case tt._debugger: return this.parseDebuggerStatement(node)
+    case tt._do: return this.parseDoStatement(node)
+    case tt._for: return this.parseForStatement(node)
+    case tt._function:
+      if (!declaration && this.options.ecmaVersion >= 6) this.unexpected()
+      return this.parseFunctionStatement(node)
+    case tt._class:
+      if (!declaration) this.unexpected()
+      return this.parseClass(node, true)
+    case tt._if: return this.parseIfStatement(node)
+    case tt._return: return this.parseReturnStatement(node)
+    case tt._switch: return this.parseSwitchStatement(node)
+    case tt._throw: return this.parseThrowStatement(node)
+    case tt._try: return this.parseTryStatement(node)
+    case tt._const: case tt._var:
+      kind = kind || this.value
+      if (!declaration && kind != "var") this.unexpected()
+      return this.parseVarStatement(node, kind)
+    case tt._while: return this.parseWhileStatement(node)
+    case tt._with: return this.parseWithStatement(node)
+    case tt.braceL: return this.parseBlock()
+    case tt.semi: return this.parseEmptyStatement(node)
+    case tt._export:
+    case tt._import:
+      if (!this.options.allowImportExportEverywhere) {
+        if (!topLevel)
+          this.raise(this.start, "'import' and 'export' may only appear at the top level")
+        if (!this.inModule)
+          this.raise(this.start, "'import' and 'export' may appear only with 'sourceType: module'")
+      }
+      return starttype === tt._import ? this.parseImport(node) : this.parseExport(node)
+
+      // If the statement does not start with a statement keyword or a
+      // brace, it's an ExpressionStatement or LabeledStatement. We
+      // simply start parsing an expression, and afterwards, if the
+      // next token is a colon and the expression was a simple
+      // Identifier node, we switch to interpreting it as a label.
+    default:
+      var maybeName = this.value, expr = this.parseExpression()
+      if (starttype === tt.name && expr.type === "Identifier" && this.eat(tt.colon))
+        return this.parseLabeledStatement(node, maybeName, expr)
+      else return this.parseExpressionStatement(node, expr)
+    }
+  }
+
+  pp$1.parseBreakContinueStatement = function(node, keyword) {
+    var this$1 = this;
+
+    var isBreak = keyword == "break"
+    this.next()
+    if (this.eat(tt.semi) || this.insertSemicolon()) node.label = null
+    else if (this.type !== tt.name) this.unexpected()
+    else {
+      node.label = this.parseIdent()
+      this.semicolon()
+    }
+
+    // Verify that there is an actual destination to break or
+    // continue to.
+    for (var i = 0; i < this.labels.length; ++i) {
+      var lab = this$1.labels[i]
+      if (node.label == null || lab.name === node.label.name) {
+        if (lab.kind != null && (isBreak || lab.kind === "loop")) break
+        if (node.label && isBreak) break
+      }
+    }
+    if (i === this.labels.length) this.raise(node.start, "Unsyntactic " + keyword)
+    return this.finishNode(node, isBreak ? "BreakStatement" : "ContinueStatement")
+  }
+
+  pp$1.parseDebuggerStatement = function(node) {
+    this.next()
+    this.semicolon()
+    return this.finishNode(node, "DebuggerStatement")
+  }
+
+  pp$1.parseDoStatement = function(node) {
+    this.next()
+    this.labels.push(loopLabel)
+    node.body = this.parseStatement(false)
+    this.labels.pop()
+    this.expect(tt._while)
+    node.test = this.parseParenExpression()
+    if (this.options.ecmaVersion >= 6)
+      this.eat(tt.semi)
+    else
+      this.semicolon()
+    return this.finishNode(node, "DoWhileStatement")
+  }
+
+  // Disambiguating between a `for` and a `for`/`in` or `for`/`of`
+  // loop is non-trivial. Basically, we have to parse the init `var`
+  // statement or expression, disallowing the `in` operator (see
+  // the second parameter to `parseExpression`), and then check
+  // whether the next token is `in` or `of`. When there is no init
+  // part (semicolon immediately after the opening parenthesis), it
+  // is a regular `for` loop.
+
+  pp$1.parseForStatement = function(node) {
+    this.next()
+    this.labels.push(loopLabel)
+    this.expect(tt.parenL)
+    if (this.type === tt.semi) return this.parseFor(node, null)
+    var isLet = this.isLet()
+    if (this.type === tt._var || this.type === tt._const || isLet) {
+      var init$1 = this.startNode(), kind = isLet ? "let" : this.value
+      this.next()
+      this.parseVar(init$1, true, kind)
+      this.finishNode(init$1, "VariableDeclaration")
+      if ((this.type === tt._in || (this.options.ecmaVersion >= 6 && this.isContextual("of"))) && init$1.declarations.length === 1 &&
+          !(kind !== "var" && init$1.declarations[0].init))
+        return this.parseForIn(node, init$1)
+      return this.parseFor(node, init$1)
+    }
+    var refDestructuringErrors = new DestructuringErrors
+    var init = this.parseExpression(true, refDestructuringErrors)
+    if (this.type === tt._in || (this.options.ecmaVersion >= 6 && this.isContextual("of"))) {
+      this.checkPatternErrors(refDestructuringErrors, true)
+      this.toAssignable(init)
+      this.checkLVal(init)
+      return this.parseForIn(node, init)
+    } else {
+      this.checkExpressionErrors(refDestructuringErrors, true)
+    }
+    return this.parseFor(node, init)
+  }
+
+  pp$1.parseFunctionStatement = function(node) {
+    this.next()
+    return this.parseFunction(node, true)
+  }
+
+  pp$1.parseIfStatement = function(node) {
+    this.next()
+    node.test = this.parseParenExpression()
+    node.consequent = this.parseStatement(false)
+    node.alternate = this.eat(tt._else) ? this.parseStatement(false) : null
+    return this.finishNode(node, "IfStatement")
+  }
+
+  pp$1.parseReturnStatement = function(node) {
+    if (!this.inFunction && !this.options.allowReturnOutsideFunction)
+      this.raise(this.start, "'return' outside of function")
+    this.next()
+
+    // In `return` (and `break`/`continue`), the keywords with
+    // optional arguments, we eagerly look for a semicolon or the
+    // possibility to insert one.
+
+    if (this.eat(tt.semi) || this.insertSemicolon()) node.argument = null
+    else { node.argument = this.parseExpression(); this.semicolon() }
+    return this.finishNode(node, "ReturnStatement")
+  }
+
+  pp$1.parseSwitchStatement = function(node) {
+    var this$1 = this;
+
+    this.next()
+    node.discriminant = this.parseParenExpression()
+    node.cases = []
+    this.expect(tt.braceL)
+    this.labels.push(switchLabel)
+
+    // Statements under must be grouped (by label) in SwitchCase
+    // nodes. `cur` is used to keep the node that we are currently
+    // adding statements to.
+
+    for (var cur, sawDefault = false; this.type != tt.braceR;) {
+      if (this$1.type === tt._case || this$1.type === tt._default) {
+        var isCase = this$1.type === tt._case
+        if (cur) this$1.finishNode(cur, "SwitchCase")
+        node.cases.push(cur = this$1.startNode())
+        cur.consequent = []
+        this$1.next()
+        if (isCase) {
+          cur.test = this$1.parseExpression()
+        } else {
+          if (sawDefault) this$1.raiseRecoverable(this$1.lastTokStart, "Multiple default clauses")
+          sawDefault = true
+          cur.test = null
+        }
+        this$1.expect(tt.colon)
+      } else {
+        if (!cur) this$1.unexpected()
+        cur.consequent.push(this$1.parseStatement(true))
+      }
+    }
+    if (cur) this.finishNode(cur, "SwitchCase")
+    this.next() // Closing brace
+    this.labels.pop()
+    return this.finishNode(node, "SwitchStatement")
+  }
+
+  pp$1.parseThrowStatement = function(node) {
+    this.next()
+    if (lineBreak.test(this.input.slice(this.lastTokEnd, this.start)))
+      this.raise(this.lastTokEnd, "Illegal newline after throw")
+    node.argument = this.parseExpression()
+    this.semicolon()
+    return this.finishNode(node, "ThrowStatement")
+  }
+
+  // Reused empty array added for node fields that are always empty.
+
+  var empty = []
+
+  pp$1.parseTryStatement = function(node) {
+    this.next()
+    node.block = this.parseBlock()
+    node.handler = null
+    if (this.type === tt._catch) {
+      var clause = this.startNode()
+      this.next()
+      this.expect(tt.parenL)
+      clause.param = this.parseBindingAtom()
+      this.checkLVal(clause.param, true)
+      this.expect(tt.parenR)
+      clause.body = this.parseBlock()
+      node.handler = this.finishNode(clause, "CatchClause")
+    }
+    node.finalizer = this.eat(tt._finally) ? this.parseBlock() : null
+    if (!node.handler && !node.finalizer)
+      this.raise(node.start, "Missing catch or finally clause")
+    return this.finishNode(node, "TryStatement")
+  }
+
+  pp$1.parseVarStatement = function(node, kind) {
+    this.next()
+    this.parseVar(node, false, kind)
+    this.semicolon()
+    return this.finishNode(node, "VariableDeclaration")
+  }
+
+  pp$1.parseWhileStatement = function(node) {
+    this.next()
+    node.test = this.parseParenExpression()
+    this.labels.push(loopLabel)
+    node.body = this.parseStatement(false)
+    this.labels.pop()
+    return this.finishNode(node, "WhileStatement")
+  }
+
+  pp$1.parseWithStatement = function(node) {
+    if (this.strict) this.raise(this.start, "'with' in strict mode")
+    this.next()
+    node.object = this.parseParenExpression()
+    node.body = this.parseStatement(false)
+    return this.finishNode(node, "WithStatement")
+  }
+
+  pp$1.parseEmptyStatement = function(node) {
+    this.next()
+    return this.finishNode(node, "EmptyStatement")
+  }
+
+  pp$1.parseLabeledStatement = function(node, maybeName, expr) {
+    var this$1 = this;
+
+    for (var i = 0; i < this.labels.length; ++i)
+      if (this$1.labels[i].name === maybeName) this$1.raise(expr.start, "Label '" + maybeName + "' is already declared")
+    var kind = this.type.isLoop ? "loop" : this.type === tt._switch ? "switch" : null
+    for (var i$1 = this.labels.length - 1; i$1 >= 0; i$1--) {
+      var label = this$1.labels[i$1]
+      if (label.statementStart == node.start) {
+        label.statementStart = this$1.start
+        label.kind = kind
+      } else break
+    }
+    this.labels.push({name: maybeName, kind: kind, statementStart: this.start})
+    node.body = this.parseStatement(true)
+    this.labels.pop()
+    node.label = expr
+    return this.finishNode(node, "LabeledStatement")
+  }
+
+  pp$1.parseExpressionStatement = function(node, expr) {
+    node.expression = expr
+    this.semicolon()
+    return this.finishNode(node, "ExpressionStatement")
+  }
+
+  // Parse a semicolon-enclosed block of statements, handling `"use
+  // strict"` declarations when `allowStrict` is true (used for
+  // function bodies).
+
+  pp$1.parseBlock = function(allowStrict) {
+    var this$1 = this;
+
+    var node = this.startNode(), first = true, oldStrict
+    node.body = []
+    this.expect(tt.braceL)
+    while (!this.eat(tt.braceR)) {
+      var stmt = this$1.parseStatement(true)
+      node.body.push(stmt)
+      if (first && allowStrict && this$1.isUseStrict(stmt)) {
+        oldStrict = this$1.strict
+        this$1.setStrict(this$1.strict = true)
+      }
+      first = false
+    }
+    if (oldStrict === false) this.setStrict(false)
+    return this.finishNode(node, "BlockStatement")
+  }
+
+  // Parse a regular `for` loop. The disambiguation code in
+  // `parseStatement` will already have parsed the init statement or
+  // expression.
+
+  pp$1.parseFor = function(node, init) {
+    node.init = init
+    this.expect(tt.semi)
+    node.test = this.type === tt.semi ? null : this.parseExpression()
+    this.expect(tt.semi)
+    node.update = this.type === tt.parenR ? null : this.parseExpression()
+    this.expect(tt.parenR)
+    node.body = this.parseStatement(false)
+    this.labels.pop()
+    return this.finishNode(node, "ForStatement")
+  }
+
+  // Parse a `for`/`in` and `for`/`of` loop, which are almost
+  // same from parser's perspective.
+
+  pp$1.parseForIn = function(node, init) {
+    var type = this.type === tt._in ? "ForInStatement" : "ForOfStatement"
+    this.next()
+    node.left = init
+    node.right = this.parseExpression()
+    this.expect(tt.parenR)
+    node.body = this.parseStatement(false)
+    this.labels.pop()
+    return this.finishNode(node, type)
+  }
+
+  // Parse a list of variable declarations.
+
+  pp$1.parseVar = function(node, isFor, kind) {
+    var this$1 = this;
+
+    node.declarations = []
+    node.kind = kind
+    for (;;) {
+      var decl = this$1.startNode()
+      this$1.parseVarId(decl)
+      if (this$1.eat(tt.eq)) {
+        decl.init = this$1.parseMaybeAssign(isFor)
+      } else if (kind === "const" && !(this$1.type === tt._in || (this$1.options.ecmaVersion >= 6 && this$1.isContextual("of")))) {
+        this$1.unexpected()
+      } else if (decl.id.type != "Identifier" && !(isFor && (this$1.type === tt._in || this$1.isContextual("of")))) {
+        this$1.raise(this$1.lastTokEnd, "Complex binding patterns require an initialization value")
+      } else {
+        decl.init = null
+      }
+      node.declarations.push(this$1.finishNode(decl, "VariableDeclarator"))
+      if (!this$1.eat(tt.comma)) break
+    }
+    return node
+  }
+
+  pp$1.parseVarId = function(decl) {
+    decl.id = this.parseBindingAtom()
+    this.checkLVal(decl.id, true)
+  }
+
+  // Parse a function declaration or literal (depending on the
+  // `isStatement` parameter).
+
+  pp$1.parseFunction = function(node, isStatement, allowExpressionBody) {
+    this.initFunction(node)
+    if (this.options.ecmaVersion >= 6)
+      node.generator = this.eat(tt.star)
+    var oldInGen = this.inGenerator
+    this.inGenerator = node.generator
+    if (isStatement || this.type === tt.name)
+      node.id = this.parseIdent()
+    this.parseFunctionParams(node)
+    this.parseFunctionBody(node, allowExpressionBody)
+    this.inGenerator = oldInGen
+    return this.finishNode(node, isStatement ? "FunctionDeclaration" : "FunctionExpression")
+  }
+
+  pp$1.parseFunctionParams = function(node) {
+    this.expect(tt.parenL)
+    node.params = this.parseBindingList(tt.parenR, false, false, true)
+  }
+
+  // Parse a class declaration or literal (depending on the
+  // `isStatement` parameter).
+
+  pp$1.parseClass = function(node, isStatement) {
+    var this$1 = this;
+
+    this.next()
+    this.parseClassId(node, isStatement)
+    this.parseClassSuper(node)
+    var classBody = this.startNode()
+    var hadConstructor = false
+    classBody.body = []
+    this.expect(tt.braceL)
+    while (!this.eat(tt.braceR)) {
+      if (this$1.eat(tt.semi)) continue
+      var method = this$1.startNode()
+      var isGenerator = this$1.eat(tt.star)
+      var isMaybeStatic = this$1.type === tt.name && this$1.value === "static"
+      this$1.parsePropertyName(method)
+      method.static = isMaybeStatic && this$1.type !== tt.parenL
+      if (method.static) {
+        if (isGenerator) this$1.unexpected()
+        isGenerator = this$1.eat(tt.star)
+        this$1.parsePropertyName(method)
+      }
+      method.kind = "method"
+      var isGetSet = false
+      if (!method.computed) {
+        var key = method.key;
+        if (!isGenerator && key.type === "Identifier" && this$1.type !== tt.parenL && (key.name === "get" || key.name === "set")) {
+          isGetSet = true
+          method.kind = key.name
+          key = this$1.parsePropertyName(method)
+        }
+        if (!method.static && (key.type === "Identifier" && key.name === "constructor" ||
+            key.type === "Literal" && key.value === "constructor")) {
+          if (hadConstructor) this$1.raise(key.start, "Duplicate constructor in the same class")
+          if (isGetSet) this$1.raise(key.start, "Constructor can't have get/set modifier")
+          if (isGenerator) this$1.raise(key.start, "Constructor can't be a generator")
+          method.kind = "constructor"
+          hadConstructor = true
+        }
+      }
+      this$1.parseClassMethod(classBody, method, isGenerator)
+      if (isGetSet) {
+        var paramCount = method.kind === "get" ? 0 : 1
+        if (method.value.params.length !== paramCount) {
+          var start = method.value.start
+          if (method.kind === "get")
+            this$1.raiseRecoverable(start, "getter should have no params")
+          else
+            this$1.raiseRecoverable(start, "setter should have exactly one param")
+        }
+        if (method.kind === "set" && method.value.params[0].type === "RestElement")
+          this$1.raise(method.value.params[0].start, "Setter cannot use rest params")
+      }
+    }
+    node.body = this.finishNode(classBody, "ClassBody")
+    return this.finishNode(node, isStatement ? "ClassDeclaration" : "ClassExpression")
+  }
+
+  pp$1.parseClassMethod = function(classBody, method, isGenerator) {
+    method.value = this.parseMethod(isGenerator)
+    classBody.body.push(this.finishNode(method, "MethodDefinition"))
+  }
+
+  pp$1.parseClassId = function(node, isStatement) {
+    node.id = this.type === tt.name ? this.parseIdent() : isStatement ? this.unexpected() : null
+  }
+
+  pp$1.parseClassSuper = function(node) {
+    node.superClass = this.eat(tt._extends) ? this.parseExprSubscripts() : null
+  }
+
+  // Parses module export declaration.
+
+  pp$1.parseExport = function(node) {
+    var this$1 = this;
+
+    this.next()
+    // export * from '...'
+    if (this.eat(tt.star)) {
+      this.expectContextual("from")
+      node.source = this.type === tt.string ? this.parseExprAtom() : this.unexpected()
+      this.semicolon()
+      return this.finishNode(node, "ExportAllDeclaration")
+    }
+    if (this.eat(tt._default)) { // export default ...
+      var parens = this.type == tt.parenL
+      var expr = this.parseMaybeAssign()
+      var needsSemi = true
+      if (!parens && (expr.type == "FunctionExpression" ||
+                      expr.type == "ClassExpression")) {
+        needsSemi = false
+        if (expr.id) {
+          expr.type = expr.type == "FunctionExpression"
+            ? "FunctionDeclaration"
+            : "ClassDeclaration"
+        }
+      }
+      node.declaration = expr
+      if (needsSemi) this.semicolon()
+      return this.finishNode(node, "ExportDefaultDeclaration")
+    }
+    // export var|const|let|function|class ...
+    if (this.shouldParseExportStatement()) {
+      node.declaration = this.parseStatement(true)
+      node.specifiers = []
+      node.source = null
+    } else { // export { x, y as z } [from '...']
+      node.declaration = null
+      node.specifiers = this.parseExportSpecifiers()
+      if (this.eatContextual("from")) {
+        node.source = this.type === tt.string ? this.parseExprAtom() : this.unexpected()
+      } else {
+        // check for keywords used as local names
+        for (var i = 0; i < node.specifiers.length; i++) {
+          if (this$1.keywords.test(node.specifiers[i].local.name) || this$1.reservedWords.test(node.specifiers[i].local.name)) {
+            this$1.unexpected(node.specifiers[i].local.start)
+          }
+        }
+
+        node.source = null
+      }
+      this.semicolon()
+    }
+    return this.finishNode(node, "ExportNamedDeclaration")
+  }
+
+  pp$1.shouldParseExportStatement = function() {
+    return this.type.keyword || this.isLet()
+  }
+
+  // Parses a comma-separated list of module exports.
+
+  pp$1.parseExportSpecifiers = function() {
+    var this$1 = this;
+
+    var nodes = [], first = true
+    // export { x, y as z } [from '...']
+    this.expect(tt.braceL)
+    while (!this.eat(tt.braceR)) {
+      if (!first) {
+        this$1.expect(tt.comma)
+        if (this$1.afterTrailingComma(tt.braceR)) break
+      } else first = false
+
+      var node = this$1.startNode()
+      node.local = this$1.parseIdent(this$1.type === tt._default)
+      node.exported = this$1.eatContextual("as") ? this$1.parseIdent(true) : node.local
+      nodes.push(this$1.finishNode(node, "ExportSpecifier"))
+    }
+    return nodes
+  }
+
+  // Parses import declaration.
+
+  pp$1.parseImport = function(node) {
+    this.next()
+    // import '...'
+    if (this.type === tt.string) {
+      node.specifiers = empty
+      node.source = this.parseExprAtom()
+    } else {
+      node.specifiers = this.parseImportSpecifiers()
+      this.expectContextual("from")
+      node.source = this.type === tt.string ? this.parseExprAtom() : this.unexpected()
+    }
+    this.semicolon()
+    return this.finishNode(node, "ImportDeclaration")
+  }
+
+  // Parses a comma-separated list of module imports.
+
+  pp$1.parseImportSpecifiers = function() {
+    var this$1 = this;
+
+    var nodes = [], first = true
+    if (this.type === tt.name) {
+      // import defaultObj, { x, y as z } from '...'
+      var node = this.startNode()
+      node.local = this.parseIdent()
+      this.checkLVal(node.local, true)
+      nodes.push(this.finishNode(node, "ImportDefaultSpecifier"))
+      if (!this.eat(tt.comma)) return nodes
+    }
+    if (this.type === tt.star) {
+      var node$1 = this.startNode()
+      this.next()
+      this.expectContextual("as")
+      node$1.local = this.parseIdent()
+      this.checkLVal(node$1.local, true)
+      nodes.push(this.finishNode(node$1, "ImportNamespaceSpecifier"))
+      return nodes
+    }
+    this.expect(tt.braceL)
+    while (!this.eat(tt.braceR)) {
+      if (!first) {
+        this$1.expect(tt.comma)
+        if (this$1.afterTrailingComma(tt.braceR)) break
+      } else first = false
+
+      var node$2 = this$1.startNode()
+      node$2.imported = this$1.parseIdent(true)
+      if (this$1.eatContextual("as")) {
+        node$2.local = this$1.parseIdent()
+      } else {
+        node$2.local = node$2.imported
+        if (this$1.isKeyword(node$2.local.name)) this$1.unexpected(node$2.local.start)
+        if (this$1.reservedWordsStrict.test(node$2.local.name)) this$1.raise(node$2.local.start, "The keyword '" + node$2.local.name + "' is reserved")
+      }
+      this$1.checkLVal(node$2.local, true)
+      nodes.push(this$1.finishNode(node$2, "ImportSpecifier"))
+    }
+    return nodes
+  }
+
+  var pp$2 = Parser.prototype
+
+  // Convert existing expression atom to assignable pattern
+  // if possible.
+
+  pp$2.toAssignable = function(node, isBinding) {
+    var this$1 = this;
+
+    if (this.options.ecmaVersion >= 6 && node) {
+      switch (node.type) {
+      case "Identifier":
+      case "ObjectPattern":
+      case "ArrayPattern":
+        break
+
+      case "ObjectExpression":
+        node.type = "ObjectPattern"
+        for (var i = 0; i < node.properties.length; i++) {
+          var prop = node.properties[i]
+          if (prop.kind !== "init") this$1.raise(prop.key.start, "Object pattern can't contain getter or setter")
+          this$1.toAssignable(prop.value, isBinding)
+        }
+        break
+
+      case "ArrayExpression":
+        node.type = "ArrayPattern"
+        this.toAssignableList(node.elements, isBinding)
+        break
+
+      case "AssignmentExpression":
+        if (node.operator === "=") {
+          node.type = "AssignmentPattern"
+          delete node.operator
+          // falls through to AssignmentPattern
+        } else {
+          this.raise(node.left.end, "Only '=' operator can be used for specifying default value.")
+          break
+        }
+
+      case "AssignmentPattern":
+        if (node.right.type === "YieldExpression")
+          this.raise(node.right.start, "Yield expression cannot be a default value")
+        break
+
+      case "ParenthesizedExpression":
+        node.expression = this.toAssignable(node.expression, isBinding)
+        break
+
+      case "MemberExpression":
+        if (!isBinding) break
+
+      default:
+        this.raise(node.start, "Assigning to rvalue")
+      }
+    }
+    return node
+  }
+
+  // Convert list of expression atoms to binding list.
+
+  pp$2.toAssignableList = function(exprList, isBinding) {
+    var this$1 = this;
+
+    var end = exprList.length
+    if (end) {
+      var last = exprList[end - 1]
+      if (last && last.type == "RestElement") {
+        --end
+      } else if (last && last.type == "SpreadElement") {
+        last.type = "RestElement"
+        var arg = last.argument
+        this.toAssignable(arg, isBinding)
+        if (arg.type !== "Identifier" && arg.type !== "MemberExpression" && arg.type !== "ArrayPattern")
+          this.unexpected(arg.start)
+        --end
+      }
+
+      if (isBinding && last && last.type === "RestElement" && last.argument.type !== "Identifier")
+        this.unexpected(last.argument.start)
+    }
+    for (var i = 0; i < end; i++) {
+      var elt = exprList[i]
+      if (elt) this$1.toAssignable(elt, isBinding)
+    }
+    return exprList
+  }
+
+  // Parses spread element.
+
+  pp$2.parseSpread = function(refDestructuringErrors) {
+    var node = this.startNode()
+    this.next()
+    node.argument = this.parseMaybeAssign(false, refDestructuringErrors)
+    return this.finishNode(node, "SpreadElement")
+  }
+
+  pp$2.parseRest = function(allowNonIdent) {
+    var node = this.startNode()
+    this.next()
+
+    // RestElement inside of a function parameter must be an identifier
+    if (allowNonIdent) node.argument = this.type === tt.name ? this.parseIdent() : this.unexpected()
+    else node.argument = this.type === tt.name || this.type === tt.bracketL ? this.parseBindingAtom() : this.unexpected()
+
+    return this.finishNode(node, "RestElement")
+  }
+
+  // Parses lvalue (assignable) atom.
+
+  pp$2.parseBindingAtom = function() {
+    if (this.options.ecmaVersion < 6) return this.parseIdent()
+    switch (this.type) {
+    case tt.name:
+      return this.parseIdent()
+
+    case tt.bracketL:
+      var node = this.startNode()
+      this.next()
+      node.elements = this.parseBindingList(tt.bracketR, true, true)
+      return this.finishNode(node, "ArrayPattern")
+
+    case tt.braceL:
+      return this.parseObj(true)
+
+    default:
+      this.unexpected()
+    }
+  }
+
+  pp$2.parseBindingList = function(close, allowEmpty, allowTrailingComma, allowNonIdent) {
+    var this$1 = this;
+
+    var elts = [], first = true
+    while (!this.eat(close)) {
+      if (first) first = false
+      else this$1.expect(tt.comma)
+      if (allowEmpty && this$1.type === tt.comma) {
+        elts.push(null)
+      } else if (allowTrailingComma && this$1.afterTrailingComma(close)) {
+        break
+      } else if (this$1.type === tt.ellipsis) {
+        var rest = this$1.parseRest(allowNonIdent)
+        this$1.parseBindingListItem(rest)
+        elts.push(rest)
+        if (this$1.type === tt.comma) this$1.raise(this$1.start, "Comma is not permitted after the rest element")
+        this$1.expect(close)
+        break
+      } else {
+        var elem = this$1.parseMaybeDefault(this$1.start, this$1.startLoc)
+        this$1.parseBindingListItem(elem)
+        elts.push(elem)
+      }
+    }
+    return elts
+  }
+
+  pp$2.parseBindingListItem = function(param) {
+    return param
+  }
+
+  // Parses assignment pattern around given atom if possible.
+
+  pp$2.parseMaybeDefault = function(startPos, startLoc, left) {
+    left = left || this.parseBindingAtom()
+    if (this.options.ecmaVersion < 6 || !this.eat(tt.eq)) return left
+    var node = this.startNodeAt(startPos, startLoc)
+    node.left = left
+    node.right = this.parseMaybeAssign()
+    return this.finishNode(node, "AssignmentPattern")
+  }
+
+  // Verify that a node is an lval — something that can be assigned
+  // to.
+
+  pp$2.checkLVal = function(expr, isBinding, checkClashes) {
+    var this$1 = this;
+
+    switch (expr.type) {
+    case "Identifier":
+      if (this.strict && this.reservedWordsStrictBind.test(expr.name))
+        this.raiseRecoverable(expr.start, (isBinding ? "Binding " : "Assigning to ") + expr.name + " in strict mode")
+      if (checkClashes) {
+        if (has(checkClashes, expr.name))
+          this.raiseRecoverable(expr.start, "Argument name clash")
+        checkClashes[expr.name] = true
+      }
+      break
+
+    case "MemberExpression":
+      if (isBinding) this.raiseRecoverable(expr.start, (isBinding ? "Binding" : "Assigning to") + " member expression")
+      break
+
+    case "ObjectPattern":
+      for (var i = 0; i < expr.properties.length; i++)
+        this$1.checkLVal(expr.properties[i].value, isBinding, checkClashes)
+      break
+
+    case "ArrayPattern":
+      for (var i$1 = 0; i$1 < expr.elements.length; i$1++) {
+        var elem = expr.elements[i$1]
+        if (elem) this$1.checkLVal(elem, isBinding, checkClashes)
+      }
+      break
+
+    case "AssignmentPattern":
+      this.checkLVal(expr.left, isBinding, checkClashes)
+      break
+
+    case "RestElement":
+      this.checkLVal(expr.argument, isBinding, checkClashes)
+      break
+
+    case "ParenthesizedExpression":
+      this.checkLVal(expr.expression, isBinding, checkClashes)
+      break
+
+    default:
+      this.raise(expr.start, (isBinding ? "Binding" : "Assigning to") + " rvalue")
+    }
+  }
+
+  var pp$3 = Parser.prototype
+
+  // Check if property name clashes with already added.
+  // Object/class getters and setters are not allowed to clash —
+  // either with each other or with an init property — and in
+  // strict mode, init properties are also not allowed to be repeated.
+
+  pp$3.checkPropClash = function(prop, propHash) {
+    if (this.options.ecmaVersion >= 6 && (prop.computed || prop.method || prop.shorthand))
+      return
+    var key = prop.key;
+    var name
+    switch (key.type) {
+    case "Identifier": name = key.name; break
+    case "Literal": name = String(key.value); break
+    default: return
+    }
+    var kind = prop.kind;
+    if (this.options.ecmaVersion >= 6) {
+      if (name === "__proto__" && kind === "init") {
+        if (propHash.proto) this.raiseRecoverable(key.start, "Redefinition of __proto__ property")
+        propHash.proto = true
+      }
+      return
+    }
+    name = "$" + name
+    var other = propHash[name]
+    if (other) {
+      var isGetSet = kind !== "init"
+      if ((this.strict || isGetSet) && other[kind] || !(isGetSet ^ other.init))
+        this.raiseRecoverable(key.start, "Redefinition of property")
+    } else {
+      other = propHash[name] = {
+        init: false,
+        get: false,
+        set: false
+      }
+    }
+    other[kind] = true
+  }
+
+  // ### Expression parsing
+
+  // These nest, from the most general expression type at the top to
+  // 'atomic', nondivisible expression types at the bottom. Most of
+  // the functions will simply let the function(s) below them parse,
+  // and, *if* the syntactic construct they handle is present, wrap
+  // the AST node that the inner parser gave them in another node.
+
+  // Parse a full expression. The optional arguments are used to
+  // forbid the `in` operator (in for loops initalization expressions)
+  // and provide reference for storing '=' operator inside shorthand
+  // property assignment in contexts where both object expression
+  // and object pattern might appear (so it's possible to raise
+  // delayed syntax error at correct position).
+
+  pp$3.parseExpression = function(noIn, refDestructuringErrors) {
+    var this$1 = this;
+
+    var startPos = this.start, startLoc = this.startLoc
+    var expr = this.parseMaybeAssign(noIn, refDestructuringErrors)
+    if (this.type === tt.comma) {
+      var node = this.startNodeAt(startPos, startLoc)
+      node.expressions = [expr]
+      while (this.eat(tt.comma)) node.expressions.push(this$1.parseMaybeAssign(noIn, refDestructuringErrors))
+      return this.finishNode(node, "SequenceExpression")
+    }
+    return expr
+  }
+
+  // Parse an assignment expression. This includes applications of
+  // operators like `+=`.
+
+  pp$3.parseMaybeAssign = function(noIn, refDestructuringErrors, afterLeftParse) {
+    if (this.inGenerator && this.isContextual("yield")) return this.parseYield()
+
+    var ownDestructuringErrors = false
+    if (!refDestructuringErrors) {
+      refDestructuringErrors = new DestructuringErrors
+      ownDestructuringErrors = true
+    }
+    var startPos = this.start, startLoc = this.startLoc
+    if (this.type == tt.parenL || this.type == tt.name)
+      this.potentialArrowAt = this.start
+    var left = this.parseMaybeConditional(noIn, refDestructuringErrors)
+    if (afterLeftParse) left = afterLeftParse.call(this, left, startPos, startLoc)
+    if (this.type.isAssign) {
+      this.checkPatternErrors(refDestructuringErrors, true)
+      if (!ownDestructuringErrors) DestructuringErrors.call(refDestructuringErrors)
+      var node = this.startNodeAt(startPos, startLoc)
+      node.operator = this.value
+      node.left = this.type === tt.eq ? this.toAssignable(left) : left
+      refDestructuringErrors.shorthandAssign = 0 // reset because shorthand default was used correctly
+      this.checkLVal(left)
+      this.next()
+      node.right = this.parseMaybeAssign(noIn)
+      return this.finishNode(node, "AssignmentExpression")
+    } else {
+      if (ownDestructuringErrors) this.checkExpressionErrors(refDestructuringErrors, true)
+    }
+    return left
+  }
+
+  // Parse a ternary conditional (`?:`) operator.
+
+  pp$3.parseMaybeConditional = function(noIn, refDestructuringErrors) {
+    var startPos = this.start, startLoc = this.startLoc
+    var expr = this.parseExprOps(noIn, refDestructuringErrors)
+    if (this.checkExpressionErrors(refDestructuringErrors)) return expr
+    if (this.eat(tt.question)) {
+      var node = this.startNodeAt(startPos, startLoc)
+      node.test = expr
+      node.consequent = this.parseMaybeAssign()
+      this.expect(tt.colon)
+      node.alternate = this.parseMaybeAssign(noIn)
+      return this.finishNode(node, "ConditionalExpression")
+    }
+    return expr
+  }
+
+  // Start the precedence parser.
+
+  pp$3.parseExprOps = function(noIn, refDestructuringErrors) {
+    var startPos = this.start, startLoc = this.startLoc
+    var expr = this.parseMaybeUnary(refDestructuringErrors, false)
+    if (this.checkExpressionErrors(refDestructuringErrors)) return expr
+    return this.parseExprOp(expr, startPos, startLoc, -1, noIn)
+  }
+
+  // Parse binary operators with the operator precedence parsing
+  // algorithm. `left` is the left-hand side of the operator.
+  // `minPrec` provides context that allows the function to stop and
+  // defer further parser to one of its callers when it encounters an
+  // operator that has a lower precedence than the set it is parsing.
+
+  pp$3.parseExprOp = function(left, leftStartPos, leftStartLoc, minPrec, noIn) {
+    var prec = this.type.binop
+    if (prec != null && (!noIn || this.type !== tt._in)) {
+      if (prec > minPrec) {
+        var logical = this.type === tt.logicalOR || this.type === tt.logicalAND
+        var op = this.value
+        this.next()
+        var startPos = this.start, startLoc = this.startLoc
+        var right = this.parseExprOp(this.parseMaybeUnary(null, false), startPos, startLoc, prec, noIn)
+        var node = this.buildBinary(leftStartPos, leftStartLoc, left, right, op, logical)
+        return this.parseExprOp(node, leftStartPos, leftStartLoc, minPrec, noIn)
+      }
+    }
+    return left
+  }
+
+  pp$3.buildBinary = function(startPos, startLoc, left, right, op, logical) {
+    var node = this.startNodeAt(startPos, startLoc)
+    node.left = left
+    node.operator = op
+    node.right = right
+    return this.finishNode(node, logical ? "LogicalExpression" : "BinaryExpression")
+  }
+
+  // Parse unary operators, both prefix and postfix.
+
+  pp$3.parseMaybeUnary = function(refDestructuringErrors, sawUnary) {
+    var this$1 = this;
+
+    var startPos = this.start, startLoc = this.startLoc, expr
+    if (this.type.prefix) {
+      var node = this.startNode(), update = this.type === tt.incDec
+      node.operator = this.value
+      node.prefix = true
+      this.next()
+      node.argument = this.parseMaybeUnary(null, true)
+      this.checkExpressionErrors(refDestructuringErrors, true)
+      if (update) this.checkLVal(node.argument)
+      else if (this.strict && node.operator === "delete" &&
+               node.argument.type === "Identifier")
+        this.raiseRecoverable(node.start, "Deleting local variable in strict mode")
+      else sawUnary = true
+      expr = this.finishNode(node, update ? "UpdateExpression" : "UnaryExpression")
+    } else {
+      expr = this.parseExprSubscripts(refDestructuringErrors)
+      if (this.checkExpressionErrors(refDestructuringErrors)) return expr
+      while (this.type.postfix && !this.canInsertSemicolon()) {
+        var node$1 = this$1.startNodeAt(startPos, startLoc)
+        node$1.operator = this$1.value
+        node$1.prefix = false
+        node$1.argument = expr
+        this$1.checkLVal(expr)
+        this$1.next()
+        expr = this$1.finishNode(node$1, "UpdateExpression")
+      }
+    }
+
+    if (!sawUnary && this.eat(tt.starstar))
+      return this.buildBinary(startPos, startLoc, expr, this.parseMaybeUnary(null, false), "**", false)
+    else
+      return expr
+  }
+
+  // Parse call, dot, and `[]`-subscript expressions.
+
+  pp$3.parseExprSubscripts = function(refDestructuringErrors) {
+    var startPos = this.start, startLoc = this.startLoc
+    var expr = this.parseExprAtom(refDestructuringErrors)
+    var skipArrowSubscripts = expr.type === "ArrowFunctionExpression" && this.input.slice(this.lastTokStart, this.lastTokEnd) !== ")"
+    if (this.checkExpressionErrors(refDestructuringErrors) || skipArrowSubscripts) return expr
+    return this.parseSubscripts(expr, startPos, startLoc)
+  }
+
+  pp$3.parseSubscripts = function(base, startPos, startLoc, noCalls) {
+    var this$1 = this;
+
+    for (;;) {
+      if (this$1.eat(tt.dot)) {
+        var node = this$1.startNodeAt(startPos, startLoc)
+        node.object = base
+        node.property = this$1.parseIdent(true)
+        node.computed = false
+        base = this$1.finishNode(node, "MemberExpression")
+      } else if (this$1.eat(tt.bracketL)) {
+        var node$1 = this$1.startNodeAt(startPos, startLoc)
+        node$1.object = base
+        node$1.property = this$1.parseExpression()
+        node$1.computed = true
+        this$1.expect(tt.bracketR)
+        base = this$1.finishNode(node$1, "MemberExpression")
+      } else if (!noCalls && this$1.eat(tt.parenL)) {
+        var node$2 = this$1.startNodeAt(startPos, startLoc)
+        node$2.callee = base
+        node$2.arguments = this$1.parseExprList(tt.parenR, false)
+        base = this$1.finishNode(node$2, "CallExpression")
+      } else if (this$1.type === tt.backQuote) {
+        var node$3 = this$1.startNodeAt(startPos, startLoc)
+        node$3.tag = base
+        node$3.quasi = this$1.parseTemplate()
+        base = this$1.finishNode(node$3, "TaggedTemplateExpression")
+      } else {
+        return base
+      }
+    }
+  }
+
+  // Parse an atomic expression — either a single token that is an
+  // expression, an expression started by a keyword like `function` or
+  // `new`, or an expression wrapped in punctuation like `()`, `[]`,
+  // or `{}`.
+
+  pp$3.parseExprAtom = function(refDestructuringErrors) {
+    var node, canBeArrow = this.potentialArrowAt == this.start
+    switch (this.type) {
+    case tt._super:
+      if (!this.inFunction)
+        this.raise(this.start, "'super' outside of function or class")
+
+    case tt._this:
+      var type = this.type === tt._this ? "ThisExpression" : "Super"
+      node = this.startNode()
+      this.next()
+      return this.finishNode(node, type)
+
+    case tt.name:
+      var startPos = this.start, startLoc = this.startLoc
+      var id = this.parseIdent(this.type !== tt.name)
+      if (canBeArrow && !this.canInsertSemicolon() && this.eat(tt.arrow))
+        return this.parseArrowExpression(this.startNodeAt(startPos, startLoc), [id])
+      return id
+
+    case tt.regexp:
+      var value = this.value
+      node = this.parseLiteral(value.value)
+      node.regex = {pattern: value.pattern, flags: value.flags}
+      return node
+
+    case tt.num: case tt.string:
+      return this.parseLiteral(this.value)
+
+    case tt._null: case tt._true: case tt._false:
+      node = this.startNode()
+      node.value = this.type === tt._null ? null : this.type === tt._true
+      node.raw = this.type.keyword
+      this.next()
+      return this.finishNode(node, "Literal")
+
+    case tt.parenL:
+      return this.parseParenAndDistinguishExpression(canBeArrow)
+
+    case tt.bracketL:
+      node = this.startNode()
+      this.next()
+      node.elements = this.parseExprList(tt.bracketR, true, true, refDestructuringErrors)
+      return this.finishNode(node, "ArrayExpression")
+
+    case tt.braceL:
+      return this.parseObj(false, refDestructuringErrors)
+
+    case tt._function:
+      node = this.startNode()
+      this.next()
+      return this.parseFunction(node, false)
+
+    case tt._class:
+      return this.parseClass(this.startNode(), false)
+
+    case tt._new:
+      return this.parseNew()
+
+    case tt.backQuote:
+      return this.parseTemplate()
+
+    default:
+      this.unexpected()
+    }
+  }
+
+  pp$3.parseLiteral = function(value) {
+    var node = this.startNode()
+    node.value = value
+    node.raw = this.input.slice(this.start, this.end)
+    this.next()
+    return this.finishNode(node, "Literal")
+  }
+
+  pp$3.parseParenExpression = function() {
+    this.expect(tt.parenL)
+    var val = this.parseExpression()
+    this.expect(tt.parenR)
+    return val
+  }
+
+  pp$3.parseParenAndDistinguishExpression = function(canBeArrow) {
+    var this$1 = this;
+
+    var startPos = this.start, startLoc = this.startLoc, val
+    if (this.options.ecmaVersion >= 6) {
+      this.next()
+
+      var innerStartPos = this.start, innerStartLoc = this.startLoc
+      var exprList = [], first = true
+      var refDestructuringErrors = new DestructuringErrors, spreadStart, innerParenStart
+      while (this.type !== tt.parenR) {
+        first ? first = false : this$1.expect(tt.comma)
+        if (this$1.type === tt.ellipsis) {
+          spreadStart = this$1.start
+          exprList.push(this$1.parseParenItem(this$1.parseRest()))
+          break
+        } else {
+          if (this$1.type === tt.parenL && !innerParenStart) {
+            innerParenStart = this$1.start
+          }
+          exprList.push(this$1.parseMaybeAssign(false, refDestructuringErrors, this$1.parseParenItem))
+        }
+      }
+      var innerEndPos = this.start, innerEndLoc = this.startLoc
+      this.expect(tt.parenR)
+
+      if (canBeArrow && !this.canInsertSemicolon() && this.eat(tt.arrow)) {
+        this.checkPatternErrors(refDestructuringErrors, true)
+        if (innerParenStart) this.unexpected(innerParenStart)
+        return this.parseParenArrowList(startPos, startLoc, exprList)
+      }
+
+      if (!exprList.length) this.unexpected(this.lastTokStart)
+      if (spreadStart) this.unexpected(spreadStart)
+      this.checkExpressionErrors(refDestructuringErrors, true)
+
+      if (exprList.length > 1) {
+        val = this.startNodeAt(innerStartPos, innerStartLoc)
+        val.expressions = exprList
+        this.finishNodeAt(val, "SequenceExpression", innerEndPos, innerEndLoc)
+      } else {
+        val = exprList[0]
+      }
+    } else {
+      val = this.parseParenExpression()
+    }
+
+    if (this.options.preserveParens) {
+      var par = this.startNodeAt(startPos, startLoc)
+      par.expression = val
+      return this.finishNode(par, "ParenthesizedExpression")
+    } else {
+      return val
+    }
+  }
+
+  pp$3.parseParenItem = function(item) {
+    return item
+  }
+
+  pp$3.parseParenArrowList = function(startPos, startLoc, exprList) {
+    return this.parseArrowExpression(this.startNodeAt(startPos, startLoc), exprList)
+  }
+
+  // New's precedence is slightly tricky. It must allow its argument to
+  // be a `[]` or dot subscript expression, but not a call — at least,
+  // not without wrapping it in parentheses. Thus, it uses the noCalls
+  // argument to parseSubscripts to prevent it from consuming the
+  // argument list.
+
+  var empty$1 = []
+
+  pp$3.parseNew = function() {
+    var node = this.startNode()
+    var meta = this.parseIdent(true)
+    if (this.options.ecmaVersion >= 6 && this.eat(tt.dot)) {
+      node.meta = meta
+      node.property = this.parseIdent(true)
+      if (node.property.name !== "target")
+        this.raiseRecoverable(node.property.start, "The only valid meta property for new is new.target")
+      if (!this.inFunction)
+        this.raiseRecoverable(node.start, "new.target can only be used in functions")
+      return this.finishNode(node, "MetaProperty")
+    }
+    var startPos = this.start, startLoc = this.startLoc
+    node.callee = this.parseSubscripts(this.parseExprAtom(), startPos, startLoc, true)
+    if (this.eat(tt.parenL)) node.arguments = this.parseExprList(tt.parenR, false)
+    else node.arguments = empty$1
+    return this.finishNode(node, "NewExpression")
+  }
+
+  // Parse template expression.
+
+  pp$3.parseTemplateElement = function() {
+    var elem = this.startNode()
+    elem.value = {
+      raw: this.input.slice(this.start, this.end).replace(/\r\n?/g, '\n'),
+      cooked: this.value
+    }
+    this.next()
+    elem.tail = this.type === tt.backQuote
+    return this.finishNode(elem, "TemplateElement")
+  }
+
+  pp$3.parseTemplate = function() {
+    var this$1 = this;
+
+    var node = this.startNode()
+    this.next()
+    node.expressions = []
+    var curElt = this.parseTemplateElement()
+    node.quasis = [curElt]
+    while (!curElt.tail) {
+      this$1.expect(tt.dollarBraceL)
+      node.expressions.push(this$1.parseExpression())
+      this$1.expect(tt.braceR)
+      node.quasis.push(curElt = this$1.parseTemplateElement())
+    }
+    this.next()
+    return this.finishNode(node, "TemplateLiteral")
+  }
+
+  // Parse an object literal or binding pattern.
+
+  pp$3.parseObj = function(isPattern, refDestructuringErrors) {
+    var this$1 = this;
+
+    var node = this.startNode(), first = true, propHash = {}
+    node.properties = []
+    this.next()
+    while (!this.eat(tt.braceR)) {
+      if (!first) {
+        this$1.expect(tt.comma)
+        if (this$1.afterTrailingComma(tt.braceR)) break
+      } else first = false
+
+      var prop = this$1.startNode(), isGenerator, startPos, startLoc
+      if (this$1.options.ecmaVersion >= 6) {
+        prop.method = false
+        prop.shorthand = false
+        if (isPattern || refDestructuringErrors) {
+          startPos = this$1.start
+          startLoc = this$1.startLoc
+        }
+        if (!isPattern)
+          isGenerator = this$1.eat(tt.star)
+      }
+      this$1.parsePropertyName(prop)
+      this$1.parsePropertyValue(prop, isPattern, isGenerator, startPos, startLoc, refDestructuringErrors)
+      this$1.checkPropClash(prop, propHash)
+      node.properties.push(this$1.finishNode(prop, "Property"))
+    }
+    return this.finishNode(node, isPattern ? "ObjectPattern" : "ObjectExpression")
+  }
+
+  pp$3.parsePropertyValue = function(prop, isPattern, isGenerator, startPos, startLoc, refDestructuringErrors) {
+    if (this.eat(tt.colon)) {
+      prop.value = isPattern ? this.parseMaybeDefault(this.start, this.startLoc) : this.parseMaybeAssign(false, refDestructuringErrors)
+      prop.kind = "init"
+    } else if (this.options.ecmaVersion >= 6 && this.type === tt.parenL) {
+      if (isPattern) this.unexpected()
+      prop.kind = "init"
+      prop.method = true
+      prop.value = this.parseMethod(isGenerator)
+    } else if (this.options.ecmaVersion >= 5 && !prop.computed && prop.key.type === "Identifier" &&
+               (prop.key.name === "get" || prop.key.name === "set") &&
+               (this.type != tt.comma && this.type != tt.braceR)) {
+      if (isGenerator || isPattern) this.unexpected()
+      prop.kind = prop.key.name
+      this.parsePropertyName(prop)
+      prop.value = this.parseMethod(false)
+      var paramCount = prop.kind === "get" ? 0 : 1
+      if (prop.value.params.length !== paramCount) {
+        var start = prop.value.start
+        if (prop.kind === "get")
+          this.raiseRecoverable(start, "getter should have no params")
+        else
+          this.raiseRecoverable(start, "setter should have exactly one param")
+      }
+      if (prop.kind === "set" && prop.value.params[0].type === "RestElement")
+        this.raiseRecoverable(prop.value.params[0].start, "Setter cannot use rest params")
+    } else if (this.options.ecmaVersion >= 6 && !prop.computed && prop.key.type === "Identifier") {
+      if (this.keywords.test(prop.key.name) ||
+          (this.strict ? this.reservedWordsStrictBind : this.reservedWords).test(prop.key.name) ||
+          (this.inGenerator && prop.key.name == "yield"))
+        this.raiseRecoverable(prop.key.start, "'" + prop.key.name + "' can not be used as shorthand property")
+      prop.kind = "init"
+      if (isPattern) {
+        prop.value = this.parseMaybeDefault(startPos, startLoc, prop.key)
+      } else if (this.type === tt.eq && refDestructuringErrors) {
+        if (!refDestructuringErrors.shorthandAssign)
+          refDestructuringErrors.shorthandAssign = this.start
+        prop.value = this.parseMaybeDefault(startPos, startLoc, prop.key)
+      } else {
+        prop.value = prop.key
+      }
+      prop.shorthand = true
+    } else this.unexpected()
+  }
+
+  pp$3.parsePropertyName = function(prop) {
+    if (this.options.ecmaVersion >= 6) {
+      if (this.eat(tt.bracketL)) {
+        prop.computed = true
+        prop.key = this.parseMaybeAssign()
+        this.expect(tt.bracketR)
+        return prop.key
+      } else {
+        prop.computed = false
+      }
+    }
+    return prop.key = this.type === tt.num || this.type === tt.string ? this.parseExprAtom() : this.parseIdent(true)
+  }
+
+  // Initialize empty function node.
+
+  pp$3.initFunction = function(node) {
+    node.id = null
+    if (this.options.ecmaVersion >= 6) {
+      node.generator = false
+      node.expression = false
+    }
+  }
+
+  // Parse object or class method.
+
+  pp$3.parseMethod = function(isGenerator) {
+    var node = this.startNode(), oldInGen = this.inGenerator
+    this.inGenerator = isGenerator
+    this.initFunction(node)
+    this.expect(tt.parenL)
+    node.params = this.parseBindingList(tt.parenR, false, false)
+    if (this.options.ecmaVersion >= 6)
+      node.generator = isGenerator
+    this.parseFunctionBody(node, false)
+    this.inGenerator = oldInGen
+    return this.finishNode(node, "FunctionExpression")
+  }
+
+  // Parse arrow function expression with given parameters.
+
+  pp$3.parseArrowExpression = function(node, params) {
+    var oldInGen = this.inGenerator
+    this.inGenerator = false
+    this.initFunction(node)
+    node.params = this.toAssignableList(params, true)
+    this.parseFunctionBody(node, true)
+    this.inGenerator = oldInGen
+    return this.finishNode(node, "ArrowFunctionExpression")
+  }
+
+  // Parse function body and check parameters.
+
+  pp$3.parseFunctionBody = function(node, isArrowFunction) {
+    var isExpression = isArrowFunction && this.type !== tt.braceL
+
+    if (isExpression) {
+      node.body = this.parseMaybeAssign()
+      node.expression = true
+    } else {
+      // Start a new scope with regard to labels and the `inFunction`
+      // flag (restore them to their old value afterwards).
+      var oldInFunc = this.inFunction, oldLabels = this.labels
+      this.inFunction = true; this.labels = []
+      node.body = this.parseBlock(true)
+      node.expression = false
+      this.inFunction = oldInFunc; this.labels = oldLabels
+    }
+
+    // If this is a strict mode function, verify that argument names
+    // are not repeated, and it does not try to bind the words `eval`
+    // or `arguments`.
+    var useStrict = (!isExpression && node.body.body.length && this.isUseStrict(node.body.body[0])) ? node.body.body[0] : null;
+    if (this.strict || useStrict) {
+      var oldStrict = this.strict
+      this.strict = true
+      if (node.id)
+        this.checkLVal(node.id, true)
+      this.checkParams(node, useStrict)
+      this.strict = oldStrict
+    } else if (isArrowFunction) {
+      this.checkParams(node, useStrict)
+    }
+  }
+
+  // Checks function params for various disallowed patterns such as using "eval"
+  // or "arguments" and duplicate parameters.
+
+  pp$3.checkParams = function(node, useStrict) {
+      var this$1 = this;
+
+      var nameHash = {}
+      for (var i = 0; i < node.params.length; i++) {
+        if (useStrict && this$1.options.ecmaVersion >= 7 && node.params[i].type !== "Identifier")
+          this$1.raiseRecoverable(useStrict.start, "Illegal 'use strict' directive in function with non-simple parameter list");
+        this$1.checkLVal(node.params[i], true, nameHash)
+      }
+  }
+
+  // Parses a comma-separated list of expressions, and returns them as
+  // an array. `close` is the token type that ends the list, and
+  // `allowEmpty` can be turned on to allow subsequent commas with
+  // nothing in between them to be parsed as `null` (which is needed
+  // for array literals).
+
+  pp$3.parseExprList = function(close, allowTrailingComma, allowEmpty, refDestructuringErrors) {
+    var this$1 = this;
+
+    var elts = [], first = true
+    while (!this.eat(close)) {
+      if (!first) {
+        this$1.expect(tt.comma)
+        if (allowTrailingComma && this$1.afterTrailingComma(close)) break
+      } else first = false
+
+      var elt
+      if (allowEmpty && this$1.type === tt.comma)
+        elt = null
+      else if (this$1.type === tt.ellipsis) {
+        elt = this$1.parseSpread(refDestructuringErrors)
+        if (this$1.type === tt.comma && refDestructuringErrors && !refDestructuringErrors.trailingComma) {
+          refDestructuringErrors.trailingComma = this$1.lastTokStart
+        }
+      } else
+        elt = this$1.parseMaybeAssign(false, refDestructuringErrors)
+      elts.push(elt)
+    }
+    return elts
+  }
+
+  // Parse the next token as an identifier. If `liberal` is true (used
+  // when parsing properties), it will also convert keywords into
+  // identifiers.
+
+  pp$3.parseIdent = function(liberal) {
+    var node = this.startNode()
+    if (liberal && this.options.allowReserved == "never") liberal = false
+    if (this.type === tt.name) {
+      if (!liberal && (this.strict ? this.reservedWordsStrict : this.reservedWords).test(this.value) &&
+          (this.options.ecmaVersion >= 6 ||
+           this.input.slice(this.start, this.end).indexOf("\\") == -1))
+        this.raiseRecoverable(this.start, "The keyword '" + this.value + "' is reserved")
+      if (!liberal && this.inGenerator && this.value === "yield")
+        this.raiseRecoverable(this.start, "Can not use 'yield' as identifier inside a generator")
+      node.name = this.value
+    } else if (liberal && this.type.keyword) {
+      node.name = this.type.keyword
+    } else {
+      this.unexpected()
+    }
+    this.next()
+    return this.finishNode(node, "Identifier")
+  }
+
+  // Parses yield expression inside generator.
+
+  pp$3.parseYield = function() {
+    var node = this.startNode()
+    this.next()
+    if (this.type == tt.semi || this.canInsertSemicolon() || (this.type != tt.star && !this.type.startsExpr)) {
+      node.delegate = false
+      node.argument = null
+    } else {
+      node.delegate = this.eat(tt.star)
+      node.argument = this.parseMaybeAssign()
+    }
+    return this.finishNode(node, "YieldExpression")
+  }
+
+  var pp$4 = Parser.prototype
+
+  // This function is used to raise exceptions on parse errors. It
+  // takes an offset integer (into the current `input`) to indicate
+  // the location of the error, attaches the position to the end
+  // of the error message, and then raises a `SyntaxError` with that
+  // message.
+
+  pp$4.raise = function(pos, message) {
+    var loc = getLineInfo(this.input, pos)
+    message += " (" + loc.line + ":" + loc.column + ")"
+    var err = new SyntaxError(message)
+    err.pos = pos; err.loc = loc; err.raisedAt = this.pos
+    throw err
+  }
+
+  pp$4.raiseRecoverable = pp$4.raise
+
+  pp$4.curPosition = function() {
+    if (this.options.locations) {
+      return new Position(this.curLine, this.pos - this.lineStart)
+    }
+  }
+
+  var Node = function Node(parser, pos, loc) {
+    this.type = ""
+    this.start = pos
+    this.end = 0
+    if (parser.options.locations)
+      this.loc = new SourceLocation(parser, loc)
+    if (parser.options.directSourceFile)
+      this.sourceFile = parser.options.directSourceFile
+    if (parser.options.ranges)
+      this.range = [pos, 0]
+  };
+
+  // Start an AST node, attaching a start offset.
+
+  var pp$5 = Parser.prototype
+
+  pp$5.startNode = function() {
+    return new Node(this, this.start, this.startLoc)
+  }
+
+  pp$5.startNodeAt = function(pos, loc) {
+    return new Node(this, pos, loc)
+  }
+
+  // Finish an AST node, adding `type` and `end` properties.
+
+  function finishNodeAt(node, type, pos, loc) {
+    node.type = type
+    node.end = pos
+    if (this.options.locations)
+      node.loc.end = loc
+    if (this.options.ranges)
+      node.range[1] = pos
+    return node
+  }
+
+  pp$5.finishNode = function(node, type) {
+    return finishNodeAt.call(this, node, type, this.lastTokEnd, this.lastTokEndLoc)
+  }
+
+  // Finish node at given position
+
+  pp$5.finishNodeAt = function(node, type, pos, loc) {
+    return finishNodeAt.call(this, node, type, pos, loc)
+  }
+
+  var TokContext = function TokContext(token, isExpr, preserveSpace, override) {
+    this.token = token
+    this.isExpr = !!isExpr
+    this.preserveSpace = !!preserveSpace
+    this.override = override
+  };
+
+  var types = {
+    b_stat: new TokContext("{", false),
+    b_expr: new TokContext("{", true),
+    b_tmpl: new TokContext("${", true),
+    p_stat: new TokContext("(", false),
+    p_expr: new TokContext("(", true),
+    q_tmpl: new TokContext("`", true, true, function (p) { return p.readTmplToken(); }),
+    f_expr: new TokContext("function", true)
+  }
+
+  var pp$6 = Parser.prototype
+
+  pp$6.initialContext = function() {
+    return [types.b_stat]
+  }
+
+  pp$6.braceIsBlock = function(prevType) {
+    if (prevType === tt.colon) {
+      var parent = this.curContext()
+      if (parent === types.b_stat || parent === types.b_expr)
+        return !parent.isExpr
+    }
+    if (prevType === tt._return)
+      return lineBreak.test(this.input.slice(this.lastTokEnd, this.start))
+    if (prevType === tt._else || prevType === tt.semi || prevType === tt.eof || prevType === tt.parenR)
+      return true
+    if (prevType == tt.braceL)
+      return this.curContext() === types.b_stat
+    return !this.exprAllowed
+  }
+
+  pp$6.updateContext = function(prevType) {
+    var update, type = this.type
+    if (type.keyword && prevType == tt.dot)
+      this.exprAllowed = false
+    else if (update = type.updateContext)
+      update.call(this, prevType)
+    else
+      this.exprAllowed = type.beforeExpr
+  }
+
+  // Token-specific context update code
+
+  tt.parenR.updateContext = tt.braceR.updateContext = function() {
+    if (this.context.length == 1) {
+      this.exprAllowed = true
+      return
+    }
+    var out = this.context.pop()
+    if (out === types.b_stat && this.curContext() === types.f_expr) {
+      this.context.pop()
+      this.exprAllowed = false
+    } else if (out === types.b_tmpl) {
+      this.exprAllowed = true
+    } else {
+      this.exprAllowed = !out.isExpr
+    }
+  }
+
+  tt.braceL.updateContext = function(prevType) {
+    this.context.push(this.braceIsBlock(prevType) ? types.b_stat : types.b_expr)
+    this.exprAllowed = true
+  }
+
+  tt.dollarBraceL.updateContext = function() {
+    this.context.push(types.b_tmpl)
+    this.exprAllowed = true
+  }
+
+  tt.parenL.updateContext = function(prevType) {
+    var statementParens = prevType === tt._if || prevType === tt._for || prevType === tt._with || prevType === tt._while
+    this.context.push(statementParens ? types.p_stat : types.p_expr)
+    this.exprAllowed = true
+  }
+
+  tt.incDec.updateContext = function() {
+    // tokExprAllowed stays unchanged
+  }
+
+  tt._function.updateContext = function(prevType) {
+    if (prevType.beforeExpr && prevType !== tt.semi && prevType !== tt._else &&
+        !((prevType === tt.colon || prevType === tt.braceL) && this.curContext() === types.b_stat))
+      this.context.push(types.f_expr)
+    this.exprAllowed = false
+  }
+
+  tt.backQuote.updateContext = function() {
+    if (this.curContext() === types.q_tmpl)
+      this.context.pop()
+    else
+      this.context.push(types.q_tmpl)
+    this.exprAllowed = false
+  }
+
+  // Object type used to represent tokens. Note that normally, tokens
+  // simply exist as properties on the parser object. This is only
+  // used for the onToken callback and the external tokenizer.
+
+  var Token = function Token(p) {
+    this.type = p.type
+    this.value = p.value
+    this.start = p.start
+    this.end = p.end
+    if (p.options.locations)
+      this.loc = new SourceLocation(p, p.startLoc, p.endLoc)
+    if (p.options.ranges)
+      this.range = [p.start, p.end]
+  };
+
+  // ## Tokenizer
+
+  var pp$7 = Parser.prototype
+
+  // Are we running under Rhino?
+  var isRhino = typeof Packages == "object" && Object.prototype.toString.call(Packages) == "[object JavaPackage]"
+
+  // Move to the next token
+
+  pp$7.next = function() {
+    if (this.options.onToken)
+      this.options.onToken(new Token(this))
+
+    this.lastTokEnd = this.end
+    this.lastTokStart = this.start
+    this.lastTokEndLoc = this.endLoc
+    this.lastTokStartLoc = this.startLoc
+    this.nextToken()
+  }
+
+  pp$7.getToken = function() {
+    this.next()
+    return new Token(this)
+  }
+
+  // If we're in an ES6 environment, make parsers iterable
+  if (typeof Symbol !== "undefined")
+    pp$7[Symbol.iterator] = function () {
+      var self = this
+      return {next: function () {
+        var token = self.getToken()
+        return {
+          done: token.type === tt.eof,
+          value: token
+        }
+      }}
+    }
+
+  // Toggle strict mode. Re-reads the next number or string to please
+  // pedantic tests (`"use strict"; 010;` should fail).
+
+  pp$7.setStrict = function(strict) {
+    var this$1 = this;
+
+    this.strict = strict
+    if (this.type !== tt.num && this.type !== tt.string) return
+    this.pos = this.start
+    if (this.options.locations) {
+      while (this.pos < this.lineStart) {
+        this$1.lineStart = this$1.input.lastIndexOf("\n", this$1.lineStart - 2) + 1
+        --this$1.curLine
+      }
+    }
+    this.nextToken()
+  }
+
+  pp$7.curContext = function() {
+    return this.context[this.context.length - 1]
+  }
+
+  // Read a single token, updating the parser object's token-related
+  // properties.
+
+  pp$7.nextToken = function() {
+    var curContext = this.curContext()
+    if (!curContext || !curContext.preserveSpace) this.skipSpace()
+
+    this.start = this.pos
+    if (this.options.locations) this.startLoc = this.curPosition()
+    if (this.pos >= this.input.length) return this.finishToken(tt.eof)
+
+    if (curContext.override) return curContext.override(this)
+    else this.readToken(this.fullCharCodeAtPos())
+  }
+
+  pp$7.readToken = function(code) {
+    // Identifier or keyword. '\uXXXX' sequences are allowed in
+    // identifiers, so '\' also dispatches to that.
+    if (isIdentifierStart(code, this.options.ecmaVersion >= 6) || code === 92 /* '\' */)
+      return this.readWord()
+
+    return this.getTokenFromCode(code)
+  }
+
+  pp$7.fullCharCodeAtPos = function() {
+    var code = this.input.charCodeAt(this.pos)
+    if (code <= 0xd7ff || code >= 0xe000) return code
+    var next = this.input.charCodeAt(this.pos + 1)
+    return (code << 10) + next - 0x35fdc00
+  }
+
+  pp$7.skipBlockComment = function() {
+    var this$1 = this;
+
+    var startLoc = this.options.onComment && this.curPosition()
+    var start = this.pos, end = this.input.indexOf("*/", this.pos += 2)
+    if (end === -1) this.raise(this.pos - 2, "Unterminated comment")
+    this.pos = end + 2
+    if (this.options.locations) {
+      lineBreakG.lastIndex = start
+      var match
+      while ((match = lineBreakG.exec(this.input)) && match.index < this.pos) {
+        ++this$1.curLine
+        this$1.lineStart = match.index + match[0].length
+      }
+    }
+    if (this.options.onComment)
+      this.options.onComment(true, this.input.slice(start + 2, end), start, this.pos,
+                             startLoc, this.curPosition())
+  }
+
+  pp$7.skipLineComment = function(startSkip) {
+    var this$1 = this;
+
+    var start = this.pos
+    var startLoc = this.options.onComment && this.curPosition()
+    var ch = this.input.charCodeAt(this.pos+=startSkip)
+    while (this.pos < this.input.length && ch !== 10 && ch !== 13 && ch !== 8232 && ch !== 8233) {
+      ++this$1.pos
+      ch = this$1.input.charCodeAt(this$1.pos)
+    }
+    if (this.options.onComment)
+      this.options.onComment(false, this.input.slice(start + startSkip, this.pos), start, this.pos,
+                             startLoc, this.curPosition())
+  }
+
+  // Called at the start of the parse and after every token. Skips
+  // whitespace and comments, and.
+
+  pp$7.skipSpace = function() {
+    var this$1 = this;
+
+    loop: while (this.pos < this.input.length) {
+      var ch = this$1.input.charCodeAt(this$1.pos)
+      switch (ch) {
+        case 32: case 160: // ' '
+          ++this$1.pos
+          break
+        case 13:
+          if (this$1.input.charCodeAt(this$1.pos + 1) === 10) {
+            ++this$1.pos
+          }
+        case 10: case 8232: case 8233:
+          ++this$1.pos
+          if (this$1.options.locations) {
+            ++this$1.curLine
+            this$1.lineStart = this$1.pos
+          }
+          break
+        case 47: // '/'
+          switch (this$1.input.charCodeAt(this$1.pos + 1)) {
+            case 42: // '*'
+              this$1.skipBlockComment()
+              break
+            case 47:
+              this$1.skipLineComment(2)
+              break
+            default:
+              break loop
+          }
+          break
+        default:
+          if (ch > 8 && ch < 14 || ch >= 5760 && nonASCIIwhitespace.test(String.fromCharCode(ch))) {
+            ++this$1.pos
+          } else {
+            break loop
+          }
+      }
+    }
+  }
+
+  // Called at the end of every token. Sets `end`, `val`, and
+  // maintains `context` and `exprAllowed`, and skips the space after
+  // the token, so that the next one's `start` will point at the
+  // right position.
+
+  pp$7.finishToken = function(type, val) {
+    this.end = this.pos
+    if (this.options.locations) this.endLoc = this.curPosition()
+    var prevType = this.type
+    this.type = type
+    this.value = val
+
+    this.updateContext(prevType)
+  }
+
+  // ### Token reading
+
+  // This is the function that is called to fetch the next token. It
+  // is somewhat obscure, because it works in character codes rather
+  // than characters, and because operator parsing has been inlined
+  // into it.
+  //
+  // All in the name of speed.
+  //
+  pp$7.readToken_dot = function() {
+    var next = this.input.charCodeAt(this.pos + 1)
+    if (next >= 48 && next <= 57) return this.readNumber(true)
+    var next2 = this.input.charCodeAt(this.pos + 2)
+    if (this.options.ecmaVersion >= 6 && next === 46 && next2 === 46) { // 46 = dot '.'
+      this.pos += 3
+      return this.finishToken(tt.ellipsis)
+    } else {
+      ++this.pos
+      return this.finishToken(tt.dot)
+    }
+  }
+
+  pp$7.readToken_slash = function() { // '/'
+    var next = this.input.charCodeAt(this.pos + 1)
+    if (this.exprAllowed) {++this.pos; return this.readRegexp()}
+    if (next === 61) return this.finishOp(tt.assign, 2)
+    return this.finishOp(tt.slash, 1)
+  }
+
+  pp$7.readToken_mult_modulo_exp = function(code) { // '%*'
+    var next = this.input.charCodeAt(this.pos + 1)
+    var size = 1
+    var tokentype = code === 42 ? tt.star : tt.modulo
+
+    // exponentiation operator ** and **=
+    if (this.options.ecmaVersion >= 7 && next === 42) {
+      ++size
+      tokentype = tt.starstar
+      next = this.input.charCodeAt(this.pos + 2)
+    }
+
+    if (next === 61) return this.finishOp(tt.assign, size + 1)
+    return this.finishOp(tokentype, size)
+  }
+
+  pp$7.readToken_pipe_amp = function(code) { // '|&'
+    var next = this.input.charCodeAt(this.pos + 1)
+    if (next === code) return this.finishOp(code === 124 ? tt.logicalOR : tt.logicalAND, 2)
+    if (next === 61) return this.finishOp(tt.assign, 2)
+    return this.finishOp(code === 124 ? tt.bitwiseOR : tt.bitwiseAND, 1)
+  }
+
+  pp$7.readToken_caret = function() { // '^'
+    var next = this.input.charCodeAt(this.pos + 1)
+    if (next === 61) return this.finishOp(tt.assign, 2)
+    return this.finishOp(tt.bitwiseXOR, 1)
+  }
+
+  pp$7.readToken_plus_min = function(code) { // '+-'
+    var next = this.input.charCodeAt(this.pos + 1)
+    if (next === code) {
+      if (next == 45 && this.input.charCodeAt(this.pos + 2) == 62 &&
+          lineBreak.test(this.input.slice(this.lastTokEnd, this.pos))) {
+        // A `-->` line comment
+        this.skipLineComment(3)
+        this.skipSpace()
+        return this.nextToken()
+      }
+      return this.finishOp(tt.incDec, 2)
+    }
+    if (next === 61) return this.finishOp(tt.assign, 2)
+    return this.finishOp(tt.plusMin, 1)
+  }
+
+  pp$7.readToken_lt_gt = function(code) { // '<>'
+    var next = this.input.charCodeAt(this.pos + 1)
+    var size = 1
+    if (next === code) {
+      size = code === 62 && this.input.charCodeAt(this.pos + 2) === 62 ? 3 : 2
+      if (this.input.charCodeAt(this.pos + size) === 61) return this.finishOp(tt.assign, size + 1)
+      return this.finishOp(tt.bitShift, size)
+    }
+    if (next == 33 && code == 60 && this.input.charCodeAt(this.pos + 2) == 45 &&
+        this.input.charCodeAt(this.pos + 3) == 45) {
+      if (this.inModule) this.unexpected()
+      // `<!--`, an XML-style comment that should be interpreted as a line comment
+      this.skipLineComment(4)
+      this.skipSpace()
+      return this.nextToken()
+    }
+    if (next === 61) size = 2
+    return this.finishOp(tt.relational, size)
+  }
+
+  pp$7.readToken_eq_excl = function(code) { // '=!'
+    var next = this.input.charCodeAt(this.pos + 1)
+    if (next === 61) return this.finishOp(tt.equality, this.input.charCodeAt(this.pos + 2) === 61 ? 3 : 2)
+    if (code === 61 && next === 62 && this.options.ecmaVersion >= 6) { // '=>'
+      this.pos += 2
+      return this.finishToken(tt.arrow)
+    }
+    return this.finishOp(code === 61 ? tt.eq : tt.prefix, 1)
+  }
+
+  pp$7.getTokenFromCode = function(code) {
+    switch (code) {
+      // The interpretation of a dot depends on whether it is followed
+      // by a digit or another two dots.
+    case 46: // '.'
+      return this.readToken_dot()
+
+      // Punctuation tokens.
+    case 40: ++this.pos; return this.finishToken(tt.parenL)
+    case 41: ++this.pos; return this.finishToken(tt.parenR)
+    case 59: ++this.pos; return this.finishToken(tt.semi)
+    case 44: ++this.pos; return this.finishToken(tt.comma)
+    case 91: ++this.pos; return this.finishToken(tt.bracketL)
+    case 93: ++this.pos; return this.finishToken(tt.bracketR)
+    case 123: ++this.pos; return this.finishToken(tt.braceL)
+    case 125: ++this.pos; return this.finishToken(tt.braceR)
+    case 58: ++this.pos; return this.finishToken(tt.colon)
+    case 63: ++this.pos; return this.finishToken(tt.question)
+
+    case 96: // '`'
+      if (this.options.ecmaVersion < 6) break
+      ++this.pos
+      return this.finishToken(tt.backQuote)
+
+    case 48: // '0'
+      var next = this.input.charCodeAt(this.pos + 1)
+      if (next === 120 || next === 88) return this.readRadixNumber(16) // '0x', '0X' - hex number
+      if (this.options.ecmaVersion >= 6) {
+        if (next === 111 || next === 79) return this.readRadixNumber(8) // '0o', '0O' - octal number
+        if (next === 98 || next === 66) return this.readRadixNumber(2) // '0b', '0B' - binary number
+      }
+      // Anything else beginning with a digit is an integer, octal
+      // number, or float.
+    case 49: case 50: case 51: case 52: case 53: case 54: case 55: case 56: case 57: // 1-9
+      return this.readNumber(false)
+
+      // Quotes produce strings.
+    case 34: case 39: // '"', "'"
+      return this.readString(code)
+
+      // Operators are parsed inline in tiny state machines. '=' (61) is
+      // often referred to. `finishOp` simply skips the amount of
+      // characters it is given as second argument, and returns a token
+      // of the type given by its first argument.
+
+    case 47: // '/'
+      return this.readToken_slash()
+
+    case 37: case 42: // '%*'
+      return this.readToken_mult_modulo_exp(code)
+
+    case 124: case 38: // '|&'
+      return this.readToken_pipe_amp(code)
+
+    case 94: // '^'
+      return this.readToken_caret()
+
+    case 43: case 45: // '+-'
+      return this.readToken_plus_min(code)
+
+    case 60: case 62: // '<>'
+      return this.readToken_lt_gt(code)
+
+    case 61: case 33: // '=!'
+      return this.readToken_eq_excl(code)
+
+    case 126: // '~'
+      return this.finishOp(tt.prefix, 1)
+    }
+
+    this.raise(this.pos, "Unexpected character '" + codePointToString(code) + "'")
+  }
+
+  pp$7.finishOp = function(type, size) {
+    var str = this.input.slice(this.pos, this.pos + size)
+    this.pos += size
+    return this.finishToken(type, str)
+  }
+
+  // Parse a regular expression. Some context-awareness is necessary,
+  // since a '/' inside a '[]' set does not end the expression.
+
+  function tryCreateRegexp(src, flags, throwErrorAt, parser) {
+    try {
+      return new RegExp(src, flags)
+    } catch (e) {
+      if (throwErrorAt !== undefined) {
+        if (e instanceof SyntaxError) parser.raise(throwErrorAt, "Error parsing regular expression: " + e.message)
+        throw e
+      }
+    }
+  }
+
+  var regexpUnicodeSupport = !!tryCreateRegexp("\uffff", "u")
+
+  pp$7.readRegexp = function() {
+    var this$1 = this;
+
+    var escaped, inClass, start = this.pos
+    for (;;) {
+      if (this$1.pos >= this$1.input.length) this$1.raise(start, "Unterminated regular expression")
+      var ch = this$1.input.charAt(this$1.pos)
+      if (lineBreak.test(ch)) this$1.raise(start, "Unterminated regular expression")
+      if (!escaped) {
+        if (ch === "[") inClass = true
+        else if (ch === "]" && inClass) inClass = false
+        else if (ch === "/" && !inClass) break
+        escaped = ch === "\\"
+      } else escaped = false
+      ++this$1.pos
+    }
+    var content = this.input.slice(start, this.pos)
+    ++this.pos
+    // Need to use `readWord1` because '\uXXXX' sequences are allowed
+    // here (don't ask).
+    var mods = this.readWord1()
+    var tmp = content, tmpFlags = ""
+    if (mods) {
+      var validFlags = /^[gim]*$/
+      if (this.options.ecmaVersion >= 6) validFlags = /^[gimuy]*$/
+      if (!validFlags.test(mods)) this.raise(start, "Invalid regular expression flag")
+      if (mods.indexOf("u") >= 0) {
+        if (regexpUnicodeSupport) {
+          tmpFlags = "u"
+        } else {
+          // Replace each astral symbol and every Unicode escape sequence that
+          // possibly represents an astral symbol or a paired surrogate with a
+          // single ASCII symbol to avoid throwing on regular expressions that
+          // are only valid in combination with the `/u` flag.
+          // Note: replacing with the ASCII symbol `x` might cause false
+          // negatives in unlikely scenarios. For example, `[\u{61}-b]` is a
+          // perfectly valid pattern that is equivalent to `[a-b]`, but it would
+          // be replaced by `[x-b]` which throws an error.
+          tmp = tmp.replace(/\\u\{([0-9a-fA-F]+)\}/g, function (_match, code, offset) {
+            code = Number("0x" + code)
+            if (code > 0x10FFFF) this$1.raise(start + offset + 3, "Code point out of bounds")
+            return "x"
+          })
+          tmp = tmp.replace(/\\u([a-fA-F0-9]{4})|[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "x")
+          tmpFlags = tmpFlags.replace("u", "")
+        }
+      }
+    }
+    // Detect invalid regular expressions.
+    var value = null
+    // Rhino's regular expression parser is flaky and throws uncatchable exceptions,
+    // so don't do detection if we are running under Rhino
+    if (!isRhino) {
+      tryCreateRegexp(tmp, tmpFlags, start, this)
+      // Get a regular expression object for this pattern-flag pair, or `null` in
+      // case the current environment doesn't support the flags it uses.
+      value = tryCreateRegexp(content, mods)
+    }
+    return this.finishToken(tt.regexp, {pattern: content, flags: mods, value: value})
+  }
+
+  // Read an integer in the given radix. Return null if zero digits
+  // were read, the integer value otherwise. When `len` is given, this
+  // will return `null` unless the integer has exactly `len` digits.
+
+  pp$7.readInt = function(radix, len) {
+    var this$1 = this;
+
+    var start = this.pos, total = 0
+    for (var i = 0, e = len == null ? Infinity : len; i < e; ++i) {
+      var code = this$1.input.charCodeAt(this$1.pos), val
+      if (code >= 97) val = code - 97 + 10 // a
+      else if (code >= 65) val = code - 65 + 10 // A
+      else if (code >= 48 && code <= 57) val = code - 48 // 0-9
+      else val = Infinity
+      if (val >= radix) break
+      ++this$1.pos
+      total = total * radix + val
+    }
+    if (this.pos === start || len != null && this.pos - start !== len) return null
+
+    return total
+  }
+
+  pp$7.readRadixNumber = function(radix) {
+    this.pos += 2 // 0x
+    var val = this.readInt(radix)
+    if (val == null) this.raise(this.start + 2, "Expected number in radix " + radix)
+    if (isIdentifierStart(this.fullCharCodeAtPos())) this.raise(this.pos, "Identifier directly after number")
+    return this.finishToken(tt.num, val)
+  }
+
+  // Read an integer, octal integer, or floating-point number.
+
+  pp$7.readNumber = function(startsWithDot) {
+    var start = this.pos, isFloat = false, octal = this.input.charCodeAt(this.pos) === 48
+    if (!startsWithDot && this.readInt(10) === null) this.raise(start, "Invalid number")
+    var next = this.input.charCodeAt(this.pos)
+    if (next === 46) { // '.'
+      ++this.pos
+      this.readInt(10)
+      isFloat = true
+      next = this.input.charCodeAt(this.pos)
+    }
+    if (next === 69 || next === 101) { // 'eE'
+      next = this.input.charCodeAt(++this.pos)
+      if (next === 43 || next === 45) ++this.pos // '+-'
+      if (this.readInt(10) === null) this.raise(start, "Invalid number")
+      isFloat = true
+    }
+    if (isIdentifierStart(this.fullCharCodeAtPos())) this.raise(this.pos, "Identifier directly after number")
+
+    var str = this.input.slice(start, this.pos), val
+    if (isFloat) val = parseFloat(str)
+    else if (!octal || str.length === 1) val = parseInt(str, 10)
+    else if (/[89]/.test(str) || this.strict) this.raise(start, "Invalid number")
+    else val = parseInt(str, 8)
+    return this.finishToken(tt.num, val)
+  }
+
+  // Read a string value, interpreting backslash-escapes.
+
+  pp$7.readCodePoint = function() {
+    var ch = this.input.charCodeAt(this.pos), code
+
+    if (ch === 123) {
+      if (this.options.ecmaVersion < 6) this.unexpected()
+      var codePos = ++this.pos
+      code = this.readHexChar(this.input.indexOf('}', this.pos) - this.pos)
+      ++this.pos
+      if (code > 0x10FFFF) this.raise(codePos, "Code point out of bounds")
+    } else {
+      code = this.readHexChar(4)
+    }
+    return code
+  }
+
+  function codePointToString(code) {
+    // UTF-16 Decoding
+    if (code <= 0xFFFF) return String.fromCharCode(code)
+    code -= 0x10000
+    return String.fromCharCode((code >> 10) + 0xD800, (code & 1023) + 0xDC00)
+  }
+
+  pp$7.readString = function(quote) {
+    var this$1 = this;
+
+    var out = "", chunkStart = ++this.pos
+    for (;;) {
+      if (this$1.pos >= this$1.input.length) this$1.raise(this$1.start, "Unterminated string constant")
+      var ch = this$1.input.charCodeAt(this$1.pos)
+      if (ch === quote) break
+      if (ch === 92) { // '\'
+        out += this$1.input.slice(chunkStart, this$1.pos)
+        out += this$1.readEscapedChar(false)
+        chunkStart = this$1.pos
+      } else {
+        if (isNewLine(ch)) this$1.raise(this$1.start, "Unterminated string constant")
+        ++this$1.pos
+      }
+    }
+    out += this.input.slice(chunkStart, this.pos++)
+    return this.finishToken(tt.string, out)
+  }
+
+  // Reads template string tokens.
+
+  pp$7.readTmplToken = function() {
+    var this$1 = this;
+
+    var out = "", chunkStart = this.pos
+    for (;;) {
+      if (this$1.pos >= this$1.input.length) this$1.raise(this$1.start, "Unterminated template")
+      var ch = this$1.input.charCodeAt(this$1.pos)
+      if (ch === 96 || ch === 36 && this$1.input.charCodeAt(this$1.pos + 1) === 123) { // '`', '${'
+        if (this$1.pos === this$1.start && this$1.type === tt.template) {
+          if (ch === 36) {
+            this$1.pos += 2
+            return this$1.finishToken(tt.dollarBraceL)
+          } else {
+            ++this$1.pos
+            return this$1.finishToken(tt.backQuote)
+          }
+        }
+        out += this$1.input.slice(chunkStart, this$1.pos)
+        return this$1.finishToken(tt.template, out)
+      }
+      if (ch === 92) { // '\'
+        out += this$1.input.slice(chunkStart, this$1.pos)
+        out += this$1.readEscapedChar(true)
+        chunkStart = this$1.pos
+      } else if (isNewLine(ch)) {
+        out += this$1.input.slice(chunkStart, this$1.pos)
+        ++this$1.pos
+        switch (ch) {
+          case 13:
+            if (this$1.input.charCodeAt(this$1.pos) === 10) ++this$1.pos
+          case 10:
+            out += "\n"
+            break
+          default:
+            out += String.fromCharCode(ch)
+            break
+        }
+        if (this$1.options.locations) {
+          ++this$1.curLine
+          this$1.lineStart = this$1.pos
+        }
+        chunkStart = this$1.pos
+      } else {
+        ++this$1.pos
+      }
+    }
+  }
+
+  // Used to read escaped characters
+
+  pp$7.readEscapedChar = function(inTemplate) {
+    var ch = this.input.charCodeAt(++this.pos)
+    ++this.pos
+    switch (ch) {
+    case 110: return "\n" // 'n' -> '\n'
+    case 114: return "\r" // 'r' -> '\r'
+    case 120: return String.fromCharCode(this.readHexChar(2)) // 'x'
+    case 117: return codePointToString(this.readCodePoint()) // 'u'
+    case 116: return "\t" // 't' -> '\t'
+    case 98: return "\b" // 'b' -> '\b'
+    case 118: return "\u000b" // 'v' -> '\u000b'
+    case 102: return "\f" // 'f' -> '\f'
+    case 13: if (this.input.charCodeAt(this.pos) === 10) ++this.pos // '\r\n'
+    case 10: // ' \n'
+      if (this.options.locations) { this.lineStart = this.pos; ++this.curLine }
+      return ""
+    default:
+      if (ch >= 48 && ch <= 55) {
+        var octalStr = this.input.substr(this.pos - 1, 3).match(/^[0-7]+/)[0]
+        var octal = parseInt(octalStr, 8)
+        if (octal > 255) {
+          octalStr = octalStr.slice(0, -1)
+          octal = parseInt(octalStr, 8)
+        }
+        if (octalStr !== "0" && (this.strict || inTemplate)) {
+          this.raise(this.pos - 2, "Octal literal in strict mode")
+        }
+        this.pos += octalStr.length - 1
+        return String.fromCharCode(octal)
+      }
+      return String.fromCharCode(ch)
+    }
+  }
+
+  // Used to read character escape sequences ('\x', '\u', '\U').
+
+  pp$7.readHexChar = function(len) {
+    var codePos = this.pos
+    var n = this.readInt(16, len)
+    if (n === null) this.raise(codePos, "Bad character escape sequence")
+    return n
+  }
+
+  // Read an identifier, and return it as a string. Sets `this.containsEsc`
+  // to whether the word contained a '\u' escape.
+  //
+  // Incrementally adds only escaped chars, adding other chunks as-is
+  // as a micro-optimization.
+
+  pp$7.readWord1 = function() {
+    var this$1 = this;
+
+    this.containsEsc = false
+    var word = "", first = true, chunkStart = this.pos
+    var astral = this.options.ecmaVersion >= 6
+    while (this.pos < this.input.length) {
+      var ch = this$1.fullCharCodeAtPos()
+      if (isIdentifierChar(ch, astral)) {
+        this$1.pos += ch <= 0xffff ? 1 : 2
+      } else if (ch === 92) { // "\"
+        this$1.containsEsc = true
+        word += this$1.input.slice(chunkStart, this$1.pos)
+        var escStart = this$1.pos
+        if (this$1.input.charCodeAt(++this$1.pos) != 117) // "u"
+          this$1.raise(this$1.pos, "Expecting Unicode escape sequence \\uXXXX")
+        ++this$1.pos
+        var esc = this$1.readCodePoint()
+        if (!(first ? isIdentifierStart : isIdentifierChar)(esc, astral))
+          this$1.raise(escStart, "Invalid Unicode escape")
+        word += codePointToString(esc)
+        chunkStart = this$1.pos
+      } else {
+        break
+      }
+      first = false
+    }
+    return word + this.input.slice(chunkStart, this.pos)
+  }
+
+  // Read an identifier or keyword token. Will check for reserved
+  // words when necessary.
+
+  pp$7.readWord = function() {
+    var word = this.readWord1()
+    var type = tt.name
+    if ((this.options.ecmaVersion >= 6 || !this.containsEsc) && this.keywords.test(word))
+      type = keywordTypes[word]
+    return this.finishToken(type, word)
+  }
+
+  var version = "3.3.0"
+
+  // The main exported interface (under `self.acorn` when in the
+  // browser) is a `parse` function that takes a code string and
+  // returns an abstract syntax tree as specified by [Mozilla parser
+  // API][api].
+  //
+  // [api]: https://developer.mozilla.org/en-US/docs/SpiderMonkey/Parser_API
+
+  function parse(input, options) {
+    return new Parser(options, input).parse()
+  }
+
+  // This function tries to parse a single expression at a given
+  // offset in a string. Useful for parsing mixed-language formats
+  // that embed JavaScript expressions.
+
+  function parseExpressionAt(input, pos, options) {
+    var p = new Parser(options, input, pos)
+    p.nextToken()
+    return p.parseExpression()
+  }
+
+  // Acorn is organized as a tokenizer and a recursive-descent parser.
+  // The `tokenizer` export provides an interface to the tokenizer.
+
+  function tokenizer(input, options) {
+    return new Parser(options, input)
+  }
+
+  exports.version = version;
+  exports.parse = parse;
+  exports.parseExpressionAt = parseExpressionAt;
+  exports.tokenizer = tokenizer;
+  exports.Parser = Parser;
+  exports.plugins = plugins;
+  exports.defaultOptions = defaultOptions;
+  exports.Position = Position;
+  exports.SourceLocation = SourceLocation;
+  exports.getLineInfo = getLineInfo;
+  exports.Node = Node;
+  exports.TokenType = TokenType;
+  exports.tokTypes = tt;
+  exports.TokContext = TokContext;
+  exports.tokContexts = types;
+  exports.isIdentifierChar = isIdentifierChar;
+  exports.isIdentifierStart = isIdentifierStart;
+  exports.Token = Token;
+  exports.isNewLine = isNewLine;
+  exports.lineBreak = lineBreak;
+  exports.lineBreakG = lineBreakG;
+
+  Object.defineProperty(exports, '__esModule', { value: true });
+
+}));
+},{}],38:[function(require,module,exports){
+
+var hasOwn = Object.prototype.hasOwnProperty;
+var toString = Object.prototype.toString;
+
+module.exports = function forEach (obj, fn, ctx) {
+    if (toString.call(fn) !== '[object Function]') {
+        throw new TypeError('iterator must be a function');
+    }
+    var l = obj.length;
+    if (l === +l) {
+        for (var i = 0; i < l; i++) {
+            fn.call(ctx, obj[i], i, obj);
+        }
+    } else {
+        for (var k in obj) {
+            if (hasOwn.call(obj, k)) {
+                fn.call(ctx, obj[k], k, obj);
+            }
+        }
+    }
+};
+
+
+},{}],39:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -6358,7 +10102,12 @@ function isSlowBuffer (obj) {
   return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
 }
 
-},{}],36:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
+module.exports = Array.isArray || function (arr) {
+  return Object.prototype.toString.call(arr) == '[object Array]';
+};
+
+},{}],41:[function(require,module,exports){
 (function (global){
 /*
 	Next Gen Events
@@ -7423,7 +11172,7 @@ NextGenEvents.Proxy = require( './Proxy.js' ) ;
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":38,"./Proxy.js":37}],37:[function(require,module,exports){
+},{"../package.json":43,"./Proxy.js":42}],42:[function(require,module,exports){
 /*
 	Next Gen Events
 	
@@ -8026,7 +11775,7 @@ RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message )
 
 
 
-},{"./NextGenEvents.js":36}],38:[function(require,module,exports){
+},{"./NextGenEvents.js":41}],43:[function(require,module,exports){
 module.exports={
   "_args": [
     [
@@ -8142,7 +11891,396 @@ module.exports={
   "version": "0.9.8"
 }
 
-},{}],39:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
+'use strict';
+
+// modified from https://github.com/es-shims/es5-shim
+var has = Object.prototype.hasOwnProperty;
+var toStr = Object.prototype.toString;
+var slice = Array.prototype.slice;
+var isArgs = require('./isArguments');
+var isEnumerable = Object.prototype.propertyIsEnumerable;
+var hasDontEnumBug = !isEnumerable.call({ toString: null }, 'toString');
+var hasProtoEnumBug = isEnumerable.call(function () {}, 'prototype');
+var dontEnums = [
+	'toString',
+	'toLocaleString',
+	'valueOf',
+	'hasOwnProperty',
+	'isPrototypeOf',
+	'propertyIsEnumerable',
+	'constructor'
+];
+var equalsConstructorPrototype = function (o) {
+	var ctor = o.constructor;
+	return ctor && ctor.prototype === o;
+};
+var excludedKeys = {
+	$console: true,
+	$external: true,
+	$frame: true,
+	$frameElement: true,
+	$frames: true,
+	$innerHeight: true,
+	$innerWidth: true,
+	$outerHeight: true,
+	$outerWidth: true,
+	$pageXOffset: true,
+	$pageYOffset: true,
+	$parent: true,
+	$scrollLeft: true,
+	$scrollTop: true,
+	$scrollX: true,
+	$scrollY: true,
+	$self: true,
+	$webkitIndexedDB: true,
+	$webkitStorageInfo: true,
+	$window: true
+};
+var hasAutomationEqualityBug = (function () {
+	/* global window */
+	if (typeof window === 'undefined') { return false; }
+	for (var k in window) {
+		try {
+			if (!excludedKeys['$' + k] && has.call(window, k) && window[k] !== null && typeof window[k] === 'object') {
+				try {
+					equalsConstructorPrototype(window[k]);
+				} catch (e) {
+					return true;
+				}
+			}
+		} catch (e) {
+			return true;
+		}
+	}
+	return false;
+}());
+var equalsConstructorPrototypeIfNotBuggy = function (o) {
+	/* global window */
+	if (typeof window === 'undefined' || !hasAutomationEqualityBug) {
+		return equalsConstructorPrototype(o);
+	}
+	try {
+		return equalsConstructorPrototype(o);
+	} catch (e) {
+		return false;
+	}
+};
+
+var keysShim = function keys(object) {
+	var isObject = object !== null && typeof object === 'object';
+	var isFunction = toStr.call(object) === '[object Function]';
+	var isArguments = isArgs(object);
+	var isString = isObject && toStr.call(object) === '[object String]';
+	var theKeys = [];
+
+	if (!isObject && !isFunction && !isArguments) {
+		throw new TypeError('Object.keys called on a non-object');
+	}
+
+	var skipProto = hasProtoEnumBug && isFunction;
+	if (isString && object.length > 0 && !has.call(object, 0)) {
+		for (var i = 0; i < object.length; ++i) {
+			theKeys.push(String(i));
+		}
+	}
+
+	if (isArguments && object.length > 0) {
+		for (var j = 0; j < object.length; ++j) {
+			theKeys.push(String(j));
+		}
+	} else {
+		for (var name in object) {
+			if (!(skipProto && name === 'prototype') && has.call(object, name)) {
+				theKeys.push(String(name));
+			}
+		}
+	}
+
+	if (hasDontEnumBug) {
+		var skipConstructor = equalsConstructorPrototypeIfNotBuggy(object);
+
+		for (var k = 0; k < dontEnums.length; ++k) {
+			if (!(skipConstructor && dontEnums[k] === 'constructor') && has.call(object, dontEnums[k])) {
+				theKeys.push(dontEnums[k]);
+			}
+		}
+	}
+	return theKeys;
+};
+
+keysShim.shim = function shimObjectKeys() {
+	if (Object.keys) {
+		var keysWorksWithArguments = (function () {
+			// Safari 5.0 bug
+			return (Object.keys(arguments) || '').length === 2;
+		}(1, 2));
+		if (!keysWorksWithArguments) {
+			var originalKeys = Object.keys;
+			Object.keys = function keys(object) {
+				if (isArgs(object)) {
+					return originalKeys(slice.call(object));
+				} else {
+					return originalKeys(object);
+				}
+			};
+		}
+	} else {
+		Object.keys = keysShim;
+	}
+	return Object.keys || keysShim;
+};
+
+module.exports = keysShim;
+
+},{"./isArguments":45}],45:[function(require,module,exports){
+'use strict';
+
+var toStr = Object.prototype.toString;
+
+module.exports = function isArguments(value) {
+	var str = toStr.call(value);
+	var isArgs = str === '[object Arguments]';
+	if (!isArgs) {
+		isArgs = str !== '[object Array]' &&
+			value !== null &&
+			typeof value === 'object' &&
+			typeof value.length === 'number' &&
+			value.length >= 0 &&
+			toStr.call(value.callee) === '[object Function]';
+	}
+	return isArgs;
+};
+
+},{}],46:[function(require,module,exports){
+(function (process){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// resolves . and .. elements in a path array with directory names there
+// must be no slashes, empty elements, or device names (c:\) in the array
+// (so also no leading and trailing slashes - it does not distinguish
+// relative and absolute paths)
+function normalizeArray(parts, allowAboveRoot) {
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var last = parts[i];
+    if (last === '.') {
+      parts.splice(i, 1);
+    } else if (last === '..') {
+      parts.splice(i, 1);
+      up++;
+    } else if (up) {
+      parts.splice(i, 1);
+      up--;
+    }
+  }
+
+  // if the path is allowed to go above the root, restore leading ..s
+  if (allowAboveRoot) {
+    for (; up--; up) {
+      parts.unshift('..');
+    }
+  }
+
+  return parts;
+}
+
+// Split a filename into [root, dir, basename, ext], unix version
+// 'root' is just a slash, or nothing.
+var splitPathRe =
+    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
+var splitPath = function(filename) {
+  return splitPathRe.exec(filename).slice(1);
+};
+
+// path.resolve([from ...], to)
+// posix version
+exports.resolve = function() {
+  var resolvedPath = '',
+      resolvedAbsolute = false;
+
+  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    var path = (i >= 0) ? arguments[i] : process.cwd();
+
+    // Skip empty and invalid entries
+    if (typeof path !== 'string') {
+      throw new TypeError('Arguments to path.resolve must be strings');
+    } else if (!path) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  // At this point the path should be resolved to a full absolute path, but
+  // handle relative paths to be safe (might happen when process.cwd() fails)
+
+  // Normalize the path
+  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
+    return !!p;
+  }), !resolvedAbsolute).join('/');
+
+  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
+};
+
+// path.normalize(path)
+// posix version
+exports.normalize = function(path) {
+  var isAbsolute = exports.isAbsolute(path),
+      trailingSlash = substr(path, -1) === '/';
+
+  // Normalize the path
+  path = normalizeArray(filter(path.split('/'), function(p) {
+    return !!p;
+  }), !isAbsolute).join('/');
+
+  if (!path && !isAbsolute) {
+    path = '.';
+  }
+  if (path && trailingSlash) {
+    path += '/';
+  }
+
+  return (isAbsolute ? '/' : '') + path;
+};
+
+// posix version
+exports.isAbsolute = function(path) {
+  return path.charAt(0) === '/';
+};
+
+// posix version
+exports.join = function() {
+  var paths = Array.prototype.slice.call(arguments, 0);
+  return exports.normalize(filter(paths, function(p, index) {
+    if (typeof p !== 'string') {
+      throw new TypeError('Arguments to path.join must be strings');
+    }
+    return p;
+  }).join('/'));
+};
+
+
+// path.relative(from, to)
+// posix version
+exports.relative = function(from, to) {
+  from = exports.resolve(from).substr(1);
+  to = exports.resolve(to).substr(1);
+
+  function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+      if (arr[start] !== '') break;
+    }
+
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+      if (arr[end] !== '') break;
+    }
+
+    if (start > end) return [];
+    return arr.slice(start, end - start + 1);
+  }
+
+  var fromParts = trim(from.split('/'));
+  var toParts = trim(to.split('/'));
+
+  var length = Math.min(fromParts.length, toParts.length);
+  var samePartsLength = length;
+  for (var i = 0; i < length; i++) {
+    if (fromParts[i] !== toParts[i]) {
+      samePartsLength = i;
+      break;
+    }
+  }
+
+  var outputParts = [];
+  for (var i = samePartsLength; i < fromParts.length; i++) {
+    outputParts.push('..');
+  }
+
+  outputParts = outputParts.concat(toParts.slice(samePartsLength));
+
+  return outputParts.join('/');
+};
+
+exports.sep = '/';
+exports.delimiter = ':';
+
+exports.dirname = function(path) {
+  var result = splitPath(path),
+      root = result[0],
+      dir = result[1];
+
+  if (!root && !dir) {
+    // No dirname whatsoever
+    return '.';
+  }
+
+  if (dir) {
+    // It has a dirname, strip trailing slash
+    dir = dir.substr(0, dir.length - 1);
+  }
+
+  return root + dir;
+};
+
+
+exports.basename = function(path, ext) {
+  var f = splitPath(path)[2];
+  // TODO: make this comparison case-insensitive on windows?
+  if (ext && f.substr(-1 * ext.length) === ext) {
+    f = f.substr(0, f.length - ext.length);
+  }
+  return f;
+};
+
+
+exports.extname = function(path) {
+  return splitPath(path)[3];
+};
+
+function filter (xs, f) {
+    if (xs.filter) return xs.filter(f);
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        if (f(xs[i], i, xs)) res.push(xs[i]);
+    }
+    return res;
+}
+
+// String.prototype.substr - negative index don't work in IE8
+var substr = 'ab'.substr(-1) === 'b'
+    ? function (str, start, len) { return str.substr(start, len) }
+    : function (str, start, len) {
+        if (start < 0) start = str.length + start;
+        return str.substr(start, len);
+    }
+;
+
+}).call(this,require('_process'))
+},{"_process":47}],47:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -8324,7 +12462,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],40:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -8861,7 +12999,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],41:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -8947,7 +13085,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],42:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -9034,13 +13172,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],43:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":41,"./encode":42}],44:[function(require,module,exports){
+},{"./decode":49,"./encode":50}],52:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -9100,7 +13238,72 @@ module.exports = {
 
 
 
-},{}],45:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var camel = {} ;
+module.exports = camel ;
+
+
+
+// Transform alphanum separated by underscore or minus to camel case
+camel.toCamelCase = function toCamelCase( str )
+{
+	if ( ! str || typeof str !== 'string' ) { return '' ; }
+	
+	return str.replace( /^[\s_-]*([^\s_-]+)|[\s_-]+([^\s_-]?)([^\s_-]*)/g , function( match , firstWord , firstLetter , endOfWord ) {
+		
+		if ( firstWord ) { return firstWord.toLowerCase() ; }
+		if ( ! firstLetter ) { return '' ; }
+		return firstLetter.toUpperCase() + endOfWord.toLowerCase() ;
+	} ) ;
+} ;
+
+
+
+// Transform camel case to alphanum separated by minus
+camel.camelCaseToDashed = function camelCaseToDashed( str )
+{
+	if ( ! str || typeof str !== 'string' ) { return '' ; }
+	
+	return str.replace( /^([A-Z])|([A-Z])/g , function( match , firstLetter , letter ) {
+		
+		if ( firstLetter ) { return firstLetter.toLowerCase() ; }
+		return '-' + letter.toLowerCase() ;
+	} ) ;
+} ;
+
+
+
+},{}],54:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -9160,6 +13363,16 @@ exports.format = function escapeFormat( str ) {
 
 
 
+exports.jsSingleQuote = function escapeJsSingleQuote( str ) {
+	return exports.control( str ).replace( /'/g , "\\'" ) ;
+} ;
+
+exports.jsDoubleQuote = function escapeJsDoubleQuote( str ) {
+	return exports.control( str ).replace( /"/g , '\\"' ) ;
+} ;
+
+
+
 exports.shellArg = function escapeShellArg( str ) {
 	return '\'' + str.replace( /\'/g , "'\\''" ) + '\'' ;
 } ;
@@ -9199,7 +13412,425 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],46:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+/*
+	String formater, inspired by C's sprintf().
+*/
+
+
+
+"use strict" ;
+
+
+
+// Load modules
+//var tree = require( 'tree-kit' ) ;
+var inspect = require( './inspect.js' ).inspect ;
+var inspectError = require( './inspect.js' ).inspectError ;
+var ansi = require( './ansi.js' ) ;
+
+
+
+/*
+	%%		a single %
+	%s		string
+	%f		float
+	%d	%i	integer
+	%u		unsigned integer
+	%U		unsigned positive integer (>0)
+	%h		hexadecimal
+	%x		hexadecimal, force pair of symbols (e.g. 'f' -> '0f')
+	%o		octal
+	%b		binary
+	%I		call string-kit's inspect()
+	%Y		call string-kit's inspect(), but do not inspect non-enumerable
+	%E		call string-kit's inspectError()
+	%J		JSON.stringify()
+	%D		drop
+	%F		filter function existing in the 'this' context, e.g. %[filter:%a%a]F
+	%a		argument for a function
+	
+	Candidate format:
+	%A		for automatic type?
+	%c		for char? (can receive a string or an integer translated into an UTF8 chars)
+	%C		for currency formating?
+	%B		for Buffer objects?
+	%e		for scientific notation?
+*/
+
+exports.formatMethod = function format( str )
+{
+	if ( typeof str !== 'string' )
+	{
+		if ( str === null || str === undefined ) { return '' ; }
+		else if ( /*str && typeof str === 'object' && */ typeof str.toString === 'function' ) { str = str.toString() ; }
+		else { return '' ; }
+	}
+	
+	var self = this , arg , value ,
+		autoIndex = 1 , args = arguments , length = arguments.length ,
+		hasMarkup = false , markupStack = [] ;
+	
+	//console.log( 'format args:' , arguments ) ;
+	
+	// /!\ each changes here should be reported on string.format.count() and string.format.hasFormatting() too /!\
+	//str = str.replace( /\^(.?)|%(?:([+-]?)([0-9]*)(?:\/([^\/]*)\/)?([a-zA-Z%])|\[([a-zA-Z0-9_]+)(?::([^\]]*))?\])/g ,
+	str = str.replace( /\^(.?)|(%%)|%([+-]?)([0-9]*)(?:\[([^\]]*)\])?([a-zA-Z])/g ,
+		function( match , markup , doublePercent , relative , index , modeArg , mode ) {		// jshint ignore:line
+			
+			var replacement , i , n , tmp , fn , fnArgString , argMatches , argList = [] ;
+			
+			//console.log( 'replaceArgs:' , arguments ) ;
+			if ( doublePercent ) { return '%'; }
+			
+			if ( markup )
+			{
+				if ( markup === '^' ) { return '^' ; }
+				if ( ! self.markup || ! self.markup[ markup ] ) { return '' ; }
+				hasMarkup = true ;
+				
+				if ( typeof self.markup[ markup ] === 'function' )
+				{
+					replacement = self.markup[ markup ]( markupStack ) ;
+					// method should manage markup stack themselves
+				}
+				else
+				{
+					replacement = self.markup[ markup ] ;
+					markupStack.push( replacement ) ;
+				}
+				
+				return replacement ;
+			}
+			
+			
+			if ( index )
+			{
+				index = parseInt( index ) ;
+				
+				if ( relative )
+				{
+					if ( relative === '+' ) { index = autoIndex + index ; }
+					else if ( relative === '-' ) { index = autoIndex - index ; }
+				}
+			}
+			else
+			{
+				index = autoIndex ;
+			}
+			
+			autoIndex ++ ;
+			
+			if ( index >= length || index < 1 ) { arg = undefined ; }
+			else { arg = args[ index ] ; }
+			
+			switch ( mode )
+			{
+				case 's' :	// string
+					if ( arg === null || arg === undefined ) { return '' ; }
+					if ( typeof arg === 'string' ) { return arg ; }
+					if ( typeof arg === 'number' ) { return '' + arg ; }
+					if ( typeof arg.toString === 'function' ) { return arg.toString() ; }
+					return '' ;
+				case 'f' :	// float
+					if ( typeof arg === 'string' ) { arg = parseFloat( arg ) ; }
+					if ( typeof arg !== 'number' ) { return '0' ; }
+					if ( modeArg !== undefined )
+					{
+						// Use jQuery number format?
+						switch ( modeArg[ 0 ] )
+						{
+							case 'p' :
+								n = parseInt( modeArg.slice( 1 ) , 10 ) ;
+								if ( n >= 1 ) { arg = arg.toPrecision( n ) ; }
+								break ;
+							case 'f' :
+								n = parseInt( modeArg.slice( 1 ) , 10 ) ;
+								arg = arg.toFixed( n ) ;
+								break ;
+						}
+					}
+					return '' + arg ;
+				case 'd' :
+				case 'i' :	// integer decimal
+					if ( typeof arg === 'string' ) { arg = parseInt( arg ) ; }
+					if ( typeof arg === 'number' ) { return '' + Math.floor( arg ) ; }
+					return '0' ;
+				case 'u' :	// unsigned decimal
+					if ( typeof arg === 'string' ) { arg = parseInt( arg ) ; }
+					if ( typeof arg === 'number' ) { return '' + Math.max( Math.floor( arg ) , 0 ) ; }
+					return '0' ;
+				case 'U' :	// unsigned positive decimal
+					if ( typeof arg === 'string' ) { arg = parseInt( arg ) ; }
+					if ( typeof arg === 'number' ) { return '' + Math.max( Math.floor( arg ) , 1 ) ; }
+					return '1' ;
+				case 'x' :	// unsigned hexadecimal, force pair of symbole
+					if ( typeof arg === 'string' ) { arg = parseInt( arg ) ; }
+					if ( typeof arg !== 'number' ) { return '0' ; }
+					value = '' + Math.max( Math.floor( arg ) , 0 ).toString( 16 ) ;
+					if ( value.length % 2 ) { value = '0' + value ; }
+					return value ;
+				case 'h' :	// unsigned hexadecimal
+					if ( typeof arg === 'string' ) { arg = parseInt( arg ) ; }
+					if ( typeof arg === 'number' ) { return '' + Math.max( Math.floor( arg ) , 0 ).toString( 16 ) ; }
+					return '0' ;
+				case 'o' :	// unsigned octal
+					if ( typeof arg === 'string' ) { arg = parseInt( arg ) ; }
+					if ( typeof arg === 'number' ) { return '' + Math.max( Math.floor( arg ) , 0 ).toString( 8 ) ; }
+					return '0' ;
+				case 'b' :	// unsigned binary
+					if ( typeof arg === 'string' ) { arg = parseInt( arg ) ; }
+					if ( typeof arg === 'number' ) { return '' + Math.max( Math.floor( arg ) , 0 ).toString( 2 ) ; }
+					return '0' ;
+				case 'I' :
+					return inspect( { style: ( self && self.color ? 'color' : 'none' ) } , arg ) ;
+				case 'Y' :
+					return inspect( {
+							style: ( self && self.color ? 'color' : 'none' ) ,
+							noFunc: true ,
+							enumOnly: true ,
+							noDescriptor: true
+						} ,
+						arg ) ;
+				case 'E' :
+					return inspectError( { style: ( self && self.color ? 'color' : 'none' ) } , arg ) ;
+				case 'J' :
+					return JSON.stringify( arg ) ;
+				case 'D' :
+					return '' ;
+				case 'F' :	// Function
+					
+					autoIndex -- ;	// %F does not eat any arg
+					
+					if ( modeArg === undefined ) { return '' ; }
+					tmp = modeArg.split( ':' ) ;
+					fn = tmp[ 0 ] ;
+					fnArgString = tmp[ 1 ] ;
+					if ( ! fn ) { return '' ; }
+					
+					if ( fnArgString && ( argMatches = fnArgString.match( /%([+-]?)([0-9]*)[a-zA-Z]/g ) ) )
+					{
+						//console.log( argMatches ) ;
+						//console.log( fnArgString ) ;
+						for ( i = 0 ; i < argMatches.length ; i ++ )
+						{
+							relative = argMatches[ i ][ 1 ] ;
+							index = argMatches[ i ][ 2 ] ;
+							
+							if ( index )
+							{
+								index = parseInt( index , 10 ) ;
+								
+								if ( relative )
+								{
+									if ( relative === '+' ) { index = autoIndex + index ; }		// jshint ignore:line
+									else if ( relative === '-' ) { index = autoIndex - index ; }	// jshint ignore:line
+								}
+							}
+							else
+							{
+								index = autoIndex ;
+							}
+							
+							autoIndex ++ ;
+							
+							if ( index >= length || index < 1 ) { argList[ i ] = undefined ; }
+							else { argList[ i ] = args[ index ] ; }
+						}
+					}
+					
+					if ( ! self || ! self.fn || typeof self.fn[ fn ] !== 'function' ) { return '' ; }
+					return self.fn[ fn ].apply( self , argList ) ;
+				
+				default :
+					return '' ;
+			}
+	} ) ;
+	
+	if ( hasMarkup && this.markupReset && this.endingMarkupReset )
+	{
+		str += typeof this.markupReset === 'function' ? this.markupReset( markupStack ) : this.markupReset ;
+	}
+	
+	if ( this.extraArguments )
+	{
+		for ( ; autoIndex < length ; autoIndex ++ )
+		{
+			arg = args[ autoIndex ] ;
+			if ( arg === null || arg === undefined ) { continue ; }
+			else if ( typeof arg === 'string' ) { str += arg ; }
+			else if ( typeof arg === 'number' ) { str += arg ; }
+			else if ( typeof arg.toString === 'function' ) { str += arg.toString() ; }
+		}
+	}
+	
+	return str ;
+} ;
+
+
+
+var defaultFormatter = {
+	extraArguments: true ,
+	endingMarkupReset: true ,
+	markupReset: ansi.reset ,
+	markup: {
+		":": ansi.reset ,
+		" ": ansi.reset + " " ,
+		
+		"-": ansi.dim ,
+		"+": ansi.bold ,
+		"_": ansi.underline ,
+		"/": ansi.italic ,
+		"!": ansi.inverse ,
+		
+		"b": ansi.blue ,
+		"B": ansi.brightBlue ,
+		"c": ansi.cyan ,
+		"C": ansi.brightCyan ,
+		"g": ansi.green ,
+		"G": ansi.brightGreen ,
+		"k": ansi.black ,
+		"K": ansi.brightBlack ,
+		"m": ansi.magenta ,
+		"M": ansi.brightMagenta ,
+		"r": ansi.red ,
+		"R": ansi.brightRed ,
+		"w": ansi.white ,
+		"W": ansi.brightWhite ,
+		"y": ansi.yellow ,
+		"Y": ansi.brightYellow
+	}
+} ;
+
+exports.format = exports.formatMethod.bind( defaultFormatter ) ;
+exports.format.default = defaultFormatter ;
+
+
+
+exports.markupMethod = function markup( str )
+{
+	if ( typeof str !== 'string' )
+	{
+		if ( str === null || str === undefined ) { return '' ; }
+		else if ( /*str && typeof str === 'object' && */ typeof str.toString === 'function' ) { str = str.toString() ; }
+		else { return '' ; }
+	}
+	
+	var self = this , hasMarkup = false , markupStack = [] ;
+	
+	//console.log( 'format args:' , arguments ) ;
+	
+	str = str.replace( /\^(.?)/g , function( match , markup ) {
+		var replacement ;
+		
+		if ( markup === '^' ) { return '^' ; }
+		if ( ! self.markup || ! self.markup[ markup ] ) { return '' ; }
+		hasMarkup = true ;
+		
+		if ( typeof self.markup[ markup ] === 'function' )
+		{
+			replacement = self.markup[ markup ]( markupStack ) ;
+			// method should manage markup stack themselves
+		}
+		else
+		{
+			replacement = self.markup[ markup ] ;
+			markupStack.push( replacement ) ;
+		}
+		
+		return replacement ;
+	} ) ;
+	
+	if ( hasMarkup && this.markupReset && this.endingMarkupReset )
+	{
+		str += typeof this.markupReset === 'function' ? this.markupReset( markupStack ) : this.markupReset ;
+	}
+	
+	return str ;
+} ;
+
+exports.markup = exports.markupMethod.bind( defaultFormatter ) ;
+
+
+
+// Count the number of parameters needed for this string
+exports.format.count = function formatCount( str )
+{
+	var match , index , relative , autoIndex = 1 , maxIndex = 0 ;
+	
+	if ( typeof str !== 'string' ) { return 0 ; }
+	
+	// This regex differs slightly from the main regex: we do not count '%%' and %F is excluded
+	var regexp = /%([+-]?)([0-9]*)(?:\[([^\]]*)\])?([a-zA-EG-Z])/g ;
+	
+	
+	while ( ( match = regexp.exec( str ) ) !== null )
+	{
+		//console.log( match ) ;
+		relative = match[ 1 ] ;
+		index = match[ 2 ] ;
+		
+		if ( index )
+		{
+			index = parseInt( index , 10 ) ;
+			
+			if ( relative )
+			{
+				if ( relative === '+' ) { index = autoIndex + index ; }
+				else if ( relative === '-' ) { index = autoIndex - index ; }
+			}
+		}
+		else
+		{
+			index = autoIndex ;
+		}
+		
+		autoIndex ++ ;
+		
+		if ( maxIndex < index ) { maxIndex = index ; }
+	}
+	
+	return maxIndex ;
+} ;
+
+
+
+// Tell if this string contains formatter chars
+exports.format.hasFormatting = function hasFormatting( str )
+{
+	if ( str.search( /\^(.?)|(%%)|%([+-]?)([0-9]*)(?:\[([^\]]*)\])?([a-zA-Z])/ ) !== -1 ) { return true ; }
+	else { return false ; }
+} ;
+
+
+
+},{"./ansi.js":52,"./inspect.js":56}],56:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -9763,7 +14394,752 @@ inspectStyle.html = treeExtend( null , {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")},require('_process'))
-},{"../../is-buffer/index.js":35,"./ansi.js":44,"./escape.js":45,"_process":39,"tree-kit/lib/extend.js":47}],47:[function(require,module,exports){
+},{"../../is-buffer/index.js":39,"./ansi.js":52,"./escape.js":54,"_process":47,"tree-kit/lib/extend.js":66}],57:[function(require,module,exports){
+module.exports={"߀":"0","́":""," ":" ","Ⓐ":"A","Ａ":"A","À":"A","Á":"A","Â":"A","Ầ":"A","Ấ":"A","Ẫ":"A","Ẩ":"A","Ã":"A","Ā":"A","Ă":"A","Ằ":"A","Ắ":"A","Ẵ":"A","Ẳ":"A","Ȧ":"A","Ǡ":"A","Ä":"A","Ǟ":"A","Ả":"A","Å":"A","Ǻ":"A","Ǎ":"A","Ȁ":"A","Ȃ":"A","Ạ":"A","Ậ":"A","Ặ":"A","Ḁ":"A","Ą":"A","Ⱥ":"A","Ɐ":"A","Ꜳ":"AA","Æ":"AE","Ǽ":"AE","Ǣ":"AE","Ꜵ":"AO","Ꜷ":"AU","Ꜹ":"AV","Ꜻ":"AV","Ꜽ":"AY","Ⓑ":"B","Ｂ":"B","Ḃ":"B","Ḅ":"B","Ḇ":"B","Ƀ":"B","Ɓ":"B","ｃ":"C","Ⓒ":"C","Ｃ":"C","Ꜿ":"C","Ḉ":"C","Ç":"C","Ⓓ":"D","Ｄ":"D","Ḋ":"D","Ď":"D","Ḍ":"D","Ḑ":"D","Ḓ":"D","Ḏ":"D","Đ":"D","Ɗ":"D","Ɖ":"D","ᴅ":"D","Ꝺ":"D","Ð":"Dh","Ǳ":"DZ","Ǆ":"DZ","ǲ":"Dz","ǅ":"Dz","ɛ":"E","Ⓔ":"E","Ｅ":"E","È":"E","É":"E","Ê":"E","Ề":"E","Ế":"E","Ễ":"E","Ể":"E","Ẽ":"E","Ē":"E","Ḕ":"E","Ḗ":"E","Ĕ":"E","Ė":"E","Ë":"E","Ẻ":"E","Ě":"E","Ȅ":"E","Ȇ":"E","Ẹ":"E","Ệ":"E","Ȩ":"E","Ḝ":"E","Ę":"E","Ḙ":"E","Ḛ":"E","Ɛ":"E","Ǝ":"E","ᴇ":"E","ꝼ":"F","Ⓕ":"F","Ｆ":"F","Ḟ":"F","Ƒ":"F","Ꝼ":"F","Ⓖ":"G","Ｇ":"G","Ǵ":"G","Ĝ":"G","Ḡ":"G","Ğ":"G","Ġ":"G","Ǧ":"G","Ģ":"G","Ǥ":"G","Ɠ":"G","Ꞡ":"G","Ᵹ":"G","Ꝿ":"G","ɢ":"G","Ⓗ":"H","Ｈ":"H","Ĥ":"H","Ḣ":"H","Ḧ":"H","Ȟ":"H","Ḥ":"H","Ḩ":"H","Ḫ":"H","Ħ":"H","Ⱨ":"H","Ⱶ":"H","Ɥ":"H","Ⓘ":"I","Ｉ":"I","Ì":"I","Í":"I","Î":"I","Ĩ":"I","Ī":"I","Ĭ":"I","İ":"I","Ï":"I","Ḯ":"I","Ỉ":"I","Ǐ":"I","Ȉ":"I","Ȋ":"I","Ị":"I","Į":"I","Ḭ":"I","Ɨ":"I","Ⓙ":"J","Ｊ":"J","Ĵ":"J","Ɉ":"J","ȷ":"J","Ⓚ":"K","Ｋ":"K","Ḱ":"K","Ǩ":"K","Ḳ":"K","Ķ":"K","Ḵ":"K","Ƙ":"K","Ⱪ":"K","Ꝁ":"K","Ꝃ":"K","Ꝅ":"K","Ꞣ":"K","Ⓛ":"L","Ｌ":"L","Ŀ":"L","Ĺ":"L","Ľ":"L","Ḷ":"L","Ḹ":"L","Ļ":"L","Ḽ":"L","Ḻ":"L","Ł":"L","Ƚ":"L","Ɫ":"L","Ⱡ":"L","Ꝉ":"L","Ꝇ":"L","Ꞁ":"L","Ǉ":"LJ","ǈ":"Lj","Ⓜ":"M","Ｍ":"M","Ḿ":"M","Ṁ":"M","Ṃ":"M","Ɱ":"M","Ɯ":"M","ϻ":"M","Ꞥ":"N","Ƞ":"N","Ⓝ":"N","Ｎ":"N","Ǹ":"N","Ń":"N","Ñ":"N","Ṅ":"N","Ň":"N","Ṇ":"N","Ņ":"N","Ṋ":"N","Ṉ":"N","Ɲ":"N","Ꞑ":"N","ᴎ":"N","Ǌ":"NJ","ǋ":"Nj","Ⓞ":"O","Ｏ":"O","Ò":"O","Ó":"O","Ô":"O","Ồ":"O","Ố":"O","Ỗ":"O","Ổ":"O","Õ":"O","Ṍ":"O","Ȭ":"O","Ṏ":"O","Ō":"O","Ṑ":"O","Ṓ":"O","Ŏ":"O","Ȯ":"O","Ȱ":"O","Ö":"O","Ȫ":"O","Ỏ":"O","Ő":"O","Ǒ":"O","Ȍ":"O","Ȏ":"O","Ơ":"O","Ờ":"O","Ớ":"O","Ỡ":"O","Ở":"O","Ợ":"O","Ọ":"O","Ộ":"O","Ǫ":"O","Ǭ":"O","Ø":"O","Ǿ":"O","Ɔ":"O","Ɵ":"O","Ꝋ":"O","Ꝍ":"O","Œ":"OE","Ƣ":"OI","Ꝏ":"OO","Ȣ":"OU","Ⓟ":"P","Ｐ":"P","Ṕ":"P","Ṗ":"P","Ƥ":"P","Ᵽ":"P","Ꝑ":"P","Ꝓ":"P","Ꝕ":"P","Ⓠ":"Q","Ｑ":"Q","Ꝗ":"Q","Ꝙ":"Q","Ɋ":"Q","Ⓡ":"R","Ｒ":"R","Ŕ":"R","Ṙ":"R","Ř":"R","Ȑ":"R","Ȓ":"R","Ṛ":"R","Ṝ":"R","Ŗ":"R","Ṟ":"R","Ɍ":"R","Ɽ":"R","Ꝛ":"R","Ꞧ":"R","Ꞃ":"R","Ⓢ":"S","Ｓ":"S","ẞ":"S","Ś":"S","Ṥ":"S","Ŝ":"S","Ṡ":"S","Š":"S","Ṧ":"S","Ṣ":"S","Ṩ":"S","Ș":"S","Ş":"S","Ȿ":"S","Ꞩ":"S","Ꞅ":"S","Ⓣ":"T","Ｔ":"T","Ṫ":"T","Ť":"T","Ṭ":"T","Ț":"T","Ţ":"T","Ṱ":"T","Ṯ":"T","Ŧ":"T","Ƭ":"T","Ʈ":"T","Ⱦ":"T","Ꞇ":"T","Þ":"Th","Ꜩ":"TZ","Ⓤ":"U","Ｕ":"U","Ù":"U","Ú":"U","Û":"U","Ũ":"U","Ṹ":"U","Ū":"U","Ṻ":"U","Ŭ":"U","Ü":"U","Ǜ":"U","Ǘ":"U","Ǖ":"U","Ǚ":"U","Ủ":"U","Ů":"U","Ű":"U","Ǔ":"U","Ȕ":"U","Ȗ":"U","Ư":"U","Ừ":"U","Ứ":"U","Ữ":"U","Ử":"U","Ự":"U","Ụ":"U","Ṳ":"U","Ų":"U","Ṷ":"U","Ṵ":"U","Ʉ":"U","Ⓥ":"V","Ｖ":"V","Ṽ":"V","Ṿ":"V","Ʋ":"V","Ꝟ":"V","Ʌ":"V","Ꝡ":"VY","Ⓦ":"W","Ｗ":"W","Ẁ":"W","Ẃ":"W","Ŵ":"W","Ẇ":"W","Ẅ":"W","Ẉ":"W","Ⱳ":"W","Ⓧ":"X","Ｘ":"X","Ẋ":"X","Ẍ":"X","Ⓨ":"Y","Ｙ":"Y","Ỳ":"Y","Ý":"Y","Ŷ":"Y","Ỹ":"Y","Ȳ":"Y","Ẏ":"Y","Ÿ":"Y","Ỷ":"Y","Ỵ":"Y","Ƴ":"Y","Ɏ":"Y","Ỿ":"Y","Ⓩ":"Z","Ｚ":"Z","Ź":"Z","Ẑ":"Z","Ż":"Z","Ž":"Z","Ẓ":"Z","Ẕ":"Z","Ƶ":"Z","Ȥ":"Z","Ɀ":"Z","Ⱬ":"Z","Ꝣ":"Z","ⓐ":"a","ａ":"a","ẚ":"a","à":"a","á":"a","â":"a","ầ":"a","ấ":"a","ẫ":"a","ẩ":"a","ã":"a","ā":"a","ă":"a","ằ":"a","ắ":"a","ẵ":"a","ẳ":"a","ȧ":"a","ǡ":"a","ä":"a","ǟ":"a","ả":"a","å":"a","ǻ":"a","ǎ":"a","ȁ":"a","ȃ":"a","ạ":"a","ậ":"a","ặ":"a","ḁ":"a","ą":"a","ⱥ":"a","ɐ":"a","ɑ":"a","ꜳ":"aa","æ":"ae","ǽ":"ae","ǣ":"ae","ꜵ":"ao","ꜷ":"au","ꜹ":"av","ꜻ":"av","ꜽ":"ay","ⓑ":"b","ｂ":"b","ḃ":"b","ḅ":"b","ḇ":"b","ƀ":"b","ƃ":"b","ɓ":"b","Ƃ":"b","ⓒ":"c","ć":"c","ĉ":"c","ċ":"c","č":"c","ç":"c","ḉ":"c","ƈ":"c","ȼ":"c","ꜿ":"c","ↄ":"c","C":"c","Ć":"c","Ĉ":"c","Ċ":"c","Č":"c","Ƈ":"c","Ȼ":"c","ⓓ":"d","ｄ":"d","ḋ":"d","ď":"d","ḍ":"d","ḑ":"d","ḓ":"d","ḏ":"d","đ":"d","ƌ":"d","ɖ":"d","ɗ":"d","Ƌ":"d","Ꮷ":"d","ԁ":"d","Ɦ":"d","ð":"dh","ǳ":"dz","ǆ":"dz","ⓔ":"e","ｅ":"e","è":"e","é":"e","ê":"e","ề":"e","ế":"e","ễ":"e","ể":"e","ẽ":"e","ē":"e","ḕ":"e","ḗ":"e","ĕ":"e","ė":"e","ë":"e","ẻ":"e","ě":"e","ȅ":"e","ȇ":"e","ẹ":"e","ệ":"e","ȩ":"e","ḝ":"e","ę":"e","ḙ":"e","ḛ":"e","ɇ":"e","ǝ":"e","ⓕ":"f","ｆ":"f","ḟ":"f","ƒ":"f","ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ⓖ":"g","ｇ":"g","ǵ":"g","ĝ":"g","ḡ":"g","ğ":"g","ġ":"g","ǧ":"g","ģ":"g","ǥ":"g","ɠ":"g","ꞡ":"g","ꝿ":"g","ᵹ":"g","ⓗ":"h","ｈ":"h","ĥ":"h","ḣ":"h","ḧ":"h","ȟ":"h","ḥ":"h","ḩ":"h","ḫ":"h","ẖ":"h","ħ":"h","ⱨ":"h","ⱶ":"h","ɥ":"h","ƕ":"hv","ⓘ":"i","ｉ":"i","ì":"i","í":"i","î":"i","ĩ":"i","ī":"i","ĭ":"i","ï":"i","ḯ":"i","ỉ":"i","ǐ":"i","ȉ":"i","ȋ":"i","ị":"i","į":"i","ḭ":"i","ɨ":"i","ı":"i","ⓙ":"j","ｊ":"j","ĵ":"j","ǰ":"j","ɉ":"j","ⓚ":"k","ｋ":"k","ḱ":"k","ǩ":"k","ḳ":"k","ķ":"k","ḵ":"k","ƙ":"k","ⱪ":"k","ꝁ":"k","ꝃ":"k","ꝅ":"k","ꞣ":"k","ⓛ":"l","ｌ":"l","ŀ":"l","ĺ":"l","ľ":"l","ḷ":"l","ḹ":"l","ļ":"l","ḽ":"l","ḻ":"l","ſ":"l","ł":"l","ƚ":"l","ɫ":"l","ⱡ":"l","ꝉ":"l","ꞁ":"l","ꝇ":"l","ɭ":"l","ǉ":"lj","ⓜ":"m","ｍ":"m","ḿ":"m","ṁ":"m","ṃ":"m","ɱ":"m","ɯ":"m","ⓝ":"n","ｎ":"n","ǹ":"n","ń":"n","ñ":"n","ṅ":"n","ň":"n","ṇ":"n","ņ":"n","ṋ":"n","ṉ":"n","ƞ":"n","ɲ":"n","ŉ":"n","ꞑ":"n","ꞥ":"n","ԉ":"n","ǌ":"nj","ⓞ":"o","ｏ":"o","ò":"o","ó":"o","ô":"o","ồ":"o","ố":"o","ỗ":"o","ổ":"o","õ":"o","ṍ":"o","ȭ":"o","ṏ":"o","ō":"o","ṑ":"o","ṓ":"o","ŏ":"o","ȯ":"o","ȱ":"o","ö":"o","ȫ":"o","ỏ":"o","ő":"o","ǒ":"o","ȍ":"o","ȏ":"o","ơ":"o","ờ":"o","ớ":"o","ỡ":"o","ở":"o","ợ":"o","ọ":"o","ộ":"o","ǫ":"o","ǭ":"o","ø":"o","ǿ":"o","ꝋ":"o","ꝍ":"o","ɵ":"o","ɔ":"o","ᴑ":"o","œ":"oe","ƣ":"oi","ꝏ":"oo","ȣ":"ou","ⓟ":"p","ｐ":"p","ṕ":"p","ṗ":"p","ƥ":"p","ᵽ":"p","ꝑ":"p","ꝓ":"p","ꝕ":"p","ρ":"p","ⓠ":"q","ｑ":"q","ɋ":"q","ꝗ":"q","ꝙ":"q","ⓡ":"r","ｒ":"r","ŕ":"r","ṙ":"r","ř":"r","ȑ":"r","ȓ":"r","ṛ":"r","ṝ":"r","ŗ":"r","ṟ":"r","ɍ":"r","ɽ":"r","ꝛ":"r","ꞧ":"r","ꞃ":"r","ⓢ":"s","ｓ":"s","ś":"s","ṥ":"s","ŝ":"s","ṡ":"s","š":"s","ṧ":"s","ṣ":"s","ṩ":"s","ș":"s","ş":"s","ȿ":"s","ꞩ":"s","ꞅ":"s","ẛ":"s","ʂ":"s","ß":"ss","ⓣ":"t","ｔ":"t","ṫ":"t","ẗ":"t","ť":"t","ṭ":"t","ț":"t","ţ":"t","ṱ":"t","ṯ":"t","ŧ":"t","ƭ":"t","ʈ":"t","ⱦ":"t","ꞇ":"t","þ":"th","ꜩ":"tz","ⓤ":"u","ｕ":"u","ù":"u","ú":"u","û":"u","ũ":"u","ṹ":"u","ū":"u","ṻ":"u","ŭ":"u","ü":"u","ǜ":"u","ǘ":"u","ǖ":"u","ǚ":"u","ủ":"u","ů":"u","ű":"u","ǔ":"u","ȕ":"u","ȗ":"u","ư":"u","ừ":"u","ứ":"u","ữ":"u","ử":"u","ự":"u","ụ":"u","ṳ":"u","ų":"u","ṷ":"u","ṵ":"u","ʉ":"u","ⓥ":"v","ｖ":"v","ṽ":"v","ṿ":"v","ʋ":"v","ꝟ":"v","ʌ":"v","ꝡ":"vy","ⓦ":"w","ｗ":"w","ẁ":"w","ẃ":"w","ŵ":"w","ẇ":"w","ẅ":"w","ẘ":"w","ẉ":"w","ⱳ":"w","ⓧ":"x","ｘ":"x","ẋ":"x","ẍ":"x","ⓨ":"y","ｙ":"y","ỳ":"y","ý":"y","ŷ":"y","ỹ":"y","ȳ":"y","ẏ":"y","ÿ":"y","ỷ":"y","ẙ":"y","ỵ":"y","ƴ":"y","ɏ":"y","ỿ":"y","ⓩ":"z","ｚ":"z","ź":"z","ẑ":"z","ż":"z","ž":"z","ẓ":"z","ẕ":"z","ƶ":"z","ȥ":"z","ɀ":"z","ⱬ":"z","ꝣ":"z"}
+},{}],58:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var map = require( './latinize-map.json' ) ;
+
+module.exports = function( str )
+{
+	return str.replace( /[^\u0000-\u007e]/g , function( c ) { return map[ c ] || c ; } ) ;
+} ;
+
+            
+
+},{"./latinize-map.json":57}],59:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+exports.resize = function resize( str , length )
+{
+	if ( str.length === length )
+	{
+		return str ;
+	}
+	else if ( str.length > length )
+	{
+		return str.slice( 0 , length ) ;
+	}
+	else
+	{
+		return str + ' '.repeat( length - str.length ) ;
+	}
+} ;
+
+
+
+},{}],60:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+/* All polyfill borrowed from MDN: developer.mozilla.org */
+
+
+
+var polyfill = {} ;
+module.exports = polyfill ;
+
+
+
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/repeat
+polyfill.repeat = function(count)
+{
+  if (this === null) {
+    throw new TypeError('can\'t convert ' + this + ' to object');
+  }
+  var str = '' + this;
+  count = +count;
+  if (count !== count) {
+    count = 0;
+  }
+  if (count < 0) {
+    throw new RangeError('repeat count must be non-negative');
+  }
+  if (count === Infinity) {
+    throw new RangeError('repeat count must be less than infinity');
+  }
+  count = Math.floor(count);
+  if (str.length === 0 || count === 0) {
+    return '';
+  }
+  // Ensuring count is a 31-bit integer allows us to heavily optimize the
+  // main part. But anyway, most current (August 2014) browsers can't handle
+  // strings 1 << 28 chars or longer, so:
+  if (str.length * count >= 1 << 28) {
+    throw new RangeError('repeat count must not overflow maximum string size');
+  }
+  var rpt = '';
+  for (;;) {
+    if ((count & 1) === 1) {
+      rpt += str;
+    }
+    count >>>= 1;
+    if (count === 0) {
+      break;
+    }
+    str += str;
+  }
+  return rpt;
+} ;
+
+
+
+},{}],61:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var escape = require( './escape.js' ) ;
+
+
+
+exports.regexp = {} ;
+
+
+
+exports.regexp.array2alternatives = function array2alternatives( array )
+{
+	var i , sorted = array.slice() ;
+	
+	// Sort descending by string length
+	sorted.sort( function( a , b ) {
+		return b.length - a.length ;
+	} ) ;
+	
+	// Then escape what should be
+	for ( i = 0 ; i < sorted.length ; i ++ )
+	{
+		sorted[ i ] = escape.regExpPattern( sorted[ i ] ) ;
+	}
+	
+	return sorted.join( '|' ) ;
+} ;
+
+
+
+},{"./escape.js":54}],62:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+// Load modules
+var tree = require( 'tree-kit' ) ;
+
+
+
+var stringKit = {} ;
+module.exports = stringKit ;
+
+
+
+// Tier 0: add polyfills to stringKit
+var fn ;
+var polyfill = require( './polyfill.js' ) ;
+
+for ( fn in polyfill )
+{
+	stringKit[ fn ] = function( str ) { // jshint ignore:line
+		return polyfill[ fn ].apply( str , Array.prototype.slice.call( arguments , 1 ) ) ;
+	} ; // jshint ignore:line
+}
+
+
+
+tree.extend( null , stringKit ,
+	
+	// Tier 1
+	{ escape: require( './escape.js' ) } ,
+	{ ansi: require( './ansi.js' ) } ,
+	{ unicode: require( './unicode.js' ) }
+) ;
+
+
+
+tree.extend( null , stringKit ,
+	
+	// Tier 2
+	require( './format.js' ) ,
+	
+	// Tier 3
+	require( './misc.js' ) ,
+	require( './inspect.js' ) ,
+	require( './regexp.js' ) ,
+	require( './camel.js' ) ,
+	{ latinize: require( './latinize.js' ) }
+) ;
+
+
+
+// Install all polyfill into String.prototype
+stringKit.installPolyfills = function installPolyfills()
+{
+	var fn ;
+	
+	for ( fn in polyfill )
+	{
+		if ( ! String.prototype[ fn ] )
+		{
+			String.prototype[ fn ] = polyfill[ fn ] ;
+		}
+	}
+} ;
+
+
+
+
+
+},{"./ansi.js":52,"./camel.js":53,"./escape.js":54,"./format.js":55,"./inspect.js":56,"./latinize.js":58,"./misc.js":59,"./polyfill.js":60,"./regexp.js":61,"./unicode.js":63,"tree-kit":70}],63:[function(require,module,exports){
+/*
+	String Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+/*
+	Javascript does not use UTF-8 but UCS-2.
+	The purpose of this module is to process correctly strings containing UTF-8 characters that take more than 2 bytes.
+	
+	Note: in monospace font, any single unicode character that has a length of 2 is a full-width char, and therefore
+	is displayed in 2 monospace cells.
+*/
+
+
+
+// Load modules
+var punycode = require( 'punycode' ) ;
+
+
+
+// Create the module and export it
+var unicode = {} ;
+module.exports = unicode ;
+
+
+
+// Get the length of an unicode string
+unicode.length = function length( str )
+{
+	return punycode.ucs2.decode( str ).length ;
+} ;
+
+
+
+// Return an array of chars
+unicode.toArray = function toArray( str )
+{
+	return punycode.ucs2.decode( str ).map( function( code ) {
+		return punycode.ucs2.encode( [ code ] ) ;
+	} ) ;
+} ;
+
+
+
+/*
+	Returns:
+		0: single char
+		1: leading surrogate
+		-1: trailing surrogate
+	
+	Note: it does not check input, to gain perfs.
+*/
+unicode.surrogatePair = function surrogatePair( char )
+{
+	var code = char.charCodeAt( 0 ) ;
+	
+	if ( code < 0xd800 || code >= 0xe000 ) { return 0 ; }
+	else if ( code < 0xdc00 ) { return 1 ; }
+	else { return -1 ; }
+} ;
+
+
+
+/*
+	Check if a character is a full-width char or not.
+	
+	Borrowed from Node.js source, from readline.js.
+*/
+unicode.isFullWidth = function isFullWidth( char )
+{
+	var code = char.codePointAt( 0 ) ;
+	
+	// Code points are derived from:
+	// http://www.unicode.org/Public/UNIDATA/EastAsianWidth.txt
+	if ( code >= 0x1100 && (
+			code <= 0x115f ||	// Hangul Jamo
+			0x2329 === code || // LEFT-POINTING ANGLE BRACKET
+			0x232a === code || // RIGHT-POINTING ANGLE BRACKET
+			// CJK Radicals Supplement .. Enclosed CJK Letters and Months
+			( 0x2e80 <= code && code <= 0x3247 && code !== 0x303f ) ||
+			// Enclosed CJK Letters and Months .. CJK Unified Ideographs Extension A
+			0x3250 <= code && code <= 0x4dbf ||
+			// CJK Unified Ideographs .. Yi Radicals
+			0x4e00 <= code && code <= 0xa4c6 ||
+			// Hangul Jamo Extended-A
+			0xa960 <= code && code <= 0xa97c ||
+			// Hangul Syllables
+			0xac00 <= code && code <= 0xd7a3 ||
+			// CJK Compatibility Ideographs
+			0xf900 <= code && code <= 0xfaff ||
+			// Vertical Forms
+			0xfe10 <= code && code <= 0xfe19 ||
+			// CJK Compatibility Forms .. Small Form Variants
+			0xfe30 <= code && code <= 0xfe6b ||
+			// Halfwidth and Fullwidth Forms
+			0xff01 <= code && code <= 0xff60 ||
+			0xffe0 <= code && code <= 0xffe6 ||
+			// Kana Supplement
+			0x1b000 <= code && code <= 0x1b001 ||
+			// Enclosed Ideographic Supplement
+			0x1f200 <= code && code <= 0x1f251 ||
+			// CJK Unified Ideographs Extension B .. Tertiary Ideographic Plane
+			0x20000 <= code && code <= 0x3fffd ) ) {
+		return true ;
+	}
+	
+	return false ;
+} ;
+
+
+
+// Convert normal ASCII chars to their full-width counterpart
+unicode.toFullWidth = function toFullWidth( str )
+{
+	return punycode.ucs2.encode( 
+		punycode.ucs2.decode( str ).map( function( code ) {
+			if ( code >= 33 && code <= 126 ) { return 0xff00 + code - 0x20 ; }
+			else { return code ; }
+		} )
+	) ;
+} ;
+
+
+
+},{"punycode":48}],64:[function(require,module,exports){
+/*
+	Tree Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+/*
+	Stand-alone fork of extend.js, without options.
+*/
+
+module.exports = function clone( originalObject , circular )
+{
+	// First create an empty object with
+	// same prototype of our original source
+	
+	var propertyIndex , descriptor , keys , current , nextSource , indexOf ,
+		copies = [ {
+			source: originalObject ,
+			target: Array.isArray( originalObject ) ? [] : Object.create( Object.getPrototypeOf( originalObject ) )
+		} ] ,
+		cloneObject = copies[ 0 ].target ,
+		sourceReferences = [ originalObject ] ,
+		targetReferences = [ cloneObject ] ;
+	
+	// First in, first out
+	while ( current = copies.shift() )	// jshint ignore:line
+	{
+		keys = Object.getOwnPropertyNames( current.source ) ;
+
+		for ( propertyIndex = 0 ; propertyIndex < keys.length ; propertyIndex ++ )
+		{
+			// Save the source's descriptor
+			descriptor = Object.getOwnPropertyDescriptor( current.source , keys[ propertyIndex ] ) ;
+			
+			if ( ! descriptor.value || typeof descriptor.value !== 'object' )
+			{
+				Object.defineProperty( current.target , keys[ propertyIndex ] , descriptor ) ;
+				continue ;
+			}
+			
+			nextSource = descriptor.value ;
+			descriptor.value = Array.isArray( nextSource ) ? [] : Object.create( Object.getPrototypeOf( nextSource ) ) ;
+			
+			if ( circular )
+			{
+				indexOf = sourceReferences.indexOf( nextSource ) ;
+				
+				if ( indexOf !== -1 )
+				{
+					// The source is already referenced, just assign reference
+					descriptor.value = targetReferences[ indexOf ] ;
+					Object.defineProperty( current.target , keys[ propertyIndex ] , descriptor ) ;
+					continue ;
+				}
+				
+				sourceReferences.push( nextSource ) ;
+				targetReferences.push( descriptor.value ) ;
+			}
+			
+			Object.defineProperty( current.target , keys[ propertyIndex ] , descriptor ) ;
+			
+			copies.push( { source: nextSource , target: descriptor.value } ) ;
+		}
+	}
+	
+	return cloneObject ;
+} ;
+
+},{}],65:[function(require,module,exports){
+/*
+	Tree Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+/*
+	== Diff function ==
+*/
+
+function diff( left , right , options )
+{
+	var i , key , keyPath ,
+		leftKeys , rightKeys , leftTypeof , rightTypeof ,
+		depth , diffObject , length , arrayMode ;
+	
+	leftTypeof = typeof left ;
+	rightTypeof = typeof right ;
+	
+	if (
+		! left || ( leftTypeof !== 'object' && leftTypeof !== 'function' ) ||
+		! right || ( rightTypeof !== 'object' && rightTypeof !== 'function' )
+	)
+	{
+		throw new Error( '[tree] diff() needs objects as argument #0 and #1' ) ;
+	}
+	
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	
+	depth = options.depth || 0 ;
+	
+	// Things applied only for the root, not for recursive call
+	if ( ! depth )
+	{
+		options.diffObject = {} ;
+		if ( ! options.path ) { options.path = '' ; }
+		if ( ! options.pathSeparator ) { options.pathSeparator = '.' ; }
+	}
+	
+	diffObject = options.diffObject ;
+	
+	
+	// Left part
+	if ( Array.isArray( left ) )
+	{
+		arrayMode = true ;
+		length = left.length ;
+	}
+	else
+	{
+		arrayMode = false ;
+		leftKeys = Object.keys( left ) ;
+		length = leftKeys.length ;
+	}
+	
+	for ( i = 0 ; i < length ; i ++ )
+	{
+		key = arrayMode ? i : leftKeys[ i ] ;
+		keyPath = options.path + options.pathSeparator + key ;
+		//console.log( 'L keyPath:' , keyPath ) ;
+		
+		if ( ! right.hasOwnProperty( key ) )
+		{
+			diffObject[ keyPath ] = { path: keyPath , message: 'does not exist in right-hand side' } ;
+			continue ;
+		}
+		
+		leftTypeof = typeof left[ key ] ;
+		rightTypeof = typeof right[ key ] ;
+		
+		if ( leftTypeof !== rightTypeof )
+		{
+			diffObject[ keyPath ] = { path: keyPath , message: 'different typeof: ' + leftTypeof + ' - ' + rightTypeof } ;
+			continue ;
+		}
+		
+		if ( leftTypeof === 'object' || leftTypeof === 'function' )
+		{
+			// Cleanup the 'null is an object' mess
+			if ( ! left[ key ] )
+			{
+				if ( right[ key ] ) { diffObject[ keyPath ] = { path: keyPath , message: 'different type: null - Object' } ; }
+				continue ;
+			}
+			
+			if ( ! right[ key ] )
+			{
+				diffObject[ keyPath ] = { path: keyPath , message: 'different type: Object - null' } ;
+				continue ;
+			}
+			
+			if ( Array.isArray( left[ key ] ) && ! Array.isArray( right[ key ] ) )
+			{
+				diffObject[ keyPath ] = { path: keyPath , message: 'different type: Array - Object' } ;
+				continue ;
+			}
+			
+			if ( ! Array.isArray( left[ key ] ) && Array.isArray( right[ key ] ) )
+			{
+				diffObject[ keyPath ] = { path: keyPath , message: 'different type: Object - Array' } ;
+				continue ;
+			}
+			
+			diff( left[ key ] , right[ key ] , { path: keyPath , pathSeparator: options.pathSeparator , depth: depth + 1 , diffObject: diffObject } ) ;
+			continue ;
+		}
+		
+		if ( left[ key ] !== right[ key ] )
+		{
+			diffObject[ keyPath ] = { path: keyPath , message: 'different value: ' + left[ key ] + ' - ' + right[ key ] } ;
+			continue ;
+		}
+	}
+	
+	
+	// Right part
+	if ( Array.isArray( right ) )
+	{
+		arrayMode = true ;
+		length = right.length ;
+	}
+	else
+	{
+		arrayMode = false ;
+		rightKeys = Object.keys( right ) ;
+		length = rightKeys.length ;
+	}
+	
+	for ( i = 0 ; i < length ; i ++ )
+	{
+		key = arrayMode ? i : rightKeys[ i ] ;
+		keyPath = options.path + options.pathSeparator + key ;
+		//console.log( 'R keyPath:' , keyPath ) ;
+		
+		if ( ! left.hasOwnProperty( key ) )
+		{
+			diffObject[ keyPath ] = { path: keyPath , message: 'does not exist in left-hand side' } ;
+			continue ;
+		}
+	}
+	
+	return Object.keys( diffObject ).length ? diffObject : null ;
+}
+
+exports.diff = diff ;
+
+
+},{}],66:[function(require,module,exports){
 /*
 	Tree Kit
 	
@@ -10104,7 +15480,860 @@ function extendOne( runtime , options , target , source )
 }
 
 
-},{}],48:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
+/*
+	Tree Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+/*
+	== Lazy function ==
+*/
+
+exports.defineLazyProperty = function defineLazyProperty( object , name , func )
+{
+	Object.defineProperty( object , name , {
+		configurable: true ,
+		enumerable: true ,
+		get: function() {
+			
+			var value = func() ;
+			
+			Object.defineProperty( object , name , {
+				configurable: true ,
+				enumerable: true ,
+				writable: false ,
+				value: value
+			} ) ;
+			
+			return value ;
+		}
+	} ) ;
+} ;
+
+},{}],68:[function(require,module,exports){
+/*
+	Tree Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+// Load modules
+var tree = require( './tree.js' ) ;
+var util = require( 'util' ) ;
+
+
+
+// Create and export
+var masklib = {} ;
+module.exports = masklib ;
+
+
+
+/*
+	== Mask-family class ==
+	
+	Recursively select values in the input object if the same path in the mask object is set.
+*/
+
+/*
+	TODO:
+	- negative mask
+	- constraint check
+	- Maskable object, like in csk-php
+*/
+
+masklib.Mask = function Mask()
+{
+	throw new Error( 'Cannot create a tree.Mask() directly' ) ;
+} ;
+
+
+
+var maskDefaultOptions = {
+	clone: false ,
+	path: '<object>' ,
+	pathSeparator: '.'
+} ;
+
+
+
+/*
+	options:
+		clone: the output clone the input rather than reference it
+		pathSeperator: when expressing path, this is the separator
+		leaf: a callback to exec for each mask leaf
+		node? a callback to exec for each mask node
+*/
+masklib.createMask = function createMask( maskArgument , options )
+{
+	if ( maskArgument === null || typeof maskArgument !== 'object' )
+	{
+		throw new TypeError( '[tree] .createMask() : Argument #1 should be an object' ) ;
+	}
+	
+	if ( options !== null && typeof options === 'object' ) { options = tree.extend( null , {} , maskDefaultOptions , options ) ; }
+	else { options = maskDefaultOptions ; }
+	
+	var mask = Object.create( masklib.Mask.prototype , {
+		__options__: { value: options , writable: true  }
+	} ) ;
+	
+	tree.extend( null , mask , maskArgument ) ;
+	
+	return mask ;
+} ;
+
+
+
+// Apply the mask to an input tree
+masklib.Mask.prototype.applyTo = function applyTo( input , context , contextOverideDefault )
+{
+	// Arguments checking
+	if ( input === null || typeof input !== 'object' )
+	{
+		throw new TypeError( '[tree] .applyTo() : Argument #1 should be an object' ) ;
+	}
+	
+	if ( contextOverideDefault )
+	{
+		context = tree.extend( null ,
+			{
+				mask: this ,
+				options: this.__options__ ,
+				path: this.__options__.path
+			} ,
+			context
+		) ;
+	}
+	else if ( context === undefined )
+	{
+		context = {
+			mask: this ,
+			options: this.__options__ ,
+			path: this.__options__.path
+		} ;
+	}
+	
+	
+	// Init
+	//console.log( context ) ;
+	var result , nextPath , output ,
+		i , key , maskValue ,
+		maskKeyList = Object.keys( context.mask ) ,
+		j , inputKey , inputValue , inputKeyList ;
+	
+	if ( Array.isArray( input ) ) { output = [] ; }
+	else { output = {} ; }
+	
+	
+	// Iterate through mask properties
+	for ( i = 0 ; i < maskKeyList.length ; i ++ )
+	{
+		key = maskKeyList[ i ] ;
+		maskValue = context.mask[ key ] ;
+		
+		//console.log( '\nnext loop: ' , key , maskValue ) ;
+		
+		// The special key * is a wildcard, it match everything
+		if ( key === '*' )
+		{
+			//console.log( 'wildcard' ) ;
+			inputKeyList = Object.keys( input ) ;
+			
+			for ( j = 0 ; j < inputKeyList.length ; j ++ )
+			{
+				inputKey = inputKeyList[ j ] ;
+				inputValue = input[ inputKey ] ;
+				
+				//console.log( '*: ' , inputKey ) ;
+				nextPath = context.path + context.options.pathSeparator + inputKey ;
+				
+				// If it is an array or object, recursively check it
+				if ( maskValue !== null && typeof maskValue === 'object' )
+				{
+					if ( input[ inputKey ] !== null && typeof input[ inputKey ] === 'object' )
+					{
+						if ( input[ inputKey ] instanceof masklib.Mask )
+						{
+							output[ inputKey ] = input[ inputKey ].applyTo( input[ inputKey ] , { path: nextPath } , true ) ;
+						}
+						else
+						{
+							output[ inputKey ] = this.applyTo( input[ inputKey ] , tree.extend( null , {} , context , { mask: maskValue , path: nextPath } ) ) ;
+						}
+					}
+					else if ( typeof context.options.leaf === 'function' )
+					{
+						output[ inputKey ] = this.applyTo( {} , tree.extend( null , {} , context , { mask: maskValue , path: nextPath } ) ) ;
+					}
+				}
+				else if ( maskValue !== null && typeof context.options.leaf === 'function' )
+				{
+					//console.log( 'leaf callback' ) ;
+					result = context.options.leaf( input , inputKey , maskValue , nextPath ) ;
+					if ( ! ( result instanceof Error ) ) { output[ inputKey ] = result ; }
+				}
+				else
+				{
+					if ( context.options.clone && ( input[ inputKey ] !== null && typeof input[ inputKey ] === 'object' ) )
+					{
+						output[ inputKey ] = tree.extend( { deep: true } , {} , input[ inputKey ] ) ;
+					}
+					else
+					{
+						output[ inputKey ] = input[ inputKey ] ;
+					}
+				}
+			}
+			
+			continue ;
+		}
+		
+		
+		nextPath = context.path + context.options.pathSeparator + key ;
+		
+		// If it is an object, recursively check it
+		//if ( maskValue instanceof masklib.Mask )
+		if ( maskValue !== null && typeof maskValue === 'object' )
+		{
+			//console.log( 'sub' ) ;
+			
+			if ( input.hasOwnProperty( key ) && input[ key ] !== null && typeof input[ key ] === 'object' )
+			{
+				//console.log( 'recursive call' ) ;
+				
+				if ( input.key instanceof masklib.Mask )
+				{
+					output[ key ] = input.key.applyTo( input[ key ] , { path: nextPath } , true ) ;
+				}
+				else
+				{
+					output[ key ] = this.applyTo( input[ key ] , tree.extend( null , {} , context , { mask: maskValue , path: nextPath } ) ) ;
+				}
+			}
+			// recursive call only if there are callback
+			else if ( context.options.leaf )
+			{
+				//console.log( 'recursive call' ) ;
+				output[ key ] = this.applyTo( {} , tree.extend( null , {} , context , { mask: maskValue , path: nextPath } ) ) ;
+			}
+		}
+		// If mask exists, add the key
+		else if ( input.hasOwnProperty( key ) )
+		{
+			//console.log( 'property found' ) ;
+			
+			if ( maskValue !== undefined && typeof context.options.leaf === 'function' )
+			{
+				//console.log( 'leaf callback' ) ;
+				result = context.options.leaf( input , key , maskValue , nextPath ) ;
+				if ( ! ( result instanceof Error ) ) { output[ key ] = result ; }
+			}
+			else
+			{
+				if ( context.options.clone && ( input[ key ] !== null && typeof input[ key ] === 'object' ) )
+				{
+					output[ key ] = tree.extend( { deep: true } , {} , input[ key ] ) ;
+				}
+				else
+				{
+					output[ key ] = input[ key ] ;
+				}
+			}
+		}
+		else if ( maskValue !== undefined && typeof context.options.leaf === 'function' )
+		{
+			//console.log( 'leaf callback' ) ;
+			result = context.options.leaf( input , key , maskValue , nextPath ) ;
+			if ( ! ( result instanceof Error ) ) { output[ key ] = result ; }
+		}
+	}
+	
+	return output ;
+} ;
+
+
+
+// InverseMask: create an output tree from the input, by excluding properties of the mask
+
+masklib.InverseMask = function InverseMask()
+{
+	throw new Error( 'Cannot create a tree.InverseMask() directly' ) ;
+} ;
+
+util.inherits( masklib.InverseMask , masklib.Mask ) ;
+
+
+
+/*
+	options:
+		clone: the output clone the input rather than reference it
+		pathSeperator: when expressing path, this is the separator
+*/
+masklib.createInverseMask = function createInverseMask( maskArgument , options )
+{
+	if ( maskArgument === null || typeof maskArgument !== 'object' )
+	{
+		throw new TypeError( '[tree] .createInverseMask() : Argument #1 should be an object' ) ;
+	}
+	
+	if ( options !== null && typeof options === 'object' ) { options = tree.extend( null , {} , maskDefaultOptions , options ) ; }
+	else { options = maskDefaultOptions ; }
+	
+	var mask = Object.create( masklib.InverseMask.prototype , {
+		__options__: { value: options , writable: true  }
+	} ) ;
+	
+	tree.extend( null , mask , maskArgument ) ;
+	
+	return mask ;
+} ;
+
+
+
+// Apply the mask to an input tree
+masklib.InverseMask.prototype.applyTo = function applyTo( input , context , contextOverideDefault )
+{
+	// Arguments checking
+	if ( input === null || typeof input !== 'object' )
+	{
+		throw new TypeError( '[tree] .applyTo() : Argument #1 should be an object' ) ;
+	}
+	
+	if ( contextOverideDefault )
+	{
+		context = tree.extend( null ,
+			{
+				mask: this ,
+				options: this.__options__ ,
+				path: this.__options__.path
+			} ,
+			context
+		) ;
+	}
+	else if ( context === undefined )
+	{
+		context = {
+			mask: this ,
+			options: this.__options__ ,
+			path: this.__options__.path
+		} ;
+	}
+	
+	
+	// Init
+	//console.log( context ) ;
+	var nextPath , output ,
+		i , key , maskValue ,
+		maskKeyList = Object.keys( context.mask ) ,
+		j , inputKey , inputValue , inputKeyList ;
+	
+	if ( Array.isArray( input ) ) { output = tree.extend( { deep: true } , [] , input ) ; }
+	else { output = tree.extend( { deep: true } , {} , input ) ; }
+	
+	//console.log( output ) ;
+	
+	// Iterate through mask properties
+	for ( i = 0 ; i < maskKeyList.length ; i ++ )
+	{
+		key = maskKeyList[ i ] ;
+		maskValue = context.mask[ key ] ;
+		
+		//console.log( '\nnext loop: ' , key , maskValue ) ;
+		
+		// The special key * is a wildcard, it match everything
+		if ( key === '*' )
+		{
+			//console.log( 'wildcard' ) ;
+			inputKeyList = Object.keys( input ) ;
+			
+			for ( j = 0 ; j < inputKeyList.length ; j ++ )
+			{
+				inputKey = inputKeyList[ j ] ;
+				inputValue = input[ inputKey ] ;
+				
+				//console.log( '*: ' , inputKey ) ;
+				nextPath = context.path + context.options.pathSeparator + inputKey ;
+				
+				// If it is an array or object, recursively check it
+				if ( maskValue !== null && typeof maskValue === 'object' )
+				{
+					if ( input[ inputKey ] !== null && typeof input[ inputKey ] === 'object' )
+					{
+						if ( input[ inputKey ] instanceof masklib.Mask )
+						{
+							output[ inputKey ] = input[ inputKey ].applyTo( input[ inputKey ] , { path: nextPath } , true ) ;
+						}
+						else
+						{
+							output[ inputKey ] = this.applyTo( input[ inputKey ] , tree.extend( null , {} , context , { mask: maskValue , path: nextPath } ) ) ;
+						}
+					}
+				}
+				else
+				{
+					delete output[ inputKey ] ;
+				}
+			}
+			
+			continue ;
+		}
+		
+		
+		nextPath = context.path + context.options.pathSeparator + key ;
+		
+		// If it is an object, recursively check it
+		//if ( maskValue instanceof masklib.Mask )
+		if ( maskValue !== null && typeof maskValue === 'object' )
+		{
+			//console.log( 'sub' ) ;
+			
+			if ( input.hasOwnProperty( key ) && input[ key ] !== null && typeof input[ key ] === 'object' )
+			{
+				//console.log( 'recursive call' ) ;
+				
+				if ( input.key instanceof masklib.Mask )
+				{
+					output[ key ] = input.key.applyTo( input[ key ] , { path: nextPath } , true ) ;
+				}
+				else
+				{
+					output[ key ] = this.applyTo( input[ key ] , tree.extend( null , {} , context , { mask: maskValue , path: nextPath } ) ) ;
+				}
+			}
+		}
+		// If mask exists, remove the key
+		else if ( input.hasOwnProperty( key ) )
+		{
+			delete output[ key ] ;
+		}
+	}
+	
+	return output ;
+} ;
+
+},{"./tree.js":70,"util":75}],69:[function(require,module,exports){
+/*
+	Tree Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var treePath = {} ;
+module.exports = treePath ;
+
+
+
+treePath.op = function op( type , object , path , value )
+{
+	var i , parts , last , pointer , key , isArray = false , pathArrayMode = false , isGenericSet , canBeEmpty = true ;
+	
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) )
+	{
+		return ;
+	}
+	
+	if ( typeof path === 'string' )
+	{
+		// Split the path into parts
+		if ( path ) { parts = path.match( /([.#\[\]]|[^.#\[\]]+)/g ) ; }
+		else { parts = [ '' ] ; }
+		
+		if ( parts[ 0 ] === '.' ) { parts.unshift( '' ) ; }
+		if ( parts[ parts.length - 1 ] === '.' ) { parts.push( '' ) ; }
+	}
+	else if ( Array.isArray( path ) )
+	{
+		parts = path ;
+		pathArrayMode = true ;
+	}
+	else
+	{
+		throw new TypeError( '[tree.path] .' + type + '(): the path argument should be a string or an array' ) ;
+	}
+	
+	switch ( type )
+	{
+		case 'get' :
+		case 'delete' :
+			isGenericSet = false ;
+			break ;
+		case 'set' :
+		case 'define' :
+		case 'inc' :
+		case 'dec' :
+		case 'append' :
+		case 'prepend' :
+		case 'concat' :
+		case 'insert' :
+		case 'autoPush' :
+			isGenericSet = true ;
+			break ;
+		default :
+			throw new TypeError( "[tree.path] .op(): wrong type of operation '" + type + "'" ) ;
+	}
+	
+	//console.log( parts ) ;
+	// The pointer start at the object's root
+	pointer = object ;
+	
+	last = parts.length - 1 ;
+	
+	for ( i = 0 ; i <= last ; i ++ )
+	{
+		if ( pathArrayMode )
+		{
+			if ( key === undefined )
+			{
+				key = parts[ i ] ;
+				continue ;
+			}
+			
+			if ( ! pointer[ key ] || ( typeof pointer[ key ] !== 'object' && typeof pointer[ key ] !== 'function' ) )
+			{
+				if ( ! isGenericSet ) { return undefined ; }
+				pointer[ key ] = {} ;
+			}
+			
+			pointer = pointer[ key ] ;
+			key = parts[ i ] ;
+			
+			continue ;
+		}
+		else if ( parts[ i ] === '.' )
+		{
+			isArray = false ;
+			
+			if ( key === undefined )
+			{
+				if ( ! canBeEmpty )
+				{
+					canBeEmpty = true ;
+					continue ;
+				}
+				
+				key = '' ;
+			}
+			
+			if ( ! pointer[ key ] || ( typeof pointer[ key ] !== 'object' && typeof pointer[ key ] !== 'function' ) )
+			{
+				if ( ! isGenericSet ) { return undefined ; }
+				pointer[ key ] = {} ;
+			}
+			
+			pointer = pointer[ key ] ;
+			canBeEmpty = true ;
+			
+			continue ;
+		}
+		else if ( parts[ i ] === '#' || parts[ i ] === '[' )
+		{
+			isArray = true ;
+			canBeEmpty = false ;
+			
+			if ( key === undefined )
+			{
+				// The root element cannot be altered, we are in trouble if an array is expected but we have only a regular object.
+				if ( ! Array.isArray( pointer ) ) { return undefined ; }
+				continue ;
+			}
+			
+			if ( ! pointer[ key ] || ! Array.isArray( pointer[ key ] ) )
+			{
+				if ( ! isGenericSet ) { return undefined ; }
+				pointer[ key ] = [] ;
+			}
+			
+			pointer = pointer[ key ] ;
+			
+			continue ;
+		}
+		else if ( parts[ i ] === ']' )
+		{
+			// Closing bracket: do nothing
+			canBeEmpty = false ;
+			continue ;
+		}
+		
+		canBeEmpty = false ;
+		
+		if ( ! isArray ) { key = parts[ i ] ; continue ; }
+		
+		switch ( parts[ i ] )
+		{
+			case 'length' :
+				key = parts[ i ] ;
+				break ;
+			
+			// Pseudo-key
+			case 'first' :
+				key = 0 ;
+				break ;
+			case 'last' :
+				key = pointer.length - 1 ;
+				if ( key < 0 ) { key = 0 ; }
+				break ;
+			case 'next' :
+				if ( ! isGenericSet ) { return undefined ; }
+				key = pointer.length ;
+				break ;
+			case 'insert' :
+				if ( ! isGenericSet ) { return undefined ; }
+				pointer.unshift( undefined ) ;
+				key = 0 ;
+				break ;
+			
+			// default = number
+			default:
+				// Convert the string key to a numerical index
+				key = parseInt( parts[ i ] , 10 ) ;
+		}
+	}
+	
+	switch ( type )
+	{
+		case 'get' :
+			return pointer[ key ] ;
+		case 'delete' :
+			if ( isArray && typeof key === 'number' ) { pointer.splice( key , 1 ) ; }
+			else { delete pointer[ key ] ; }
+			return ;
+		case 'set' :
+			pointer[ key ] = value ;
+			return pointer[ key ] ;
+		case 'define' :
+			// define: set only if it doesn't exist
+			if ( ! ( key in pointer ) ) { pointer[ key ] = value ; }
+			return pointer[ key ] ;
+		case 'inc' :
+			if ( typeof pointer[ key ] === 'number' ) { pointer[ key ] ++ ; }
+			else if ( ! pointer[ key ] || typeof pointer[ key ] !== 'object' ) { pointer[ key ] = 1 ; }
+			return pointer[ key ] ;
+		case 'dec' :
+			if ( typeof pointer[ key ] === 'number' ) { pointer[ key ] -- ; }
+			else if ( ! pointer[ key ] || typeof pointer[ key ] !== 'object' ) { pointer[ key ] = -1 ; }
+			return pointer[ key ] ;
+		case 'append' :
+			if ( ! pointer[ key ] ) { pointer[ key ] = [ value ] ; }
+			else if ( Array.isArray( pointer[ key ] ) ) { pointer[ key ].push( value ) ; }
+			//else ? do nothing???
+			return pointer[ key ] ;
+		case 'prepend' :
+			if ( ! pointer[ key ] ) { pointer[ key ] = [ value ] ; }
+			else if ( Array.isArray( pointer[ key ] ) ) { pointer[ key ].unshift( value ) ; }
+			//else ? do nothing???
+			return pointer[ key ] ;
+		case 'concat' :
+			if ( ! pointer[ key ] ) { pointer[ key ] = value ; }
+			else if ( Array.isArray( pointer[ key ] ) && Array.isArray( value ) )
+			{
+				pointer[ key ] = pointer[ key ].concat( value ) ;
+			}
+			//else ? do nothing???
+			return pointer[ key ] ;
+		case 'insert' :
+			if ( ! pointer[ key ] ) { pointer[ key ] = value ; }
+			else if ( Array.isArray( pointer[ key ] ) && Array.isArray( value ) )
+			{
+				pointer[ key ] = value.concat( pointer[ key ] ) ;
+			}
+			//else ? do nothing???
+			return pointer[ key ] ;
+		case 'autoPush' :
+			if ( pointer[ key ] === undefined ) { pointer[ key ] = value ; }
+			else if ( Array.isArray( pointer[ key ] ) ) { pointer[ key ].push( value ) ; }
+			else { pointer[ key ] = [ pointer[ key ] , value ] ; }
+			return pointer[ key ] ;
+	}
+} ;
+
+
+
+// get, set and delete use the same op() function
+treePath.get = treePath.op.bind( undefined , 'get' ) ;
+treePath.delete = treePath.op.bind( undefined , 'delete' ) ;
+treePath.set = treePath.op.bind( undefined , 'set' ) ;
+treePath.define = treePath.op.bind( undefined , 'define' ) ;
+treePath.inc = treePath.op.bind( undefined , 'inc' ) ;
+treePath.dec = treePath.op.bind( undefined , 'dec' ) ;
+treePath.append = treePath.op.bind( undefined , 'append' ) ;
+treePath.prepend = treePath.op.bind( undefined , 'prepend' ) ;
+treePath.concat = treePath.op.bind( undefined , 'concat' ) ;
+treePath.insert = treePath.op.bind( undefined , 'insert' ) ;
+treePath.autoPush = treePath.op.bind( undefined , 'autoPush' ) ;
+
+
+
+// Prototype used for object creation, so they can be created with Object.create( tree.path.prototype )
+treePath.prototype = {
+	get: function( path ) { return treePath.get( this , path ) ; } ,
+	delete: function( path ) { return treePath.delete( this , path ) ; } ,
+	set: function( path , value ) { return treePath.set( this , path , value ) ; } ,
+	define: function( path , value ) { return treePath.define( this , path , value ) ; } ,
+	inc: function( path , value ) { return treePath.inc( this , path , value ) ; } ,
+	dec: function( path , value ) { return treePath.dec( this , path , value ) ; } ,
+	append: function( path , value ) { return treePath.append( this , path , value ) ; } ,
+	prepend: function( path , value ) { return treePath.prepend( this , path , value ) ; } ,
+	concat: function( path , value ) { return treePath.concat( this , path , value ) ; } ,
+	insert: function( path , value ) { return treePath.insert( this , path , value ) ; } ,
+	autoPush: function( path , value ) { return treePath.autoPush( this , path , value ) ; }
+} ;
+
+
+
+// Upgrade an object so it can support get, set and delete at its root
+treePath.upgrade = function upgrade( object )
+{
+	Object.defineProperties( object , {
+		get: { value: treePath.op.bind( undefined , 'get' , object ) } ,
+		delete: { value: treePath.op.bind( undefined , 'delete' , object ) } ,
+		set: { value: treePath.op.bind( undefined , 'set' , object ) } ,
+		define: { value: treePath.op.bind( undefined , 'define' , object ) } ,
+		inc: { value: treePath.op.bind( undefined , 'inc' , object ) } ,
+		dec: { value: treePath.op.bind( undefined , 'dec' , object ) } ,
+		append: { value: treePath.op.bind( undefined , 'append' , object ) } ,
+		prepend: { value: treePath.op.bind( undefined , 'prepend' , object ) } ,
+		concat: { value: treePath.op.bind( undefined , 'concat' , object ) } ,
+		insert: { value: treePath.op.bind( undefined , 'insert' , object ) } ,
+		autoPush: { value: treePath.op.bind( undefined , 'autoPush' , object ) }
+	} ) ;
+} ;
+
+
+
+
+},{}],70:[function(require,module,exports){
+/*
+	Tree Kit
+	
+	Copyright (c) 2014 - 2016 Cédric Ronvel
+	
+	The MIT License (MIT)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+// Create and export
+var tree = {} ;
+module.exports = tree ;
+
+
+// Tier 0: extend() is even used to build the module
+tree.extend = require( './extend.js' ) ;
+
+
+
+tree.extend( null , tree ,
+	
+	// Tier 1
+	require( './lazy.js' ) ,
+	
+	// Tier 2
+	{ clone: require( './clone.js' ) } ,
+	
+	// Tier 3
+	{ path: require( './path.js' ) } ,
+	require( './diff.js' ) ,
+	require( './mask.js' )
+) ;
+
+
+
+},{"./clone.js":64,"./diff.js":65,"./extend.js":66,"./lazy.js":67,"./mask.js":68,"./path.js":69}],71:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -10838,7 +17067,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":49,"punycode":40,"querystring":43}],49:[function(require,module,exports){
+},{"./util":72,"punycode":48,"querystring":51}],72:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -10856,5 +17085,702 @@ module.exports = {
   }
 };
 
-},{}]},{},[4])(4)
+},{}],73:[function(require,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+},{}],74:[function(require,module,exports){
+module.exports = function isBuffer(arg) {
+  return arg && typeof arg === 'object'
+    && typeof arg.copy === 'function'
+    && typeof arg.fill === 'function'
+    && typeof arg.readUInt8 === 'function';
+}
+},{}],75:[function(require,module,exports){
+(function (process,global){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
+        try {
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
+        }
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
+
+
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+  // Allow for deprecating things in the process of starting up.
+  if (isUndefined(global.process)) {
+    return function() {
+      return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+  }
+
+  if (process.noDeprecation === true) {
+    return fn;
+  }
+
+  var warned = false;
+  function deprecated() {
+    if (!warned) {
+      if (process.throwDeprecation) {
+        throw new Error(msg);
+      } else if (process.traceDeprecation) {
+        console.trace(msg);
+      } else {
+        console.error(msg);
+      }
+      warned = true;
+    }
+    return fn.apply(this, arguments);
+  }
+
+  return deprecated;
+};
+
+
+var debugs = {};
+var debugEnviron;
+exports.debuglog = function(set) {
+  if (isUndefined(debugEnviron))
+    debugEnviron = process.env.NODE_DEBUG || '';
+  set = set.toUpperCase();
+  if (!debugs[set]) {
+    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+      var pid = process.pid;
+      debugs[set] = function() {
+        var msg = exports.format.apply(exports, arguments);
+        console.error('%s %d: %s', set, pid, msg);
+      };
+    } else {
+      debugs[set] = function() {};
+    }
+  }
+  return debugs[set];
+};
+
+
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  array.forEach(function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes, ctx);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = Object.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = Object.getOwnPropertyNames(value);
+  }
+
+  // IE doesn't make error fields non-enumerable
+  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+  if (isError(value)
+      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+    return formatError(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+  keys.forEach(function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (ctx.seen.indexOf(desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = output.reduce(function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return Array.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) &&
+      (objectToString(e) === '[object Error]' || e instanceof Error);
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+exports.isBuffer = require('./support/isBuffer');
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = require('inherits');
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = Object.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./support/isBuffer":74,"_process":47,"inherits":73}],76:[function(require,module,exports){
+module.exports={
+  "name": "tea-time",
+  "version": "0.8.0",
+  "engines": {
+    "node": ">=4.5.0"
+  },
+  "description": "Unit test: Tea Time!",
+  "main": "lib/TeaTime.js",
+  "bin": {
+    "tea-time": "./bin/tea-time"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "async-kit": "^2.2.3",
+    "async-try-catch": "^0.3.4",
+    "browserify": "^13.1.1",
+    "diff": "^3.1.0",
+    "dom-kit": "^0.1.2",
+    "falafel": "^2.0.0",
+    "glob": "^7.1.1",
+    "minimist": "^1.2.0",
+    "nextgen-events": "^0.9.8",
+    "string-kit": "^0.5.14",
+    "terminal-kit": "^0.25.6",
+    "tree-kit": "^0.5.26",
+    "uglify-js": "^2.7.5",
+    "ws": "^1.1.1"
+  },
+  "optionalDependencies": {
+    "freedesktop-notifications": "^1.2.2"
+  },
+  "devDependencies": {
+    "expect.js": "^0.3.1",
+    "jshint": "^2.9.4",
+    "mocha": "^3.2.0"
+  },
+  "scripts": {
+    "test": "mocha -R dot"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cronvel/tea-time.git"
+  },
+  "keywords": [
+    "unit",
+    "test",
+    "bdd",
+    "tdd",
+    "tap",
+    "mocha"
+  ],
+  "author": "Cédric Ronvel",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cronvel/tea-time/issues"
+  },
+  "config": {
+    "tea-time": {
+      "coverDir": [
+        "sample"
+      ]
+    }
+  },
+  "copyright": {
+    "title": "Tea Time!",
+    "years": [
+      2015,
+      2016
+    ],
+    "owner": "Cédric Ronvel"
+  }
+}
+},{}]},{},[6])(6)
 });
