@@ -117,6 +117,7 @@ Available options:
 * **verbose**: *like classic, but more verbose*
 * **report**: *use in conjunction with another reporter, only output the final status report*
 * **error-report**: *use in conjunction with another reporter, only output the final error report*
+* **coverage-summary**: *use in conjunction with another reporter, output partly uncovered files with percent*
 * **coverage-report**: *use in conjunction with another reporter, output all uncovered lines of code*
 * **notify**: *use in conjunction with another reporter, send a freedesktop.org notification with the final status report*
 

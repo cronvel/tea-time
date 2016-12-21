@@ -156,7 +156,6 @@ Cover.prototype.requireJs = function requireJs( localModule , filePath )
 	}
 	
 	//console.log( ">>>>>>>>>>>> Hi-jacked requireJs" , filePath ) ;
-	nodeRequireJs( localModule , filePath ) ;
 	
 	// This is the original require.extensions['.js'] function, as of node v6:
 	
@@ -311,8 +310,13 @@ Cover.prototype.injectStatementTrackingCode = function injectStatementTrackingCo
 	if ( nodeToTrack.indexOf( node.type ) !== -1 && node.parent.type !== 'LabeledStatement' )
 	{
 		if (
-			node.type === "VariableDeclaration" &&
-			( node.parent.type === "ForStatement" || node.parent.type === "ForInStatement" )
+			// Do not track variable declaration inside for and for in
+			( node.type === "VariableDeclaration" &&
+				( node.parent.type === "ForStatement" || node.parent.type === "ForInStatement" ) ) ||
+			
+			// Do not track "use strict"
+			( node.type === "ExpressionStatement" && node.parent.type === "Program" &&
+				node.expression.type === "Literal" && node.expression.value === "use strict" )
 		)
 		{
 			return false ;
@@ -17760,7 +17764,7 @@ function hasOwnProperty(obj, prop) {
 },{"./support/isBuffer":74,"_process":47,"inherits":73}],76:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "engines": {
     "node": ">=4.5.0"
   },
