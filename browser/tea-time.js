@@ -17763,7 +17763,7 @@ function hasOwnProperty(obj, prop) {
 },{"./support/isBuffer":74,"_process":47,"inherits":73}],76:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "engines": {
     "node": ">=4.5.0"
   },
