@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "engines": {
     "node": ">=4.5.0"
   },
