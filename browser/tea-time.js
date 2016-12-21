@@ -55,6 +55,7 @@ Cover.create = function createCover( options )
 		blackList: { value: null , writable: true , enumerable: true } ,
 		ecmaVersion: { value: 6 , writable: true , enumerable: true } ,
 		tracking: { value: {} , writable: true , enumerable: true } ,
+		trackingArea: { value: [] , writable: true , enumerable: true } ,
 		isTracking: { value: false , writable: true , enumerable: true } ,
 		package: { value: null , writable: true , enumerable: true } ,
 	} ) ;
@@ -186,12 +187,9 @@ Cover.prototype.instrument = function instrument( content , filePath ) //config,
 {
 	this.tracking[ filePath ] = {
 		area: [] ,
-		charCount: content.length ,
+		//charCount: content.length ,
 		sourceLines: content.split( '\n' ) ,
 	} ;
-	
-	// It seems that falafel/acorn counts lines starting at 1, not 0
-	this.tracking[ filePath ].sourceLines.unshift( '' ) ;
 	
 	// Remove shebang: not needed anymore since allowHashBang option exists in acorn
 	//content = content.replace( /^\#\!.*/ , '' ) ;
@@ -223,11 +221,11 @@ Cover.prototype.stop = function stop() { this.isTracking = false ; } ;
 
 
 
-Cover.prototype.track = function track( filePath , index )
+Cover.prototype.track = function track( index )
 {
 	if ( ! this.isTracking ) { return ; }
 	
-	this.tracking[ filePath ].area[ index ].count ++ ;
+	this.trackingArea[ index ].count ++ ;
 	//console.log( "Tracked:" , filePath , this.tracking[ filePath ].area[ index ].location.start.line ) ;
 } ;
 
@@ -235,12 +233,25 @@ Cover.prototype.track = function track( filePath , index )
 
 Cover.prototype.initTracking = function initTracking( filePath , node )
 {
-	var index = this.tracking[ filePath ].area.length ;
+	var index = this.trackingArea.length ;
 	
-	this.tracking[ filePath ].area[ index ] = {
+	// Falafel/Acorn start lines and columns at 1, not 0, and that's troublesome.
+	// Fix that now!
+	this.trackingArea[ index ] = {
 		count: 0 ,
-		location: node.loc
+		location: {
+			start: {
+				line: node.loc.start.line - 1 ,
+				column: node.loc.start.column - 1
+			} ,
+			end: {
+				line: node.loc.end.line - 1 ,
+				column: node.loc.end.column - 1
+			}
+		}
 	} ;
+	
+	this.tracking[ filePath ].area[ this.tracking[ filePath ].area.length ] = this.trackingArea[ index ] ;
 	
 	return index ;
 } ;
@@ -251,8 +262,8 @@ Cover.prototype.injectTrackingCode = function injectTrackingCode( filePath , nod
 {
 	//console.log( "node type ["+filePath+"]:" , node.type ) ;
 	
-	// From Blanket, but does it really happen?
-	if ( ! node.loc || ! node.loc.start ) { throw new Error( "Node without location" ) ; }
+	// This is from the Blanket source code, but does it really happen?
+	if ( ! node.loc || ! node.loc.start || ! node.loc.end ) { throw new Error( "Node without location" ) ; }
 	
 	this.injectBraces( node ) ;
 	
@@ -311,7 +322,7 @@ Cover.prototype.injectStatementTrackingCode = function injectStatementTrackingCo
 		
 		node.update( 
 			//'/*' + node.type + '*/' +
-			coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) ;\n" +
+			coverVarName + ".track( " + index + " ) ; " +
 			node.source()
 		) ;
 		
@@ -337,7 +348,7 @@ Cover.prototype.injectConditionTrackingCode = function injectConditionTrackingCo
 			
 			node.left.update( 
 				//'/*' + node.type + '/' + node.left.type + '*/' +
-				'(' + coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) || " +
+				'(' + coverVarName + ".track( " + index + " ) || " +
 				node.left.source() + ')'
 			) ;
 		}
@@ -348,7 +359,7 @@ Cover.prototype.injectConditionTrackingCode = function injectConditionTrackingCo
 			
 			node.right.update( 
 				//'/*' + node.type + '/' + node.right.type + '*/' +
-				'(' + coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) || " +
+				'(' + coverVarName + ".track( " + index + " ) || " +
 				node.right.source() + ')'
 			) ;
 		}
@@ -371,7 +382,7 @@ Cover.prototype.injectBlockTrackingCode = function injectBlockTrackingCode( file
 		
 		node.update( 
 			//'/*' + node.type + '*/' +
-			coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) ;" +
+			coverVarName + ".track( " + index + " ) ; " +
 			node.source()
 		) ;
 		
@@ -384,7 +395,7 @@ Cover.prototype.injectBlockTrackingCode = function injectBlockTrackingCode( file
 		node.update( 
 			'{' +
 			//'/*' + node.type + '*/' +
-			coverVarName + ".track( '" + escape.jsSingleQuote( filePath ) + "' , " + index + " ) ;" +
+			coverVarName + ".track( " + index + " ) ; " +
 			node.source().slice( 1 )
 		) ;
 		
@@ -398,7 +409,7 @@ Cover.prototype.injectBlockTrackingCode = function injectBlockTrackingCode( file
 
 Cover.prototype.getCoverage = function getCoverage()
 {
-	var filePath , i , iMax , j , oneData ;
+	var filePath , i , iMax , j , oneData , col , max ;
 	
 	var coverage = {
 		uncoveredFiles: {} ,
@@ -411,7 +422,7 @@ Cover.prototype.getCoverage = function getCoverage()
 	for ( filePath in this.tracking )
 	{
 		//charCount += this.tracking[ filePath ].charCount ;
-		coverage.lineCount += this.tracking[ filePath ].sourceLines.length - 1 ;	// substract empty line 0
+		coverage.lineCount += this.tracking[ filePath ].sourceLines.length ;
 		
 		for ( i = 0 , iMax = this.tracking[ filePath ].area.length ; i < iMax ; i ++ )
 		{
@@ -426,15 +437,56 @@ Cover.prototype.getCoverage = function getCoverage()
 				{
 					coverage.uncoveredFiles[ filePath ] = {
 						source: this.tracking[ filePath ].sourceLines ,
-						lines: ( new Array( this.tracking[ filePath ].sourceLines.length ) ).fill( false )
+						//lines: ( new Array( this.tracking[ filePath ].sourceLines.length ) ).fill( false )
+						lines: []
 					} ;
 				}
 				
-				// Flags the lines as uncovered
-				for ( j = oneData.location.start.line ; j <= oneData.location.end.line ; j ++ )
+				//*
+				if ( oneData.location.start.line === oneData.location.end.line )
 				{
+					// Flags the line as partially uncovered
+					col = coverage.uncoveredFiles[ filePath ].lines[ oneData.location.start.line ] = [] ;
+					
+					for ( j = oneData.location.start.column ; j <= oneData.location.end.column ; j ++ )
+					{
+						col[ j ] = true ;
+					}
+				}
+				else
+				{
+					// Flags the starting line as partially uncovered
+					col = coverage.uncoveredFiles[ filePath ].lines[ oneData.location.start.line ] = [] ;
+					max = this.tracking[ filePath ].sourceLines[ oneData.location.start.line ].length ;
+					
+					for ( j = oneData.location.start.column ; j < max ; j ++ )
+					{
+						col[ j ] = true ;
+					}
+					
+					// Flags the ending line as partially uncovered
+					col = coverage.uncoveredFiles[ filePath ].lines[ oneData.location.end.line ] = [] ;
+					
+					for ( j = 0 ; j <= oneData.location.end.column ; j ++ )
+					{
+						col[ j ] = true ;
+					}
+				}
+				
+				for ( j = oneData.location.start.line + 1 ; j < oneData.location.end.line ; j ++ )
+				{
+					// Flags the whole middle lines as uncovered
 					coverage.uncoveredFiles[ filePath ].lines[ j ] = true ;
 				}
+				//*/
+				
+				/*
+				for ( j = oneData.location.start.line ; j <= oneData.location.end.line ; j ++ )
+				{
+					// Flags the whole middle lines as uncovered
+					coverage.uncoveredFiles[ filePath ].lines[ j ] = true ;
+				}
+				//*/
 				
 				/*
 				console.log( "\n\n>>> Not covered:" , filePath , i , oneData , "\nline:" , oneData.location.start.line ,
@@ -454,8 +506,9 @@ Cover.prototype.getCoverage = function getCoverage()
 		}
 	}
 	
-	//coverage.rate = 1 - coverage.uncoveredAreaCount / coverage.areaCount ;
-	coverage.rate = 1 - coverage.uncoveredLineCount / coverage.lineCount ;
+	// The first is more accurate, the last count comments
+	coverage.rate = 1 - coverage.uncoveredAreaCount / coverage.areaCount ;
+	//coverage.rate = 1 - coverage.uncoveredLineCount / coverage.lineCount ;
 	
 	return coverage ;
 } ;
@@ -17710,7 +17763,7 @@ function hasOwnProperty(obj, prop) {
 },{"./support/isBuffer":74,"_process":47,"inherits":73}],76:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "engines": {
     "node": ">=4.5.0"
   },
