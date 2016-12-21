@@ -423,24 +423,26 @@ Cover.prototype.getCoverage = function getCoverage()
 	{
 		//charCount += this.tracking[ filePath ].charCount ;
 		coverage.lineCount += this.tracking[ filePath ].sourceLines.length ;
+		coverage.areaCount += this.tracking[ filePath ].area.length ;
 		
 		for ( i = 0 , iMax = this.tracking[ filePath ].area.length ; i < iMax ; i ++ )
 		{
 			oneData = this.tracking[ filePath ].area[ i ] ;
-			coverage.areaCount ++ ;
 			
 			if ( ! oneData.count )
 			{
-				coverage.uncoveredAreaCount ++ ;
-				
 				if ( ! coverage.uncoveredFiles[ filePath ] )
 				{
 					coverage.uncoveredFiles[ filePath ] = {
 						source: this.tracking[ filePath ].sourceLines ,
-						//lines: ( new Array( this.tracking[ filePath ].sourceLines.length ) ).fill( false )
-						lines: []
+						lines: [] ,
+						areaCount: this.tracking[ filePath ].area.length ,
+						uncoveredAreaCount: 0
 					} ;
 				}
+				
+				coverage.uncoveredAreaCount ++ ;
+				coverage.uncoveredFiles[ filePath ].uncoveredAreaCount ++ ;
 				
 				//*
 				if ( oneData.location.start.line === oneData.location.end.line )
@@ -481,14 +483,6 @@ Cover.prototype.getCoverage = function getCoverage()
 				//*/
 				
 				/*
-				for ( j = oneData.location.start.line ; j <= oneData.location.end.line ; j ++ )
-				{
-					// Flags the whole middle lines as uncovered
-					coverage.uncoveredFiles[ filePath ].lines[ j ] = true ;
-				}
-				//*/
-				
-				/*
 				console.log( "\n\n>>> Not covered:" , filePath , i , oneData , "\nline:" , oneData.location.start.line ,
 					'\n' + escape.control( this.tracking[ filePath ].sourceLines[ oneData.location.start.line - 1 ] ) ,
 					'\n' + escape.control( this.tracking[ filePath ].sourceLines[ oneData.location.start.line ] ) ,
@@ -500,13 +494,16 @@ Cover.prototype.getCoverage = function getCoverage()
 		
 		if ( coverage.uncoveredFiles[ filePath ] )
 		{
+			coverage.uncoveredFiles[ filePath ].rate =
+				1 - coverage.uncoveredFiles[ filePath ].uncoveredAreaCount / coverage.uncoveredFiles[ filePath ].areaCount ;
+			
 			coverage.uncoveredLineCount += coverage.uncoveredFiles[ filePath ].lines.reduce(
 				function( accu , element ) { return accu + ( element ? 1 : 0 ) ; } , 0
 			) ;
 		}
 	}
 	
-	// The first is more accurate, the last count comments
+	// The first is more accurate, the last count comments, blank lines, etc...
 	coverage.rate = 1 - coverage.uncoveredAreaCount / coverage.areaCount ;
 	//coverage.rate = 1 - coverage.uncoveredLineCount / coverage.lineCount ;
 	
@@ -17763,7 +17760,7 @@ function hasOwnProperty(obj, prop) {
 },{"./support/isBuffer":74,"_process":47,"inherits":73}],76:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "engines": {
     "node": ">=4.5.0"
   },
