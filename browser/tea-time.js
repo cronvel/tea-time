@@ -603,6 +603,20 @@ TeaTime.create = function createTeaTime( options )
 
 
 
+var reporterAliases = {
+	"oneline": "one-line" ,
+	"one": "one-line" ,
+	"error": "error-report" ,
+	"err": "error-report" ,
+	"coverage": "coverage-report" ,
+	"cov": "coverage-report" ,
+	"cov-sum": "coverage-summary" ,
+	"pan": "panel" ,
+	"bar": "progress"
+} ;
+
+
+
 // CLI and browser share the same args
 TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , args )
 {
@@ -648,6 +662,9 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 		if ( ! Array.isArray( args.R ) ) { args.R = [ args.R ] ; }
 		options.reporters = args.R ;
 	}
+	
+	// Manage reporter aliases
+	options.reporters = options.reporters.map( function( r ) { return reporterAliases[ r ] || r ; } ) ;
 	
 	
 	if ( args.clientReporter )
@@ -17817,7 +17834,7 @@ function hasOwnProperty(obj, prop) {
 },{"./support/isBuffer":74,"_process":47,"inherits":73}],76:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "0.8.5",
+  "version": "0.8.7",
   "engines": {
     "node": ">=4.5.0"
   },
