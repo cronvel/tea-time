@@ -3,7 +3,7 @@
 /*
 	Tea Time!
 	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
+	Copyright (c) 2015 - 2017 Cédric Ronvel
 	
 	The MIT License (MIT)
 	
@@ -551,7 +551,7 @@ Cover.prototype.getCoverage = function getCoverage()
 /*
 	Tea Time!
 	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
+	Copyright (c) 2015 - 2017 Cédric Ronvel
 	
 	The MIT License (MIT)
 	
@@ -1429,7 +1429,7 @@ TeaTime.prototype.patchError = function patchError( error )
 /*
 	Tea Time!
 	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
+	Copyright (c) 2015 - 2017 Cédric Ronvel
 	
 	The MIT License (MIT)
 	
@@ -1619,8 +1619,8 @@ Reporter.report = function report( ok , fail , optionalFail , skip , coverageRat
 		'<hr />' +
 		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + ok + ' passing ' +
 		( time < 2000 ?
-			'<span style="' + timeStyle + '">(' + Math.round( time ) + 'ms)</span>' :
-			'<span style="' + timeStyle + '">(' + Math.round( time / 1000 ) + 's)</span>'
+			'<span style="' + timeStyle + '">(' + Math.floor( time ) + 'ms)</span>' :
+			'<span style="' + timeStyle + '">(' + Math.floor( time / 1000 ) + '.' + Math.floor( time % 1000 ) + 's)</span>'
 		) +
 		'</p>' +
 		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + failingStyle + indentStyle( 1 ) + '">' + fail + ' failing</p>' +
@@ -1709,7 +1709,7 @@ Reporter.prototype.reportOneError = function reportOneError( error )
 /*
 	Tea Time!
 	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
+	Copyright (c) 2015 - 2017 Cédric Ronvel
 	
 	The MIT License (MIT)
 	
@@ -1800,7 +1800,7 @@ Reporter.report = function report( ok , fail , optionalFail , skip , coverageRat
 /*
 	Tea Time!
 	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
+	Copyright (c) 2015 - 2017 Cédric Ronvel
 	
 	The MIT License (MIT)
 	
@@ -1921,7 +1921,7 @@ Reporter.exit = function exit( callback )
 /*
 	Tea Time!
 	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
+	Copyright (c) 2015 - 2017 Cédric Ronvel
 	
 	The MIT License (MIT)
 	
@@ -2067,7 +2067,7 @@ dom.ready( function() {
 /*
 	Tea Time!
 	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
+	Copyright (c) 2015 - 2017 Cédric Ronvel
 	
 	The MIT License (MIT)
 	
@@ -2159,7 +2159,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
 /*
 	Tea Time!
 	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
+	Copyright (c) 2015 - 2017 Cédric Ronvel
 	
 	The MIT License (MIT)
 	
@@ -25099,9 +25099,9 @@ module.exports = {
 },{}],64:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "0.9.0",
+  "version": "1.0.1",
   "engines": {
-    "node": ">=4.5.0"
+    "node": ">=6.0.0"
   },
   "description": "Unit test: Tea Time!",
   "main": "lib/TeaTime.js",
@@ -25166,11 +25166,10 @@ module.exports={
     "title": "Tea Time!",
     "years": [
       2015,
-      2016
+      2017
     ],
     "owner": "Cédric Ronvel"
   }
 }
-
 },{}]},{},[6])(6)
 });
