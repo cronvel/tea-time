@@ -1172,7 +1172,9 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		testFn.call( context , triggerCallback ) ;
 	} )
 	.catch( function( error ) {
-		triggerCallback( error ) ;
+		//triggerCallback( error ) ;
+		if ( ! callbackTriggered ) { triggerCallback( error ) ; }
+		else { throw error ; }  // Something is messing with async-try-catch, don't swallow the error!
 	} ) ;
 	
 	this.onceUncaughtException( uncaughtExceptionHandler ) ;
@@ -1246,7 +1248,8 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 		hookFn( triggerCallback ) ;
 	} )
 	.catch( function( error ) {
-		triggerCallback( error ) ;
+		if ( ! callbackTriggered ) { triggerCallback( error ) ; }
+		else { throw error ; }  // Something is messing with async-try-catch, don't swallow the error!
 	} ) ;
 	
 	this.onceUncaughtException( uncaughtExceptionHandler ) ;
@@ -25101,7 +25104,7 @@ module.exports = {
 },{}],64:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "engines": {
     "node": ">=6.0.0"
   },
