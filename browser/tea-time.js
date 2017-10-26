@@ -729,6 +729,8 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 TeaTime.prototype.init = function init( callback )
 {
 	// Register to global
+	global.asyncTry = asyncTry ;
+	
 	global.suite =
 		global.describe =
 		global.context = TeaTime.registerSuite.bind( this ) ;
@@ -25099,7 +25101,7 @@ module.exports = {
 },{}],64:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "engines": {
     "node": ">=6.0.0"
   },
