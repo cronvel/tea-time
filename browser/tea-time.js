@@ -617,6 +617,7 @@ TeaTime.create = function createTeaTime( options )
 		optionalFail: { value: 0 , writable: true , enumerable: true } ,
 		skip: { value: 0 , writable: true , enumerable: true } ,
 		errors: { value: [] , enumerable: true } ,
+		orphanError: { value: null , enumerable: true , writable: true } ,
 		
 		microTimeout: { value: options.microTimeout , enumerable: true } ,
 		onceUncaughtException: { value: options.onceUncaughtException , enumerable: true } ,
@@ -1046,8 +1047,9 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 			return ;
 		}
 		
+		self.orphanError = null ;
 		self.emit( 'enterTest' , testFn.testName , depth ) ;
-
+		
 		testWrapper( testFn , function( testError , time , slow ) {
 			
 			self.emit( 'exitTest' , testFn.testName , depth , time , slow , testError ) ;
@@ -1127,6 +1129,12 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 			if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
 			
 			timer = setTimeout( function() {
+				if ( self.orphanError )
+				{
+					triggerCallback( self.orphanError ) ;
+					return ;
+				}
+				
 				var timeoutError = new Error( 'Test timeout (local)' ) ;
 				timeoutError.testTimeout = true ;
 				triggerCallback( timeoutError ) ;
@@ -1159,6 +1167,12 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 	
 	// Should come before running the test, or it would override the user-set timeout
 	timer = setTimeout( function() {
+		if ( self.orphanError )
+		{
+			triggerCallback( self.orphanError ) ;
+			return ;
+		}
+		
 		var timeoutError = new Error( 'Test timeout' ) ;
 		timeoutError.testTimeout = true ;
 		triggerCallback( timeoutError ) ;
@@ -1172,9 +1186,8 @@ TeaTime.asyncTest = function asyncTest( testFn , callback )
 		testFn.call( context , triggerCallback ) ;
 	} )
 	.catch( function( error ) {
-		//triggerCallback( error ) ;
-		if ( ! callbackTriggered ) { triggerCallback( error ) ; }
-		else { throw error ; }  // Something is messing with async-try-catch, don't swallow the error!
+		if ( callbackTriggered ) { self.orphanError = error ; }
+		triggerCallback( error ) ;
 	} ) ;
 	
 	this.onceUncaughtException( uncaughtExceptionHandler ) ;
@@ -1248,8 +1261,8 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 		hookFn( triggerCallback ) ;
 	} )
 	.catch( function( error ) {
-		if ( ! callbackTriggered ) { triggerCallback( error ) ; }
-		else { throw error ; }  // Something is messing with async-try-catch, don't swallow the error!
+		if ( callbackTriggered ) { self.orphanError = error ; }
+		triggerCallback( error ) ;
 	} ) ;
 	
 	this.onceUncaughtException( uncaughtExceptionHandler ) ;
@@ -25104,7 +25117,7 @@ module.exports = {
 },{}],64:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "engines": {
     "node": ">=6.0.0"
   },
