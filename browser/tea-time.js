@@ -578,10 +578,14 @@ Cover.prototype.getCoverage = function getCoverage()
 
 
 
-// Load modules
-var async = require( 'async-kit' ) ;
+// It should load before anything else,
+// so nothing can get a timer function without it being patched
 var NGEvents = require( 'nextgen-events' ) ;
-var asyncTry = require( 'async-try-catch' ).try ;
+var asyncTryCatch = require( 'async-try-catch' ) ;
+asyncTryCatch.substitute() ;
+var asyncTry = asyncTryCatch.try ;
+
+var async = require( 'async-kit' ) ;
 var Cover = require( './Cover.js' ) ;
 
 
@@ -25117,7 +25121,7 @@ module.exports = {
 },{}],64:[function(require,module,exports){
 module.exports={
   "name": "tea-time",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "engines": {
     "node": ">=6.0.0"
   },
