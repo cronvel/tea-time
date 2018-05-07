@@ -23,6 +23,11 @@
 	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 	SOFTWARE.
 */
+
+var SeventhPromise = require( 'seventh' ) ;
+
+
+
 describe( "Sync tests" , function() {
 	
 	it( "Sync Exception" , function() {
@@ -64,6 +69,65 @@ describe( "Async tests" , function() {
 		setTimeout( function() {
 			done( new Error( 'Asyncly Failed!' ) ) ;
 		} , 10 ) ;
+	} ) ;
+} ) ;
+
+
+
+describe( "Promise-returning function and async function tests" , function() {
+	
+	it( "Promise sync resolve" , function() {
+		return Promise.resolve() ;
+	} ) ;
+	
+	it( "Promise sync reject" , function() {
+		return Promise.reject( new Error( "Failed!" ) ) ;
+	} ) ;
+	
+	it( "Promise async resolve" , function() {
+		return SeventhPromise.resolveTimeout( 20 ) ;
+	} ) ;
+	
+	it( "Promise async reject" , function() {
+		return SeventhPromise.reject( new Error( "Failed!" ) ) ;
+	} ) ;
+	
+	it( "Async function sync resolve" , async function() {
+		return ;
+	} ) ;
+	
+	it( "Async function sync reject" , async function() {
+		throw new Error( "Failed!" ) ;
+	} ) ;
+	
+	it( "Async function async resolve" , async function() {
+		await SeventhPromise.resolveTimeout( 20 ) ;
+	} ) ;
+	
+	it( "Async function async reject" , async function() {
+		await SeventhPromise.resolveTimeout( 20 ) ;
+		throw new Error( "Failed!" ) ;
+	} ) ;
+} ) ;
+
+
+
+describe( "Mixing Promise/thenable with the callback interface should fail" , function() {
+	
+	it( "Promise sync resolve" , function( done ) {
+		return Promise.resolve() ;
+	} ) ;
+	
+	it( "Promise async resolve" , function( done ) {
+		return SeventhPromise.resolveTimeout( 20 ) ;
+	} ) ;
+	
+	it( "Async function sync resolve" , async function( done ) {
+		return ;
+	} ) ;
+	
+	it( "Async function async resolve" , async function( done ) {
+		await SeventhPromise.resolveTimeout( 20 ) ;
 	} ) ;
 } ) ;
 

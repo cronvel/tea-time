@@ -31,10 +31,10 @@
     "freedesktop-notifications": "^1.2.2"
   },
   "devDependencies": {
-    "uglify-js-es6": "^2.8.9",
     "expect.js": "^0.3.1",
-    "jshint": "^2.9.4",
-    "mocha": "^3.2.0"
+    "mocha": "^3.2.0",
+    "seventh": "^0.7.3",
+    "uglify-js-es6": "^2.8.9"
   },
   "scripts": {
     "test": "mocha -R dot"
