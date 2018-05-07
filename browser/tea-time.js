@@ -2,21 +2,21 @@
 (function (process,global){
 /*
 	Tea Time!
-	
-	Copyright (c) 2015 - 2017 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -33,26 +33,14 @@
 // Browser is not supported ATM, because of the require.extensions['.js'] trick
 if ( process.browser ) { return ; }
 
-// Load modules
 var falafel = require( 'falafel' ) ;
-var packageJson = require( '../package.json' ) ;
-var path = require( 'path' ) ;
 var fs = require( 'fs' ) ;
-var escape = require( 'string-kit/lib/escape.js' ) ;
+//var escape = require( 'string-kit/lib/escape.js' ) ;
 
 
 
-function Cover() { throw new Error( 'Use TeaTime.create() instead' ) ; }
-//Cover.prototype = Object.create( NGEvents.prototype ) ;
-//Cover.prototype.constructor = Cover ;
-
-module.exports = Cover ;
-
-
-
-Cover.create = function createCover( options )
-{
-	var self = Object.create( Cover.prototype , {
+function Cover( options ) {
+	Object.defineProperties( this.prototype , {
 		whiteList: { value: null , writable: true , enumerable: true } ,
 		blackList: { value: null , writable: true , enumerable: true } ,
 		ecmaVersion: { value: 6 , writable: true , enumerable: true } ,
@@ -62,37 +50,41 @@ Cover.create = function createCover( options )
 		isTracking: { value: false , writable: true , enumerable: true } ,
 		package: { value: null , writable: true , enumerable: true } ,
 		warningComments: { value: {} , writable: true , enumerable: true } ,
-		warningCommentCount: { value: 0 , writable: true , enumerable: true } ,
+		warningCommentCount: { value: 0 , writable: true , enumerable: true }
 	} ) ;
-	
+
 	// Tmp:
 	var rootDir = process.cwd() ;
-	
+
 	// Require the package.json (mandatory)
 	try {
-		self.package = require( rootDir + '/package.json' ) ;
+		this.package = require( rootDir + '/package.json' ) ;
 	}
 	catch ( error ) {
 		if ( error.code === 'MODULE_NOT_FOUND' ) { throw new Error( "[Cover] No package.json found" ) ; }
 		else { throw new Error( "[Cover] Error in the package.json: " + error ) ; }
 	}
-	
-	if ( self.package.config && self.package.config['tea-time'] && self.package.config['tea-time'].coverDir )
-	{
-		self.whiteList = self.package.config['tea-time'].coverDir.map( function( dirPath ) {
+
+	if ( this.package.config && this.package.config['tea-time'] && this.package.config['tea-time'].coverDir ) {
+		this.whiteList = this.package.config['tea-time'].coverDir.map( ( dirPath ) => {
 			return rootDir + '/' + dirPath + '/' ;
 		} ) ;
 	}
-	
-	require.extensions['.js'] = self.requireJs.bind( self ) ;
-	
-	global[ coverVarName ] = self ;
-	
-	return self ;
-} ;
+
+	require.extensions['.js'] = this.requireJs.bind( this ) ;
+
+	global[ coverVarName ] = this ;
+}
+
+//Cover.prototype = Object.create( NGEvents.prototype ) ;
+//Cover.prototype.constructor = Cover ;
+
+module.exports = Cover ;
 
 
 
+// Backward compatibility
+Cover.create = ( ... args ) => new Cover( ... args ) ;
 var nodeRequireJs = require.extensions['.js'] ;
 
 
@@ -133,46 +125,40 @@ var coverVarName = '__TEA_TIME_COVER__' ;
 
 
 // This is the replacement for JS extension require
-Cover.prototype.requireJs = function requireJs( localModule , filePath )
-{
+Cover.prototype.requireJs = function requireJs( localModule , filePath ) {
 	var isTrackingBkup = this.isTracking ;
-	
-	if ( ( ! this.whiteList || ! this.whiteList.length ) && ( ! this.blackList || ! this.blackList.length ) )
-	{
+
+	if ( ( ! this.whiteList || ! this.whiteList.length ) && ( ! this.blackList || ! this.blackList.length ) ) {
 		return nodeRequireJs( localModule , filePath ) ;
 	}
-	
-	if ( this.whiteList && this.whiteList.length )
-	{
-		if ( ! this.whiteList.some( function( dirPath ) { return filePath.indexOf( dirPath ) === 0 ; } ) )
-		{
+
+	if ( this.whiteList && this.whiteList.length ) {
+		if ( ! this.whiteList.some( ( dirPath ) => { return filePath.indexOf( dirPath ) === 0 ; } ) ) {
 			//console.log( ">>>>>>>>>>>> Normal requireJs (not white-listed)" , filePath ) ;
 			return nodeRequireJs( localModule , filePath ) ;
 		}
 	}
-	
-	if ( this.blackList && this.blackList.length )
-	{
-		if ( this.blackList.some( function( dirPath ) { return filePath.indexOf( dirPath ) === 0 ; } ) )
-		{
+
+	if ( this.blackList && this.blackList.length ) {
+		if ( this.blackList.some( ( dirPath ) => { return filePath.indexOf( dirPath ) === 0 ; } ) ) {
 			//console.log( ">>>>>>>>>>>> Normal requireJs (black-listed)" , filePath ) ;
 			return nodeRequireJs( localModule , filePath ) ;
 		}
 	}
-	
+
 	//console.log( ">>>>>>>>>>>> Hi-jacked requireJs" , filePath ) ;
-	
+
 	// This is the original require.extensions['.js'] function, as of node v6:
 	/*
 	var content = fs.readFileSync( filePath , 'utf8' ) ;
 	module._compile( internalModule.stripBOM( content ) , filePath ) ;
 	*/
-	
+
 	var content = fs.readFileSync( filePath , 'utf8' ) ;
 	var instrumentedContent = this.instrument( content , filePath ) ;
-	
+
 	//console.log( "Instrumented content:\n" + instrumentedContent + "\n\n\n" ) ;
-	
+
 	// Force the tracking activation during module loading:
 	// tests cannot re-trigger global/top-level module exec,
 	// if not, it would always report low coverage
@@ -186,40 +172,39 @@ Cover.prototype.requireJs = function requireJs( localModule , filePath )
 // instrument the file synchronously
 // `next` is optional callback which will be called
 // with instrumented code when present
-Cover.prototype.instrument = function instrument( content , filePath ) //config, next)
-{
+Cover.prototype.instrument = function instrument( content , filePath /*, config , next */ ) {
 	this.tracking[ filePath ] = {
 		area: [] ,
 		//charCount: content.length ,
-		sourceLines: content.split( '\n' ) ,
+		sourceLines: content.split( '\n' )
 	} ;
-	
+
 	this.currentFile = filePath ;
-	
+
 	// Remove shebang: not needed anymore since allowHashBang option exists in acorn
 	//content = content.replace( /^\#\!.*/ , '' ) ;
-	
+
 	var instrumented = falafel( content , {
-			locations: true ,
-			comment: true ,
-			ecmaVersion: this.ecmaVersion ,
-			
-			allowHashBang: true ,
-			
-			//sourceType: 'module' ,
-			allowReturnOutsideFunction: true ,
-			
-			// important or conditional tracking may fail with code like:
-			// if ( var1 && ( var2 = expression ) )
-			preserveParens: true ,
-			
-			onComment: this.onComment.bind( this ) ,
-			
-		} , this.injectTrackingCode.bind( this , filePath )
+		locations: true ,
+		comment: true ,
+		ecmaVersion: this.ecmaVersion ,
+
+		allowHashBang: true ,
+
+		//sourceType: 'module' ,
+		allowReturnOutsideFunction: true ,
+
+		// important or conditional tracking may fail with code like:
+		// if ( var1 && ( var2 = expression ) )
+		preserveParens: true ,
+
+		onComment: this.onComment.bind( this )
+
+	} , this.injectTrackingCode.bind( this , filePath )
 	) ;
-	
+
 	this.currentFile = null ;
-	
+
 	return instrumented ;
 } ;
 
@@ -231,36 +216,32 @@ Cover.prototype.stop = function stop() { this.isTracking = false ; } ;
 
 
 // Get warning comment, starting with
-Cover.prototype.onComment = function onComment( blockComment , content , startOffset , endOffset , start , end )
-{
+Cover.prototype.onComment = function onComment( blockComment , content , startOffset , endOffset , start , end ) {
 	var match = content.match( /^(\s*\/!\\\s*)+(.+?)(\s*\/!\\\s*)*$/m ) ;
 	if ( ! match ) { return ; }
-	
-	if ( ! this.warningComments[ this.currentFile ] )
-	{
+
+	if ( ! this.warningComments[ this.currentFile ] ) {
 		this.warningComments[ this.currentFile ] = [] ;
 	}
-	
+
 	this.warningComments[ this.currentFile ].push( { comment: match[ 2 ] , line: start.line } ) ;
 	this.warningCommentCount ++ ;
 } ;
 
 
 
-Cover.prototype.track = function track( index )
-{
+Cover.prototype.track = function track( index ) {
 	if ( ! this.isTracking ) { return ; }
-	
+
 	this.trackingArea[ index ].count ++ ;
 	//console.log( "Tracked:" , filePath , this.tracking[ filePath ].area[ index ].location.start.line ) ;
 } ;
 
 
 
-Cover.prototype.initTracking = function initTracking( filePath , node )
-{
+Cover.prototype.initTracking = function initTracking( filePath , node ) {
 	var index = this.trackingArea.length ;
-	
+
 	// Falafel/Acorn start lines and columns at 1, not 0, and that's troublesome.
 	// Fix that now!
 	this.trackingArea[ index ] = {
@@ -276,23 +257,22 @@ Cover.prototype.initTracking = function initTracking( filePath , node )
 			}
 		}
 	} ;
-	
+
 	this.tracking[ filePath ].area[ this.tracking[ filePath ].area.length ] = this.trackingArea[ index ] ;
-	
+
 	return index ;
 } ;
 
 
 
-Cover.prototype.injectTrackingCode = function injectTrackingCode( filePath , node )
-{
+Cover.prototype.injectTrackingCode = function injectTrackingCode( filePath , node ) {
 	//console.log( "node type ["+filePath+"]:" , node.type ) ;
-	
+
 	// This is from the Blanket source code, but does it really happen?
 	if ( ! node.loc || ! node.loc.start || ! node.loc.end ) { throw new Error( "Node without location" ) ; }
-	
+
 	this.injectBraces( node ) ;
-	
+
 	//this.injectBlockTrackingCode( filePath , node ) ;
 	this.injectStatementTrackingCode( filePath , node ) ;
 	this.injectConditionTrackingCode( filePath , node ) ;
@@ -300,148 +280,132 @@ Cover.prototype.injectTrackingCode = function injectTrackingCode( filePath , nod
 
 
 
-Cover.prototype.injectBraces = function injectBraces( node )
-{
+Cover.prototype.injectBraces = function injectBraces( node ) {
 	var index ;
-	
-	if ( nodeNeedingBraces.indexOf( node.type ) !== -1 )
-	{
-		if ( node.consequent && node.consequent.type !== "BlockStatement" )
-		{
+
+	if ( nodeNeedingBraces.indexOf( node.type ) !== -1 ) {
+		if ( node.consequent && node.consequent.type !== "BlockStatement" ) {
 			// The 'then' statement
 			node.consequent.update( "{\n" + node.consequent.source() + "}\n" ) ;
 		}
-		else if ( node.body && node.body.type !== "BlockStatement" )
-		{
+		else if ( node.body && node.body.type !== "BlockStatement" ) {
 			// Dunno what node.body is supposed to be...
 			node.body.update( "{\n" + node.body.source() + "}\n" ) ;
 		}
-		
+
 		//if ( node.alternate && node.alternate.type !== "BlockStatement" && node.alternate.type !== "IfStatement" )
-		if ( node.alternate && node.alternate.type !== "BlockStatement" )
-		{
+		if ( node.alternate && node.alternate.type !== "BlockStatement" ) {
 			// The 'else/else if' node
 			node.alternate.update( "{\n" + node.alternate.source() + "}\n" ) ;
 		}
 	}
-	
+
 	return false ;
 } ;
 
 
 
-Cover.prototype.injectStatementTrackingCode = function injectStatementTrackingCode( filePath , node )
-{
+Cover.prototype.injectStatementTrackingCode = function injectStatementTrackingCode( filePath , node ) {
 	var index ;
-	
-	if ( nodeToTrack.indexOf( node.type ) !== -1 && node.parent.type !== 'LabeledStatement' )
-	{
+
+	if ( nodeToTrack.indexOf( node.type ) !== -1 && node.parent.type !== 'LabeledStatement' ) {
 		if (
 			// Do not track variable declaration inside for and for in
 			( node.type === "VariableDeclaration" &&
 				( node.parent.type === "ForStatement" || node.parent.type === "ForInStatement" ) ) ||
-			
+
 			// Do not track "use strict"
 			( node.type === "ExpressionStatement" && node.parent.type === "Program" &&
 				node.expression.type === "Literal" && node.expression.value === "use strict" )
-		)
-		{
+		) {
 			return false ;
 		}
-		
+
 		index = this.initTracking( filePath , node ) ;
-		
-		node.update( 
+
+		node.update(
 			//'/*' + node.type + '*/' +
 			coverVarName + ".track( " + index + " ) ; " +
 			node.source()
 		) ;
-		
+
 		return true ;
 	}
-	
+
 	return false ;
 } ;
 
 
 
-Cover.prototype.injectConditionTrackingCode = function injectConditionTrackingCode( filePath , node )
-{
+Cover.prototype.injectConditionTrackingCode = function injectConditionTrackingCode( filePath , node ) {
 	var index ;
-	
-	if ( node.type === 'LogicalExpression' && ( node.operator === '&&' || node.operator === '||' ) )
-	{
+
+	if ( node.type === 'LogicalExpression' && ( node.operator === '&&' || node.operator === '||' ) ) {
 		//console.log( "#######" , node ) ;
-		
-		if ( node.left.type !== 'LogicalExpression' )
-		{
+
+		if ( node.left.type !== 'LogicalExpression' ) {
 			index = this.initTracking( filePath , node.left ) ;
-			
-			node.left.update( 
+
+			node.left.update(
 				//'/*' + node.type + '/' + node.left.type + '*/' +
 				'(' + coverVarName + ".track( " + index + " ) || " +
 				node.left.source() + ')'
 			) ;
 		}
-		
-		if ( node.right.type !== 'LogicalExpression' )
-		{
+
+		if ( node.right.type !== 'LogicalExpression' ) {
 			index = this.initTracking( filePath , node.right ) ;
-			
-			node.right.update( 
+
+			node.right.update(
 				//'/*' + node.type + '/' + node.right.type + '*/' +
 				'(' + coverVarName + ".track( " + index + " ) || " +
 				node.right.source() + ')'
 			) ;
 		}
-		
+
 		return true ;
 	}
-	
+
 	return false ;
 } ;
 
 
 
-Cover.prototype.injectBlockTrackingCode = function injectBlockTrackingCode( filePath , node )
-{
+Cover.prototype.injectBlockTrackingCode = function injectBlockTrackingCode( filePath , node ) {
 	var index ;
-	
-	if ( node.type === "Program" )
-	{
+
+	if ( node.type === "Program" ) {
 		index = this.initTracking( filePath , node ) ;
-		
-		node.update( 
+
+		node.update(
 			//'/*' + node.type + '*/' +
 			coverVarName + ".track( " + index + " ) ; " +
 			node.source()
 		) ;
-		
+
 		return true ;
 	}
-	else if ( node.type === "BlockStatement" )
-	{
+	else if ( node.type === "BlockStatement" ) {
 		index = this.initTracking( filePath , node ) ;
-		
-		node.update( 
+
+		node.update(
 			'{' +
 			//'/*' + node.type + '*/' +
 			coverVarName + ".track( " + index + " ) ; " +
 			node.source().slice( 1 )
 		) ;
-		
+
 		return true ;
 	}
-	
+
 	return false ;
 } ;
 
 
 
-Cover.prototype.getCoverage = function getCoverage()
-{
+Cover.prototype.getCoverage = function getCoverage() {
 	var filePath , i , iMax , j , oneData , col , max ;
-	
+
 	var coverage = {
 		uncoveredFiles: {} ,
 		lineCount: 0 ,
@@ -451,21 +415,17 @@ Cover.prototype.getCoverage = function getCoverage()
 		warningCommentCount: this.warningCommentCount ,
 		warningComments: this.warningComments
 	} ;
-	
-	for ( filePath in this.tracking )
-	{
+
+	for ( filePath in this.tracking ) {
 		//charCount += this.tracking[ filePath ].charCount ;
 		coverage.lineCount += this.tracking[ filePath ].sourceLines.length ;
 		coverage.areaCount += this.tracking[ filePath ].area.length ;
-		
-		for ( i = 0 , iMax = this.tracking[ filePath ].area.length ; i < iMax ; i ++ )
-		{
+
+		for ( i = 0 , iMax = this.tracking[ filePath ].area.length ; i < iMax ; i ++ ) {
 			oneData = this.tracking[ filePath ].area[ i ] ;
-			
-			if ( ! oneData.count )
-			{
-				if ( ! coverage.uncoveredFiles[ filePath ] )
-				{
+
+			if ( ! oneData.count ) {
+				if ( ! coverage.uncoveredFiles[ filePath ] ) {
 					coverage.uncoveredFiles[ filePath ] = {
 						source: this.tracking[ filePath ].sourceLines ,
 						lines: [] ,
@@ -473,48 +433,42 @@ Cover.prototype.getCoverage = function getCoverage()
 						uncoveredAreaCount: 0
 					} ;
 				}
-				
+
 				coverage.uncoveredAreaCount ++ ;
 				coverage.uncoveredFiles[ filePath ].uncoveredAreaCount ++ ;
-				
+
 				//*
-				if ( oneData.location.start.line === oneData.location.end.line )
-				{
+				if ( oneData.location.start.line === oneData.location.end.line ) {
 					// Flags the line as partially uncovered
 					col = coverage.uncoveredFiles[ filePath ].lines[ oneData.location.start.line ] = [] ;
-					
-					for ( j = oneData.location.start.column ; j <= oneData.location.end.column ; j ++ )
-					{
+
+					for ( j = oneData.location.start.column ; j <= oneData.location.end.column ; j ++ ) {
 						col[ j ] = true ;
 					}
 				}
-				else
-				{
+				else {
 					// Flags the starting line as partially uncovered
 					col = coverage.uncoveredFiles[ filePath ].lines[ oneData.location.start.line ] = [] ;
 					max = this.tracking[ filePath ].sourceLines[ oneData.location.start.line ].length ;
-					
-					for ( j = oneData.location.start.column ; j < max ; j ++ )
-					{
+
+					for ( j = oneData.location.start.column ; j < max ; j ++ ) {
 						col[ j ] = true ;
 					}
-					
+
 					// Flags the ending line as partially uncovered
 					col = coverage.uncoveredFiles[ filePath ].lines[ oneData.location.end.line ] = [] ;
-					
-					for ( j = 0 ; j <= oneData.location.end.column ; j ++ )
-					{
+
+					for ( j = 0 ; j <= oneData.location.end.column ; j ++ ) {
 						col[ j ] = true ;
 					}
 				}
-				
-				for ( j = oneData.location.start.line + 1 ; j < oneData.location.end.line ; j ++ )
-				{
+
+				for ( j = oneData.location.start.line + 1 ; j < oneData.location.end.line ; j ++ ) {
 					// Flags the whole middle lines as uncovered
 					coverage.uncoveredFiles[ filePath ].lines[ j ] = true ;
 				}
 				//*/
-				
+
 				/*
 				console.log( "\n\n>>> Not covered:" , filePath , i , oneData , "\nline:" , oneData.location.start.line ,
 					'\n' + escape.control( this.tracking[ filePath ].sourceLines[ oneData.location.start.line - 1 ] ) ,
@@ -524,47 +478,46 @@ Cover.prototype.getCoverage = function getCoverage()
 				*/
 			}
 		}
-		
-		if ( coverage.uncoveredFiles[ filePath ] )
-		{
+
+		if ( coverage.uncoveredFiles[ filePath ] ) {
 			coverage.uncoveredFiles[ filePath ].rate =
 				1 - coverage.uncoveredFiles[ filePath ].uncoveredAreaCount / coverage.uncoveredFiles[ filePath ].areaCount ;
-			
+
 			coverage.uncoveredLineCount += coverage.uncoveredFiles[ filePath ].lines.reduce(
-				function( accu , element ) { return accu + ( element ? 1 : 0 ) ; } , 0
+				( accu , element ) => { return accu + ( element ? 1 : 0 ) ; } , 0
 			) ;
 		}
 	}
-	
+
 	// The first is more accurate, the last count comments, blank lines, etc...
 	coverage.rate = 1 - coverage.uncoveredAreaCount / coverage.areaCount ;
 	//coverage.rate = 1 - coverage.uncoveredLineCount / coverage.lineCount ;
-	
+
 	return coverage ;
 } ;
 
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":64,"_process":42,"falafel":29,"fs":24,"path":41,"string-kit/lib/escape.js":49}],2:[function(require,module,exports){
+},{"_process":41,"falafel":29,"fs":24}],2:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
-	
-	Copyright (c) 2015 - 2017 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -590,17 +543,8 @@ var Cover = require( './Cover.js' ) ;
 
 
 
-function TeaTime() { throw new Error( 'Use TeaTime.create() instead' ) ; }
-TeaTime.prototype = Object.create( NGEvents.prototype ) ;
-TeaTime.prototype.constructor = TeaTime ;
-
-module.exports = TeaTime ;
-
-
-
-TeaTime.create = function createTeaTime( options )
-{
-	var self = Object.create( TeaTime.prototype , {
+function TeaTime( options ) {
+	Object.defineProperties( this , {
 		timeout: { value: options.timeout || 2000 , writable: true , enumerable: true } ,
 		slowTime: { value: options.slowTime || 75 , writable: true , enumerable: true } ,
 		suite: { value: TeaTime.createSuite() , enumerable: true } ,
@@ -609,10 +553,10 @@ TeaTime.create = function createTeaTime( options )
 		bail: { value: !! options.bail , writable: true , enumerable: true } ,
 		skipOptional: { value: !! options.skipOptional , writable: true , enumerable: true } ,
 		cover: { value: options.cover && Cover.create( options.cover ) , writable: true , enumerable: true } ,
-		
+
 		token: { value: options.token || null , writable: true , enumerable: true } , // for slave instance
 		acceptTokens: { value: options.acceptTokens || null , writable: true , enumerable: true } , // for master instance
-		
+
 		startTime: { value: 0 , writable: true , enumerable: true } ,
 		testCount: { value: 0 , writable: true , enumerable: true } ,
 		done: { value: 0 , writable: true , enumerable: true } ,
@@ -622,18 +566,26 @@ TeaTime.create = function createTeaTime( options )
 		skip: { value: 0 , writable: true , enumerable: true } ,
 		errors: { value: [] , enumerable: true } ,
 		orphanError: { value: null , enumerable: true , writable: true } ,
-		
+
 		microTimeout: { value: options.microTimeout , enumerable: true } ,
 		onceUncaughtException: { value: options.onceUncaughtException , enumerable: true } ,
-		offUncaughtException: { value: options.offUncaughtException , enumerable: true } ,
+		offUncaughtException: { value: options.offUncaughtException , enumerable: true }
 	} ) ;
-	
-	Object.defineProperties( self , {
-		registerStack: { value: [ self.suite ] , writable: true , enumerable: true } ,
+
+	Object.defineProperties( this , {
+		registerStack: { value: [ this.suite ] , writable: true , enumerable: true }
 	} ) ;
-	
-	return self ;
-} ;
+}
+
+TeaTime.prototype = Object.create( NGEvents.prototype ) ;
+TeaTime.prototype.constructor = TeaTime ;
+
+module.exports = TeaTime ;
+
+
+
+// Backward compatibility
+TeaTime.create = ( ... args ) => new TeaTime( ... args ) ;
 
 
 
@@ -654,126 +606,117 @@ var reporterAliases = {
 
 
 // CLI and browser share the same args
-TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , args )
-{
+TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , args ) {
 	var i , iMax , v ;
-	
+
 	options.cover = args.cover || args.C ;
-	
-	if ( ! options.reporters )
-	{
+
+	if ( ! options.reporters ) {
 		if ( options.cover ) { options.reporters = [ 'classic' , 'coverage-report' , 'warning-comments-summary' ] ; }
 		else { options.reporters = [ 'classic' ] ; }
 	}
-	
+
 	if ( ! options.clientReporters ) { options.clientReporters = [ 'classic' ] ; }
-	
+
 	if ( args.console !== undefined ) { options.allowConsole = args.console ; }
 	else if ( args.c !== undefined ) { options.allowConsole = args.c ; }
-	
+
 	if ( args.b || args.bail ) { options.bail = true ; }
-	
+
 	if ( args['skip-optional'] || args.O ) { options.skipOptional = true ; }
-	
+
 	if ( args.timeout && ( v = parseInt( args.timeout , 10 ) ) ) { options.timeout = v ; }
 	else if ( args.t && ( v = parseInt( args.t , 10 ) ) ) { options.timeout = v ; }
-	
+
 	if ( args.slow && ( v = parseInt( args.slow , 10 ) ) ) { options.slowTime = v ; }
 	else if ( args.s && ( v = parseInt( args.s , 10 ) ) ) { options.slowTime = v ; }
-	
-	
-	if ( args.reporter )
-	{
+
+
+	if ( args.reporter ) {
 		if ( ! Array.isArray( args.reporter ) ) { args.reporter = [ args.reporter ] ; }
 		options.reporters = args.reporter ;
-		
-		if ( args.R )
-		{
+
+		if ( args.R ) {
 			if ( ! Array.isArray( args.R ) ) { args.R = [ args.R ] ; }
 			options.reporters = args.reporter.concat( args.R ) ;
 		}
 	}
-	else if ( args.R )
-	{
+	else if ( args.R ) {
 		if ( ! Array.isArray( args.R ) ) { args.R = [ args.R ] ; }
 		options.reporters = args.R ;
 	}
-	
+
 	// Manage reporter aliases
-	options.reporters = options.reporters.map( function( r ) { return reporterAliases[ r ] || r ; } ) ;
-	
-	
-	if ( args.clientReporter )
-	{
+	options.reporters = options.reporters.map( ( r ) => { return reporterAliases[ r ] || r ; } ) ;
+
+
+	if ( args.clientReporter ) {
 		if ( ! Array.isArray( args.clientReporter ) ) { args.clientReporter = [ args.clientReporter ] ; }
 		options.clientReporters = args.clientReporter ;
 	}
-	
-	
+
+
 	// Turn string into regexp for the "grep" feature
 	options.grep = [] ;
 	options.sourceGrep = [] ;
-	
+
 	if ( ! args.grep ) { args.grep = [] ; }
 	else if ( args.grep && ! Array.isArray( args.grep ) ) { args.grep = [ args.grep ] ; }
-	
+
 	if ( args.g ) { args.grep = args.grep.concat( args.g ) ; }
-	
-	for ( i = 0 , iMax = args.grep.length ; i < iMax ; i ++ )
-	{
+
+	for ( i = 0 , iMax = args.grep.length ; i < iMax ; i ++ ) {
 		options.grep.push( new RegExp( args.grep[ i ] , 'i' ) ) ;
 		options.sourceGrep.push( args.grep[ i ] ) ;
 	}
-	
-	
+
+
 	if ( args.token ) { options.token = args.token ; }
 } ;
 
 
 
-TeaTime.prototype.init = function init( callback )
-{
+TeaTime.prototype.init = function init( callback ) {
 	// Register to global
 	global.asyncTry = asyncTry ;
-	
+
 	global.suite =
 		global.describe =
 		global.context = TeaTime.registerSuite.bind( this ) ;
-	
+
 	global.test =
 		global.it =
 		global.specify =
 			TeaTime.registerTest.bind( this ) ;
-	
+
 	global.test.skip = TeaTime.registerSkipTest.bind( this ) ;
-	
+
 	global.test.optional = TeaTime.registerOptionalTest.bind( this ) ;
 	global.test.opt = TeaTime.registerOptionalTest.bind( this ) ;
 	global.test.next = TeaTime.registerOptionalTest.bind( this ) ;
-	
+
 	global.setup =
 		global.beforeEach =
 			TeaTime.registerHook.bind( this , 'setup' ) ;
-	
+
 	global.teardown =
 		global.afterEach =
 			TeaTime.registerHook.bind( this , 'teardown' ) ;
-	
+
 	global.suiteSetup =
 		global.before =
 			TeaTime.registerHook.bind( this , 'suiteSetup' ) ;
-	
+
 	global.suiteTeardown =
 		global.after =
 			TeaTime.registerHook.bind( this , 'suiteTeardown' ) ;
-	
+
 	if ( ! this.allowConsole ) { TeaTime.disableConsole() ; }
 } ;
 
 
 
-TeaTime.disableConsole = function disableConsole()
-{
+TeaTime.disableConsole = function disableConsole() {
 	console.log =
 		console.error =
 		console.assert =
@@ -788,10 +731,9 @@ TeaTime.disableConsole = function disableConsole()
 
 
 
-TeaTime.createSuite = function createSuite( name )
-{
+TeaTime.createSuite = function createSuite( name ) {
 	var suite = [] ;
-	
+
 	Object.defineProperties( suite , {
 		name: { value: name } ,
 		parent: { value: null , writable: true } ,
@@ -800,15 +742,14 @@ TeaTime.createSuite = function createSuite( name )
 		setup: { value: [] } ,
 		teardown: { value: [] }
 	} ) ;
-	
+
 	return suite ;
 } ;
 
 
 
-TeaTime.sortSuite = function sortSuite( suite )
-{
-	suite.sort( function( a , b ) {
+TeaTime.sortSuite = function sortSuite( suite ) {
+	suite.sort( ( a , b ) => {
 		var va = Array.isArray( a ) ? 1 : 0 ;
 		var vb = Array.isArray( b ) ? 1 : 0 ;
 		if ( va - vb ) { return va - vb ; }
@@ -818,42 +759,41 @@ TeaTime.sortSuite = function sortSuite( suite )
 
 
 
-TeaTime.prototype.run = function run( callback )
-{
-	var self = this , callbackTriggered = false ;
-	
+TeaTime.prototype.run = function run( callback ) {
+	var callbackTriggered = false ;
+
 	TeaTime.sortSuite( this.suite ) ;
-	
-	this.emit( 'ready' , function() {
-	
-		self.emit( 'start' , self.testCount ) ;
-		
-		var triggerCallback = function() {
+
+	this.emit( 'ready' , () => {
+
+		this.emit( 'start' , this.testCount ) ;
+
+		var triggerCallback = () => {
 			if ( callbackTriggered ) { return ; }
 			if ( typeof callback === 'function' ) { callback() ; }
 		} ;
-		
+
 		// Start coverage tracking NOW!
-		if ( self.cover ) { self.cover.start() ; }
-		
-		self.startTime = Date.now() ;
-		
-		self.runSuite( self.suite , 0 , function() {
-			
-			var duration = Date.now() - self.startTime ;
+		if ( this.cover ) { this.cover.start() ; }
+
+		this.startTime = Date.now() ;
+
+		this.runSuite( this.suite , 0 , () => {
+
+			var duration = Date.now() - this.startTime ;
 			var coverage ;
-			
-			if ( self.cover ) { coverage = self.cover.getCoverage() ; }
-			
-			self.emit( 'report' , self.ok , self.fail , self.optionalFail , self.skip , coverage && coverage.rate , duration ) ;
-			
-			if ( self.fail + self.optionalFail ) { self.emit( 'errorReport' , self.errors ) ; }
-			
-			if ( self.cover ) { self.emit( 'coverageReport' , coverage ) ; }
-			
-			self.emit( 'end' ) ;
-			self.emit( 'exit' , triggerCallback ) ;
-			
+
+			if ( this.cover ) { coverage = this.cover.getCoverage() ; }
+
+			this.emit( 'report' , this.ok , this.fail , this.optionalFail , this.skip , coverage && coverage.rate , duration ) ;
+
+			if ( this.fail + this.optionalFail ) { this.emit( 'errorReport' , this.errors ) ; }
+
+			if ( this.cover ) { this.emit( 'coverageReport' , coverage ) ; }
+
+			this.emit( 'end' ) ;
+			this.emit( 'exit' , triggerCallback ) ;
+
 			// Exit anyway after 10 seconds
 			setTimeout( triggerCallback , 10000 ) ;
 		} ) ;
@@ -862,60 +802,53 @@ TeaTime.prototype.run = function run( callback )
 
 
 
-TeaTime.prototype.runSuite = function runSuite( suite , depth , callback )
-{
-	var self = this ;
-	
-	if ( depth ) { self.emit( 'enterSuite' , suite.name , depth - 1 ) ; }
-	
-	var triggerCallback = function( error ) {
-		if ( depth ) { self.emit( 'exitSuite' , suite.name , depth - 1 ) ; }
+TeaTime.prototype.runSuite = function runSuite( suite , depth , callback ) {
+	if ( depth ) { this.emit( 'enterSuite' , suite.name , depth - 1 ) ; }
+
+	var triggerCallback = error => {
+		if ( depth ) { this.emit( 'exitSuite' , suite.name , depth - 1 ) ; }
 		callback( error ) ;
 	} ;
-	
-	this.runHooks( suite.suiteSetup , depth , function( suiteSetupError ) {
-		
-		if ( suiteSetupError )
-		{
-			self.patchError( suiteSetupError ) ;
-			
-			self.errors.push( {
+
+	this.runHooks( suite.suiteSetup , depth , ( suiteSetupError ) => {
+
+		if ( suiteSetupError ) {
+			this.patchError( suiteSetupError ) ;
+
+			this.errors.push( {
 				name: suiteSetupError.hookFn.hookName + '[' + suiteSetupError.hookFn.hookType + ']' ,
 				type: suiteSetupError.hookFn.hookType ,
 				fn: suiteSetupError.hookFn ,
 				error: suiteSetupError
 			} ) ;
-			
-			self.failSuite( suite , depth , 'suiteSetup' , suiteSetupError.hookFn , suiteSetupError ) ;
-			
+
+			this.failSuite( suite , depth , 'suiteSetup' , suiteSetupError.hookFn , suiteSetupError ) ;
+
 			// Run teardown anyway?
-			self.runHooks( suite.suiteTeardown , depth , function( suiteTeardownError ) {
+			this.runHooks( suite.suiteTeardown , depth , ( suiteTeardownError ) => {
 				triggerCallback( suiteSetupError ) ;
 			} ) ;
 			return ;
 		}
-		
-		self.runSuiteTests( suite , depth , function( suiteTestsError ) {
-			self.runHooks( suite.suiteTeardown , depth , function( suiteTeardownError ) {
-				if ( suiteTestsError )
-				{
+
+		this.runSuiteTests( suite , depth , ( suiteTestsError ) => {
+			this.runHooks( suite.suiteTeardown , depth , ( suiteTeardownError ) => {
+				if ( suiteTestsError ) {
 					triggerCallback( suiteTestsError ) ;
 				}
-				else if ( suiteTeardownError )
-				{
-					self.patchError( suiteTeardownError ) ;
-					
-					self.errors.push( {
+				else if ( suiteTeardownError ) {
+					this.patchError( suiteTeardownError ) ;
+
+					this.errors.push( {
 						name: suiteTeardownError.hookFn.hookName + '[' + suiteTeardownError.hookFn.hookType + ']' ,
 						type: suiteTeardownError.hookFn.hookType ,
 						fn: suiteTeardownError.hookFn ,
 						error: suiteTeardownError
 					} ) ;
-					
+
 					triggerCallback( suiteTeardownError ) ;
 				}
-				else
-				{
+				else {
 					triggerCallback() ;
 				}
 			} ) ;
@@ -925,37 +858,30 @@ TeaTime.prototype.runSuite = function runSuite( suite , depth , callback )
 
 
 
-TeaTime.prototype.runSuiteTests = function runSuiteTests( suite , depth , callback )
-{
-	var self = this ;
-	
-	async.foreach( suite , function( item , foreachCallback ) {
-		
-		if ( Array.isArray( item ) )
-		{
-			self.runSuite( item , depth + 1 , foreachCallback ) ;
+TeaTime.prototype.runSuiteTests = function runSuiteTests( suite , depth , callback ) {
+	async.foreach( suite , ( item , foreachCallback ) => {
+
+		if ( Array.isArray( item ) ) {
+			this.runSuite( item , depth + 1 , foreachCallback ) ;
 			return ;
 		}
-		
-		self.runTest( suite , depth , item , foreachCallback ) ;
+
+		this.runTest( suite , depth , item , foreachCallback ) ;
 	} )
-	.fatal( self.bail )
+	.fatal( this.bail )
 	.exec( callback ) ;
 } ;
 
 
 
-TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , errorFn , error )
-{
+TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , errorFn , error ) {
 	var i , iMax ;
-	
-	for ( i = 0 , iMax = suite.length ; i < iMax ; i ++ )
-	{
-		if ( Array.isArray( suite[ i ] ) )
-		{
+
+	for ( i = 0 , iMax = suite.length ; i < iMax ; i ++ ) {
+		if ( Array.isArray( suite[ i ] ) ) {
 			this.failSuite( suite[ i ] , depth + 1 , errorType , errorFn , error ) ;
 		}
-		
+
 		this.done ++ ;
 		this.fail ++ ;
 		this.emit( 'fail' , suite[ i ].testName , depth , undefined , undefined , error ) ;
@@ -964,50 +890,44 @@ TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , er
 
 
 
-TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback )
-{
-	var self = this ;
-	
+TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback ) {
 	// /!\ Useful?
-	self.testInProgress = testFn ;
-	
-	
+	this.testInProgress = testFn ;
+
+
 	// Early exit, if the functions should be skipped
-	if ( typeof testFn !== 'function' )
-	{
-		self.done ++ ;
-		self.skip ++ ;
-		self.emit( 'skip' , testFn.testName , depth ) ;
+	if ( typeof testFn !== 'function' ) {
+		this.done ++ ;
+		this.skip ++ ;
+		this.emit( 'skip' , testFn.testName , depth ) ;
 		callback() ;
 		return ;
 	}
-	
-	
+
+
 	// Inherit parent's setup/teardown
 	var ancestor = suite , setup = suite.setup , teardown = suite.teardown ;
-	
-	while ( ancestor.parent )
-	{
+
+	while ( ancestor.parent ) {
 		ancestor = ancestor.parent ;
 		setup = ancestor.setup.concat( setup ) ;
 		teardown = ancestor.teardown.concat( teardown ) ;
 	}
-	
-	
+
+
 	// Sync or async?
-	var testWrapper = testFn.length ? TeaTime.asyncTest.bind( self ) : TeaTime.syncTest.bind( self ) ;
-	
-	
+	var testWrapper = testFn.length ? TeaTime.asyncTest.bind( this ) : TeaTime.syncTest.bind( this ) ;
+
+
 	// Finishing
-	var triggerCallback = function( error , time , slow , errorType ) {
-		
-		if ( error )
-		{
-			self.done ++ ;
-			self.patchError( error ) ;
-			
-			self.errors.push( {
-				name: 
+	var triggerCallback = ( error , time , slow , errorType ) => {
+
+		if ( error ) {
+			this.done ++ ;
+			this.patchError( error ) ;
+
+			this.errors.push( {
+				name:
 					( error.hookFn ? error.hookFn.hookName + '[' + error.hookFn.hookType + '] ' : '' ) +
 					testFn.testName ,
 				type: errorType ,
@@ -1015,61 +935,54 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 				optional: testFn.optional ,
 				error: error
 			} ) ;
-			
-			if ( testFn.optional )
-			{
-				self.optionalFail ++ ;
-				self.emit( 'optionalFail' , testFn.testName , depth , time , slow , error ) ;
+
+			if ( testFn.optional ) {
+				this.optionalFail ++ ;
+				this.emit( 'optionalFail' , testFn.testName , depth , time , slow , error ) ;
 			}
-			else
-			{
-				self.fail ++ ;
-				self.emit( 'fail' , testFn.testName , depth , time , slow , error ) ;
+			else {
+				this.fail ++ ;
+				this.emit( 'fail' , testFn.testName , depth , time , slow , error ) ;
 			}
-			
+
 			callback( error ) ;
 		}
-		else
-		{
-			self.done ++ ;
-			self.ok ++ ;
-			self.emit( 'ok' , testFn.testName , depth , time , slow ) ;
+		else {
+			this.done ++ ;
+			this.ok ++ ;
+			this.emit( 'ok' , testFn.testName , depth , time , slow ) ;
 			callback() ;
 		}
 	} ;
-	
-	
+
+
 	// Async flow
-	self.runHooks( setup , depth , function( setupError ) {
-		
-		if ( setupError )
-		{
+	this.runHooks( setup , depth , ( setupError ) => {
+
+		if ( setupError ) {
 			// Run teardown anyway?
-			self.runHooks( teardown , depth , function( teardownError ) {
+			this.runHooks( teardown , depth , ( teardownError ) => {
 				triggerCallback( setupError , undefined , undefined , 'setup' ) ;
 			} ) ;
 			return ;
 		}
-		
-		self.orphanError = null ;
-		self.emit( 'enterTest' , testFn.testName , depth ) ;
-		
-		testWrapper( testFn , function( testError , time , slow ) {
-			
-			self.emit( 'exitTest' , testFn.testName , depth , time , slow , testError ) ;
-			
-			self.runHooks( teardown , depth , function( teardownError , teardownResults ) {
-				
-				if ( testError )
-				{
+
+		this.orphanError = null ;
+		this.emit( 'enterTest' , testFn.testName , depth ) ;
+
+		testWrapper( testFn , ( testError , time , slow ) => {
+
+			this.emit( 'exitTest' , testFn.testName , depth , time , slow , testError ) ;
+
+			this.runHooks( teardown , depth , ( teardownError , teardownResults ) => {
+
+				if ( testError ) {
 					triggerCallback( testError , time , slow , 'test' , testFn ) ;
 				}
-				else if ( teardownError )
-				{
+				else if ( teardownError ) {
 					triggerCallback( teardownError , time , slow , 'teardown' , teardownResults[ teardownResults.length - 1 ][ 2 ] ) ;
 				}
-				else
-				{
+				else {
 					triggerCallback( undefined , time , slow ) ;
 				}
 			} ) ;
@@ -1079,139 +992,157 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 
 
 
-TeaTime.syncTest = function syncTest( testFn , callback )
-{
-	var startTime , time , slowTime = this.slowTime ;
-	
+TeaTime.syncTest = function syncTest( testFn , callback ) {
+	var startTime , time , returnValue ,
+		slowTime = this.slowTime ;
+
 	// We need a fresh callstack after each test
 	callback = this.freshCallback( callback ) ;
-	
+
 	var context = {
 		timeout: function() {} ,	// Does nothing in sync mode
-		slow: function( slowTime_ ) { slowTime = slowTime_ ; }
+		slow: ( slowTime_ ) => { slowTime = slowTime_ ; }
 	} ;
-	
+
 	try {
 		// Start coverage tracking NOW!
 		if ( this.cover ) { this.cover.start() ; }
-		
+
 		startTime = Date.now() ;
-		testFn.call( context ) ;
+		returnValue = testFn.call( context ) ;
+
+		if ( returnValue && typeof returnValue === 'object' && returnValue.then ) {
+			Promise.resolve( returnValue ).then( () => {
+				time = Date.now() - startTime ;
+
+				// Stop coverage tracking
+				if ( this.cover ) { this.cover.stop() ; }
+
+				callback( undefined , time , Math.floor( time / slowTime ) ) ;
+			} ).catch( error => {
+				time = Date.now() - startTime ;
+
+				// Stop coverage tracking
+				if ( this.cover ) { this.cover.stop() ; }
+
+				callback( error , time , Math.floor( time / slowTime ) ) ;
+			} ) ;
+			return ;
+		}
+
 		time = Date.now() - startTime ;
 	}
 	catch ( error ) {
 		time = Date.now() - startTime ;
-		
+
 		// Stop coverage tracking
 		if ( this.cover ) { this.cover.stop() ; }
-		
+
 		callback( error , time , Math.floor( time / slowTime ) ) ;
 		return ;
 	}
-	
+
 	// Stop coverage tracking
 	if ( this.cover ) { this.cover.stop() ; }
-	
+
 	callback( undefined , time , Math.floor( time / slowTime ) ) ;
 } ;
 
 
 
-TeaTime.asyncTest = function asyncTest( testFn , callback )
-{
-	var self = this ,
-		startTime , time , callbackTriggered = false ,
+TeaTime.asyncTest = function asyncTest( testFn , callback ) {
+	var returnValue , badTest , startTime , time , callbackTriggered = false ,
 		timer = null ,
-		slowTime = self.slowTime ;
-	
+		slowTime = this.slowTime ;
+
 	// We need a fresh callstack after each test
 	callback = this.freshCallback( callback ) ;
-	
+
 	var context = {
-		timeout: function( timeout ) {
+		timeout: timeout => {
 			if ( callbackTriggered ) { return ; }
 			if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
-			
-			timer = setTimeout( function() {
-				if ( self.orphanError )
-				{
-					triggerCallback( self.orphanError ) ;
+
+			timer = setTimeout( () => {
+				if ( this.orphanError ) {
+					triggerCallback( this.orphanError ) ;
 					return ;
 				}
-				
+
 				var timeoutError = new Error( 'Test timeout (local)' ) ;
 				timeoutError.testTimeout = true ;
 				triggerCallback( timeoutError ) ;
 			} , timeout ) ;
 		} ,
-		slow: function( slowTime_ ) { slowTime = slowTime_ ; }
+		slow: slowTime_ => { slowTime = slowTime_ ; }
 	} ;
-	
-	var uncaughtExceptionHandler = function uncaughtExceptionHandler( error ) {
+
+	var uncaughtExceptionHandler = error => {
 		error.uncaught = true ;
 		triggerCallback( error ) ;
 	} ;
-	
-	var triggerCallback = function triggerCallback( error ) {
-		
-		self.offUncaughtException( uncaughtExceptionHandler ) ;
+
+	var triggerCallback = error => {
+
+		this.offUncaughtException( uncaughtExceptionHandler ) ;
 		if ( callbackTriggered ) { return ; }
-		
+
 		time = Date.now() - startTime ;
-		
+
 		// Stop coverage tracking
-		if ( self.cover ) { self.cover.stop() ; }
-		
+		if ( this.cover ) { this.cover.stop() ; }
+
 		callbackTriggered = true ;
 		if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
-		
+
 		callback( error , time , Math.floor( time / slowTime ) ) ;
 	} ;
-	
-	
+
+
 	// Should come before running the test, or it would override the user-set timeout
-	timer = setTimeout( function() {
-		if ( self.orphanError )
-		{
-			triggerCallback( self.orphanError ) ;
+	timer = setTimeout( () => {
+		if ( this.orphanError ) {
+			triggerCallback( this.orphanError ) ;
 			return ;
 		}
-		
+
 		var timeoutError = new Error( 'Test timeout' ) ;
 		timeoutError.testTimeout = true ;
 		triggerCallback( timeoutError ) ;
-	} , self.timeout ) ;
-	
-	asyncTry( function() {
+	} , this.timeout ) ;
+
+	asyncTry( () => {
 		// Start coverage tracking NOW!
-		if ( self.cover ) { self.cover.start() ; }
-		
+		if ( this.cover ) { this.cover.start() ; }
+
 		startTime = Date.now() ;
-		testFn.call( context , triggerCallback ) ;
+		returnValue = testFn.call( context , triggerCallback ) ;
+
+		if ( returnValue && typeof returnValue === 'object' && returnValue.then ) {
+			badTest = true ;
+			triggerCallback( new Error( "Bad test: mixing the Promise/thenable and the callback interface" ) ) ;
+		}
 	} )
-	.catch( function( error ) {
-		if ( callbackTriggered ) { self.orphanError = error ; }
+	.catch( ( error ) => {
+		if ( callbackTriggered && ! badTest ) { this.orphanError = error ; }
 		triggerCallback( error ) ;
 	} ) ;
-	
+
 	this.onceUncaughtException( uncaughtExceptionHandler ) ;
 } ;
 
 
 
-TeaTime.prototype.runHooks = function runHooks( hookList , depth , callback )
-{
-	var self = this ;
-	
-	async.foreach( hookList , function( hookFn , foreachCallback ) {
-		
+TeaTime.prototype.runHooks = function runHooks( hookList , depth , callback ) {
+	async.foreach( hookList , ( hookFn , foreachCallback ) => {
+
 		// Sync or async?
-		var hookWrapper = hookFn.length ? TeaTime.asyncHook.bind( self ) : TeaTime.syncHook.bind( self ) ;
-		
-		self.emit( 'enterHook' , hookFn.hookType , hookFn.hookName , depth ) ;
-		
-		hookWrapper( hookFn , function( error ) {
-			self.emit( 'exitHook' , hookFn.hookType , hookFn.hookName , depth ) ;
+		var hookWrapper = hookFn.length ? TeaTime.asyncHook.bind( this ) : TeaTime.syncHook.bind( this ) ;
+
+		this.emit( 'enterHook' , hookFn.hookType , hookFn.hookName , depth ) ;
+
+		hookWrapper( hookFn , ( error ) => {
+			this.emit( 'exitHook' , hookFn.hookType , hookFn.hookName , depth ) ;
 			if ( error ) { error.hookFn = hookFn ; }
 			foreachCallback( error ) ;
 		} ) ;
@@ -1222,53 +1153,67 @@ TeaTime.prototype.runHooks = function runHooks( hookList , depth , callback )
 
 
 
-TeaTime.syncHook = function syncHook( hookFn , callback )
-{
+TeaTime.syncHook = function syncHook( hookFn , callback ) {
+	var returnValue ;
+
 	// We need a fresh callstack after each hook
 	callback = this.freshCallback( callback ) ;
-	
+
 	try {
-		hookFn() ;
+		returnValue = hookFn() ;
+
+		if ( returnValue && typeof returnValue === 'object' && returnValue.then ) {
+			Promise.resolve( returnValue ).then( () => {
+				callback() ;
+			} ).catch( error => {
+				callback( error ) ;
+			} ) ;
+			return ;
+		}
 	}
 	catch ( error ) {
 		callback( error ) ;
 		return ;
 	}
-	
+
 	callback() ;
 } ;
 
 
 
-TeaTime.asyncHook = function asyncHook( hookFn , callback )
-{
-	var self = this , callbackTriggered = false ;
-	
+TeaTime.asyncHook = function asyncHook( hookFn , callback ) {
+	var returnValue , badHook , callbackTriggered = false ;
+
 	// We need a fresh callstack after each hook
 	callback = this.freshCallback( callback ) ;
-	
-	var uncaughtExceptionHandler = function uncaughtExceptionHandler( error ) {
+
+	var uncaughtExceptionHandler = error => {
 		error.uncaught = true ;
 		triggerCallback( error ) ;
 	} ;
-	
-	var triggerCallback = function triggerCallback( error ) {
-		
-		self.offUncaughtException( uncaughtExceptionHandler ) ;
+
+	var triggerCallback = error => {
+
+		this.offUncaughtException( uncaughtExceptionHandler ) ;
 		if ( callbackTriggered ) { return ; }
-		
+
 		callbackTriggered = true ;
 		callback( error ) ;
 	} ;
-	
-	asyncTry( function() {
-		hookFn( triggerCallback ) ;
+
+	asyncTry( () => {
+		returnValue = hookFn( triggerCallback ) ;
+
+		if ( returnValue && typeof returnValue === 'object' && returnValue.then ) {
+			badHook = true ;
+			triggerCallback( new Error( "Bad hook: mixing the Promise/thenable and the callback interface" ) ) ;
+		}
 	} )
-	.catch( function( error ) {
-		if ( callbackTriggered ) { self.orphanError = error ; }
+	.catch( ( error ) => {
+		if ( callbackTriggered && ! badHook ) { this.orphanError = error ; }
 		triggerCallback( error ) ;
 	} ) ;
-	
+
 	this.onceUncaughtException( uncaughtExceptionHandler ) ;
 } ;
 
@@ -1276,35 +1221,33 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback )
 
 
 
-			/* User-land global functions */
+/* User-land global functions */
 
 
 
 // suite(), describe(), context()
-TeaTime.registerSuite = function registerSuite( suiteName , fn )
-{
-	if ( ! suiteName || typeof suiteName !== 'string' || typeof fn !== 'function' )
-	{
+TeaTime.registerSuite = function registerSuite( suiteName , fn ) {
+	if ( ! suiteName || typeof suiteName !== 'string' || typeof fn !== 'function' ) {
 		throw new Error( "Usage is suite( name , fn )" ) ;
 	}
-	
+
 	var parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
-	
+
 	var suite = TeaTime.createSuite( suiteName ) ;
-	
+
 	this.registerStack.push( suite ) ;
-	
+
 	fn() ;
-	
+
 	this.registerStack.pop() ;
-	
+
 	// Only add this suite to its parent if it is not empty
 	if ( ! suite.length ) { return ; }
-	
+
 	Object.defineProperties( suite , {
 		order: { value: parentSuite.length }
 	} ) ;
-	
+
 	TeaTime.sortSuite( suite ) ;
 	parentSuite.push( suite ) ;
 	Object.defineProperty( suite , 'parent' , { value: parentSuite } ) ;
@@ -1313,59 +1256,53 @@ TeaTime.registerSuite = function registerSuite( suiteName , fn )
 
 
 // test(), it(), specify()
-TeaTime.registerTest = function registerTest( testName , fn , optional )
-{
+TeaTime.registerTest = function registerTest( testName , fn , optional ) {
 	var i , iMax , j , jMax , found , parentSuite ;
-	
-	if ( ! testName || typeof testName !== 'string' )
-	{
+
+	if ( ! testName || typeof testName !== 'string' ) {
 		throw new Error( "Usage is test( name , [fn] , [optional] )" ) ;
 	}
-	
+
 	parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
-	
+
 	// Filter out tests that are not relevant,
 	// each grep should either match the test name or one of the ancestor parent suite.
-	for ( i = 0 , iMax = this.grep.length ; i < iMax ; i ++ )
-	{
+	for ( i = 0 , iMax = this.grep.length ; i < iMax ; i ++ ) {
 		found = false ;
-		
+
 		if ( testName.match( this.grep[ i ] ) ) { continue ; }
-		
-		for ( j = 1 , jMax = this.registerStack.length ; j < jMax ; j ++ )
-		{
+
+		for ( j = 1 , jMax = this.registerStack.length ; j < jMax ; j ++ ) {
 			if ( this.registerStack[ j ].name.match( this.grep[ i ] ) ) { found = true ; break ; }
 		}
-		
+
 		if ( ! found ) { return ; }
 	}
-	
+
 	this.testCount ++ ;
-	
+
 	if ( typeof fn !== 'function' ) { fn = {} ; }
-	
+
 	Object.defineProperties( fn , {
 		testName: { value: testName } ,
 		optional: { value: !! optional } ,
 		order: { value: parentSuite.length }
 	} ) ;
-	
+
 	parentSuite.push( fn ) ;
 } ;
 
 
 
 // test.skip(), it.skip(), specify.skip()
-TeaTime.registerSkipTest = function registerSkipTest( testName ) //, fn )
-{
+TeaTime.registerSkipTest = function registerSkipTest( testName /*, fn */ ) {
 	return TeaTime.registerTest.call( this , testName ) ;
 } ;
 
 
 
 // test.next(), it.next(), specify.next()
-TeaTime.registerOptionalTest = function registerOptionalTest( testName , fn )
-{
+TeaTime.registerOptionalTest = function registerOptionalTest( testName , fn ) {
 	return this.skipOptional ?
 		TeaTime.registerTest.call( this , testName ) :
 		TeaTime.registerTest.call( this , testName , fn , true ) ;
@@ -1374,25 +1311,22 @@ TeaTime.registerOptionalTest = function registerOptionalTest( testName , fn )
 
 
 // setup(), suiteSetup(), teardown(), suiteTeardown(), before(), beforeEach(), after(), afterEach()
-TeaTime.registerHook = function registerHook( type , hookName , fn )
-{
+TeaTime.registerHook = function registerHook( type , hookName , fn ) {
 	var parentSuite ;
-	
-	if ( typeof hookName === 'function' )
-	{
+
+	if ( typeof hookName === 'function' ) {
 		fn = hookName ;
 		hookName = undefined ;
 	}
-	else if ( typeof fn !== 'function' )
-	{
+	else if ( typeof fn !== 'function' ) {
 		throw new Error( "Usage is hook( [name] , fn )" ) ;
 	}
-	
+
 	Object.defineProperties( fn , {
 		hookName: { value: hookName || fn.name || '[no name]' } ,
-		hookType: { value: type } 
+		hookType: { value: type }
 	} ) ;
-	
+
 	parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
 	parentSuite[ type ].push( fn ) ;
 } ;
@@ -1401,20 +1335,16 @@ TeaTime.registerHook = function registerHook( type , hookName , fn )
 
 
 
-			/* Misc functions */
+/* Misc functions */
 
 
 
 // Transform a callback into a fresh callback:
 // It use setImmediate() or process.nextTick() to prevent "Maximum call stack"
-TeaTime.prototype.freshCallback = function freshCallback( callback )
-{
-	var self = this ;
-	
-	return function() {
-		var args = arguments ;
-		self.microTimeout( function() {
-			callback.apply( self , args ) ;
+TeaTime.prototype.freshCallback = function freshCallback( callback ) {
+	return ( ... args ) => {
+		this.microTimeout( () => {
+			callback.call( this , ... args ) ;
 		} ) ;
 	} ;
 } ;
@@ -1422,25 +1352,22 @@ TeaTime.prototype.freshCallback = function freshCallback( callback )
 
 
 // Remove the framework from the stack trace
-TeaTime.prototype.patchError = function patchError( error )
-{
+TeaTime.prototype.patchError = function patchError( error ) {
 	var i , iMax , stack ;
-	
+
 	if ( ! error.stack ) { return ; }
-	
+
 	stack = error.stack ;
 	if ( ! Array.isArray( stack ) ) { stack = error.stack.split( '\n' ) ; }
-	
-	for ( i = 0 , iMax = stack.length ; i < iMax ; i ++ )
-	{
-		// This is a bit hacky, but well... 
-		if ( stack[ i ].match( /(^|\/)tea-time\.(min\.)?js/ ) )
-		{
+
+	for ( i = 0 , iMax = stack.length ; i < iMax ; i ++ ) {
+		// This is a bit hacky, but well...
+		if ( stack[ i ].match( /(^|\/)tea-time\.(min\.)?js/ ) ) {
 			stack = stack.slice( 0 , i ) ;
 			break ;
 		}
 	}
-	
+
 	error.stack = stack.join( '\n' ) ;
 } ;
 
@@ -1450,21 +1377,21 @@ TeaTime.prototype.patchError = function patchError( error )
 },{"./Cover.js":1,"async-kit":13,"async-try-catch":21,"nextgen-events":35}],3:[function(require,module,exports){
 /*
 	Tea Time!
-	
-	Copyright (c) 2015 - 2017 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -1484,22 +1411,20 @@ TeaTime.prototype.patchError = function patchError( error )
 //var ErrorReport = require( './error-report.js' ) ;
 
 
-function Reporter( teaTime , self )
-{
-	if ( ! self )
-	{
+function Reporter( teaTime , self ) {
+	if ( ! self ) {
 		self = Object.create( Reporter.prototype , {
 			teaTime: { value: teaTime , enumerable: true }
 		} ) ;
 	}
-	
+
 	document.querySelector( 'body' )
-		.insertAdjacentHTML( 'beforeend' ,
-			'<div class="tea-time-classic-reporter" style="background-color:black;color:white"></div>'
-		) ;
-	
+	.insertAdjacentHTML( 'beforeend' ,
+		'<div class="tea-time-classic-reporter" style="background-color:black;color:white"></div>'
+	) ;
+
 	self.container = document.querySelector( 'div.tea-time-classic-reporter' ) ;
-	
+
 	self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
 	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
 	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
@@ -1507,7 +1432,7 @@ function Reporter( teaTime , self )
 	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
 	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
 	self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
-	
+
 	return self ;
 }
 
@@ -1515,18 +1440,16 @@ module.exports = Reporter ;
 
 
 
-function scrollDown()
-{
+function scrollDown() {
 	( document.querySelector( 'div.tea-time-classic-reporter p:last-child' ) ||
 		document.querySelector( 'div.tea-time-classic-reporter h4:last-child' ) ||
 		document.querySelector( 'div.tea-time-classic-reporter pre:last-child' ) )
-			.scrollIntoView() ;
+	.scrollIntoView() ;
 }
 
 
 
-function indentStyle( depth )
-{
+function indentStyle( depth ) {
 	return 'margin-left:' + ( 1 + 2 * depth ) + '%;' ;
 }
 
@@ -1553,89 +1476,81 @@ var actualStyle = "background-color:red;color:white;font-weight:bold;" ;
 
 
 
-Reporter.enterSuite = function enterSuite( suiteName , depth )
-{
+Reporter.enterSuite = function enterSuite( suiteName , depth ) {
 	this.container.insertAdjacentHTML( 'beforeend' ,
 		'<h4 class="tea-time-classic-reporter" style="' + indentStyle( depth ) + '">' + suiteName + '</h4>'
 	) ;
-	
+
 	scrollDown() ;
 } ;
 
 
 
-Reporter.ok = function ok( testName , depth , time , slow )
-{
+Reporter.ok = function ok( testName , depth , time , slow ) {
 	var content = '✔ ' + testName ;
-	
+
 	if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
 	else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
 	else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
-	
+
 	this.container.insertAdjacentHTML( 'beforeend' ,
 		'<p class="tea-time-classic-reporter" style="' + passingStyle + indentStyle( depth ) + '">' + content + '</p>'
 	) ;
-	
+
 	scrollDown() ;
 } ;
 
 
 
-Reporter.fail = function fail( testName , depth , time , slow , error )
-{
+Reporter.fail = function fail( testName , depth , time , slow , error ) {
 	var content = '✘ ' + testName ;
-	
-	if ( time !== undefined )
-	{
+
+	if ( time !== undefined ) {
 		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
 		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
 		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
 	}
-	
+
 	this.container.insertAdjacentHTML( 'beforeend' ,
 		'<p class="tea-time-classic-reporter" style="' + failingStyle + indentStyle( depth ) + '">' + content + '</p>'
 	) ;
-	
+
 	scrollDown() ;
 } ;
 
 
 
-Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error )
-{
+Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error ) {
 	var content = '✘ ' + testName ;
-	
-	if ( time !== undefined )
-	{
+
+	if ( time !== undefined ) {
 		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
 		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
 		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
 	}
-	
+
 	this.container.insertAdjacentHTML( 'beforeend' ,
 		'<p class="tea-time-classic-reporter" style="' + optionalFailingStyle + indentStyle( depth ) + '">' + content + '</p>'
 	) ;
-	
+
 	scrollDown() ;
 } ;
 
 
 
-Reporter.skip = function skip( testName , depth )
-{
+Reporter.skip = function skip( testName , depth ) {
 	var content = '· ' + testName ;
-	
+
 	this.container.insertAdjacentHTML( 'beforeend' ,
 		'<p class="tea-time-classic-reporter" style="' + pendingStyle + indentStyle( depth ) + '">' + content + '</p>'
 	) ;
-	
+
 	scrollDown() ;
 } ;
 
 
 
-Reporter.report = function report( ok , fail , optionalFail , skip , coverageRate , time )
-{
+Reporter.report = function report( ok , fail , optionalFail , skip , coverageRate , time ) {
 	this.container.insertAdjacentHTML(
 		'beforeend' ,
 		'<hr />' +
@@ -1650,27 +1565,24 @@ Reporter.report = function report( ok , fail , optionalFail , skip , coverageRat
 		( skip ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + skip + ' pending</p>' : '' ) +
 		( coverageRate !== undefined ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + coverageStyle + indentStyle( 1 ) + '">' + Math.round( coverageRate * 100 ) + '% coverage</p>' : '' )
 	) ;
-	
+
 	scrollDown() ;
 } ;
 
 
 
-Reporter.errorReport = function errorReport( errors )
-{
+Reporter.errorReport = function errorReport( errors ) {
 	var i , error , content = '' ;
-	
+
 	content += '<h4 class="tea-time-classic-reporter" style="' + errorStyle + indentStyle( 0 ) + '">== Errors ==</h4>' ;
-	
-	for ( i = 0 ; i < errors.length ; i ++ )
-	{
+
+	for ( i = 0 ; i < errors.length ; i ++ ) {
 		error = errors[ i ] ;
 		content += '<p class="tea-time-classic-reporter" style="' +
 			( error.optional ? optionalErrorStyle : errorStyle ) +
 			indentStyle( 1 ) + '">' + ( i + 1 ) + ' ) ' ;
-		
-		switch ( error.type )
-		{
+
+		switch ( error.type ) {
 			case 'test' :
 				if ( error.error.testTimeout ) { content += '<span style="' + hookErrorStyle + '">TEST TIMEOUT</span> ' ; }
 				break ;
@@ -1687,41 +1599,39 @@ Reporter.errorReport = function errorReport( errors )
 				content += '<span style="' + hookErrorStyle + '">SUITE TEARDOWN HOOK</span> ' ;
 				break ;
 		}
-		
+
 		if ( error.error.uncaught ) { content += '<span style="' + hookErrorStyle + '">UNCAUGHT EXCEPTION</span> ' ; }
-		
+
 		content += error.name ;
 		content += '</p>' ;
 		content += this.reportOneError( error.error ) ;
 	}
-	
+
 	this.container.insertAdjacentHTML( 'beforeend' , '<hr />' + content ) ;
-	
+
 	scrollDown() ;
 } ;
 
 
 
-Reporter.prototype.reportOneError = function reportOneError( error )
-{
+Reporter.prototype.reportOneError = function reportOneError( error ) {
 	var content = '' ;
-	
-	if ( ( 'expected' in error ) && ( 'actual' in error ) )
-	{
+
+	if ( ( 'expected' in error ) && ( 'actual' in error ) ) {
 		content += '<p class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
 			'<span style="' + expectedStyle + '">expected</span><span style="' + actualStyle + '">actual</span>' +
 			'</p>' ;
-		
+
 		content += '<pre class="tea-time-classic-reporter"; style="' + indentStyle( 2 ) + '">' ;
 		content += this.teaTime.htmlColorDiff( error.actual , error.expected ) ;
 		content += '</pre>' ;
 	}
-	
-	content += 
-		'<pre class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' + 
+
+	content +=
+		'<pre class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
 		this.teaTime.inspect.inspectError( { style: 'html' } , error ) +
 		'</pre>' ;
-	
+
 	return content ;
 } ;
 
@@ -1730,21 +1640,21 @@ Reporter.prototype.reportOneError = function reportOneError( error )
 },{}],4:[function(require,module,exports){
 /*
 	Tea Time!
-	
-	Copyright (c) 2015 - 2017 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -1758,22 +1668,20 @@ Reporter.prototype.reportOneError = function reportOneError( error )
 
 
 
-function Reporter( teaTime , self )
-{
-	if ( ! self )
-	{
+function Reporter( teaTime , self ) {
+	if ( ! self ) {
 		self = Object.create( Reporter.prototype , {
 			teaTime: { value: teaTime , enumerable: true }
 		} ) ;
 	}
-	
+
 	self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
 	self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
 	self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
 	self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
 	self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
 	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
-	
+
 	return self ;
 }
 
@@ -1781,36 +1689,31 @@ module.exports = Reporter ;
 
 
 
-Reporter.ok = function ok( testName , depth , time , slow )
-{
+Reporter.ok = function ok( testName , depth , time , slow ) {
 	console.log( 'OK:' , testName , '(' + time + ')' ) ;
 } ;
 
 
 
-Reporter.fail = function fail( testName , depth , time , slow , error )
-{
+Reporter.fail = function fail( testName , depth , time , slow , error ) {
 	console.log( 'Fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
 } ;
 
 
 
-Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error )
-{
+Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error ) {
 	console.log( 'Opt fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
 } ;
 
 
 
-Reporter.skip = function skip( testName , depth )
-{
+Reporter.skip = function skip( testName , depth ) {
 	console.log( 'Pending:' , testName ) ;
 } ;
 
 
 
-Reporter.report = function report( ok , fail , optionalFail , skip , coverageRate )
-{
+Reporter.report = function report( ok , fail , optionalFail , skip , coverageRate ) {
 	console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' opt fail:' , optionalFail , ' pending:' , skip ,
 		' coverage:' , coverageRate !== undefined ? Math.round( coverageRate * 100 ) + '%' : 'n/a'
 	) ;
@@ -1821,21 +1724,21 @@ Reporter.report = function report( ok , fail , optionalFail , skip , coverageRat
 },{}],5:[function(require,module,exports){
 /*
 	Tea Time!
-	
-	Copyright (c) 2015 - 2017 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -1851,17 +1754,15 @@ Reporter.report = function report( ok , fail , optionalFail , skip , coverageRat
 
 
 
-function Reporter( teaTime , self )
-{
-	if ( ! self )
-	{
+function Reporter( teaTime , self ) {
+	if ( ! self ) {
 		self = Object.create( Reporter.prototype , {
 			teaTime: { value: teaTime , enumerable: true }
 		} ) ;
 	}
-	
+
 	self.teaTime.on( 'ready' , { fn: Reporter.ready.bind( self ) , async: true } ) ;
-	
+
 	self.teaTime.on( 'start' , Reporter.forward.bind( self , 'start' ) ) ;
 	self.teaTime.on( 'enterSuite' , Reporter.forward.bind( self , 'enterSuite' ) ) ;
 	self.teaTime.on( 'exitSuite' , Reporter.forward.bind( self , 'exitSuite' ) ) ;
@@ -1874,8 +1775,8 @@ function Reporter( teaTime , self )
 	self.teaTime.on( 'report' , Reporter.forward.bind( self , 'report' ) ) ;
 	self.teaTime.on( 'errorReport' , Reporter.forward.bind( self , 'errorReport' ) ) ;
 	self.teaTime.on( 'exit' , Reporter.exit.bind( self , 'exit' ) ) ;
-	
-	
+
+
 	//self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
 	//self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
 	//self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
@@ -1883,7 +1784,7 @@ function Reporter( teaTime , self )
 	//self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
 	//self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
 	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
-	
+
 	return self ;
 }
 
@@ -1891,34 +1792,28 @@ module.exports = Reporter ;
 
 
 
-Reporter.ready = function ready( callback )
-{
+Reporter.ready = function ready( callback ) {
 	var self = this ;
-	
+
 	//console.log( "Ready event received!" , this.teaTime.token ) ;
 	this.ws = new WebSocket( 'ws://127.0.0.1:7357/' + this.teaTime.token ) ;
-	
-	this.ws.onopen = function onOpen()
-	{
+
+	this.ws.onopen = function onOpen() {
 		Reporter.forward.call( self , 'ready' ) ;
 		console.log( "Websocket opened!" ) ;
 		callback() ;
 	} ;
-	
-	this.ws.onclose = function onClose()
-	{
+
+	this.ws.onclose = function onClose() {
 		console.log( "Websocket closed!" ) ;
 	} ;
 } ;
 
 
 
-Reporter.forward = function forward( event )
-{
-	var args = Array.prototype.slice.call( arguments , 1 ) ;
-	
+Reporter.forward = function forward( event , ... args ) {
 	this.teaTime.prepareSerialize( args ) ;
-	
+
 	this.ws.send(
 		JSON.stringify( {
 			event: event ,
@@ -1929,8 +1824,7 @@ Reporter.forward = function forward( event )
 
 
 
-Reporter.exit = function exit( callback )
-{
+Reporter.exit = function exit( callback ) {
 	Reporter.forward.call( this , 'exit' ) ;
 	//console.log( "Exit event received!" ) ;
 	this.ws.close() ;
@@ -1942,21 +1836,21 @@ Reporter.exit = function exit( callback )
 },{}],6:[function(require,module,exports){
 /*
 	Tea Time!
-	
-	Copyright (c) 2015 - 2017 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -1981,8 +1875,7 @@ var url = require( 'url' ) ;
 
 
 
-function createTeaTime()
-{
+function createTeaTime() {
 	var options = {
 		microTimeout: function( callback ) {
 			setTimeout( callback , 0 ) ;
@@ -1999,32 +1892,31 @@ function createTeaTime()
 		} ,
 		allowConsole: true
 	} ;
-	
+
 	TeaTime.populateOptionsWithArgs( options , url.parse( window.location.href , true ).query ) ;
-	
-	window.teaTime = TeaTime.create( options ) ;
-	
+
+	window.teaTime = new TeaTime( options ) ;
+
 	window.teaTime.init() ;
 	window.teaTime.diff = diff ;
 	window.teaTime.htmlColorDiff = htmlColorDiff ;
 	window.teaTime.inspect = inspect ;
 	window.teaTime.prepareSerialize = prepareSerialize ;
-	
+
 	window.teaTime.reporters = {
 		console: require( './browser-reporters/console.js' ) ,
 		classic: require( './browser-reporters/classic.js' ) ,
 		websocket: require( './browser-reporters/websocket.js' )
 	} ;
-	
-	options.reporters.forEach( function( reporter ) {
+
+	options.reporters.forEach( ( reporter ) => {
 		window.teaTime.reporters[ reporter ]( window.teaTime ) ;
 	} ) ;
-	
-	if ( options.ws )
-	{
+
+	if ( options.ws ) {
 		window.teaTime.ws = true ;
 	}
-	
+
 	return window.teaTime ;
 }
 
@@ -2032,30 +1924,26 @@ module.exports = createTeaTime ;
 
 
 
-function prepareSerialize( object )
-{
+function prepareSerialize( object ) {
 	var i , iMax , keys , proto , prototypeName ;
-	
+
 	if ( ! object || typeof object !== 'object' ) { return ; }
-	
-	
-	if ( Array.isArray( object ) )
-	{
-		for ( i = 0 , iMax = object.length ; i < iMax ; i ++ )
-		{
+
+
+	if ( Array.isArray( object ) ) {
+		for ( i = 0 , iMax = object.length ; i < iMax ; i ++ ) {
 			prepareSerialize( object[ i ] ) ;
 		}
-		
+
 		return ;
 	}
-	
+
 	proto = Object.getPrototypeOf( object ) ;
 	prototypeName = proto && proto.constructor.name ;
-	
+
 	if ( prototypeName && prototypeName !== 'Object' ) { object.__prototype = prototypeName ; }
-	
-	if ( object instanceof Error )
-	{
+
+	if ( object instanceof Error ) {
 		// Make things enumerable, so JSON.stringify() will serialize them like it should
 		Object.defineProperties( object , {
 			__prototype: { value: object.constructor.name , enumerable: true , writable: true } ,
@@ -2065,11 +1953,10 @@ function prepareSerialize( object )
 			stack: { value: object.stack , enumerable: true , writable: true }
 		} ) ;
 	}
-	
+
 	keys = Object.keys( object ) ;
-	
-	for ( i = 0 , iMax = keys.length ; i < iMax ; i ++ )
-	{
+
+	for ( i = 0 , iMax = keys.length ; i < iMax ; i ++ ) {
 		prepareSerialize( object[ keys[ i ] ] ) ;
 	}
 }
@@ -2078,31 +1965,31 @@ function prepareSerialize( object )
 
 createTeaTime() ;
 
-dom.ready( function() {
+dom.ready( () => {
 	window.teaTime.run() ;
 } ) ;
 
 
 
 
-},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":27,"string-kit/lib/inspect.js":51,"url":62}],7:[function(require,module,exports){
+},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":27,"string-kit/lib/inspect.js":50,"url":61}],7:[function(require,module,exports){
 /*
 	Tea Time!
-	
-	Copyright (c) 2015 - 2017 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -2125,20 +2012,19 @@ var inspectOptions = { minimal: true , depth: 10 , sort: true } ;
 
 
 
-function textDiff( oldValue , newValue )
-{
+function textDiff( oldValue , newValue ) {
 	var str = '' ,
 		diff = textDiff.raw( oldValue , newValue , true ) ;
-	
-	diff.forEach( function( part ) {
-		
-		str += part.value.replace( /^(?!$)/mg , function() {
+
+	diff.forEach( ( part ) => {
+
+		str += part.value.replace( /^(?!$)/mg , () => {
 			if ( part.added ) { return '++' ; }
 			else if ( part.removed ) { return '--' ; }
-			else { return '  ' ; }
+			return '  ' ;
 		} ) ;
 	} ) ;
-	
+
 	return str ;
 }
 
@@ -2146,55 +2032,52 @@ module.exports = textDiff ;
 
 
 
-textDiff.raw = function rawDiff( oldValue , newValue , noCharMode )
-{
+textDiff.raw = function rawDiff( oldValue , newValue , noCharMode ) {
 	var diff , score = 0 ;
-	
+
 	var oldStr = inspect.inspect( inspectOptions , oldValue ) ;
 	var newStr = inspect.inspect( inspectOptions , newValue ) ;
-	
-	if ( ! noCharMode && Math.max( oldStr.length , newStr.length ) < 2000 )
-	{
+
+	if ( ! noCharMode && Math.max( oldStr.length , newStr.length ) < 2000 ) {
 		// First try the diffChars algorithm, it looks great if there are only few changes
 		diff = jsdiff.diffChars( oldStr , newStr ) ;
-		
+
 		// Try to evaluate the weirdness
-		diff.forEach( function( part ) {
-			if ( part.added || part.removed )
-			{
+		diff.forEach( ( part ) => {
+			if ( part.added || part.removed ) {
 				score += 15 + part.value.length ;
 			}
 		} ) ;
-		
+
 		// If too much weirdness, fallback to line mode
 		if ( score < 80 ) { return diff ; }
 	}
-	
+
 	diff = jsdiff.diffLines( oldStr , newStr ) ;
-	
+
 	return diff ;
 } ;
 
 
 
-},{"diff":26,"string-kit/lib/inspect.js":51}],8:[function(require,module,exports){
+},{"diff":26,"string-kit/lib/inspect.js":50}],8:[function(require,module,exports){
 /*
 	Tea Time!
-	
-	Copyright (c) 2015 - 2017 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -2212,31 +2095,27 @@ var rawDiff = require( './diff.js' ).raw ;
 
 
 
-module.exports = function htmlColorDiff( oldValue , newValue )
-{
+module.exports = function htmlColorDiff( oldValue , newValue ) {
 	var str = '' ,
 		diff = rawDiff( oldValue , newValue ) ;
-	
-	diff.forEach( function( part ) {
-		
-		if ( part.added )
-		{
-			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , function( match , pre , value , after ) {
+
+	diff.forEach( ( part ) => {
+
+		if ( part.added ) {
+			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , ( match , pre , value , after ) => {
 				return pre + '<span style="background-color:green;color:white">' + value + '</span>' + after ;
 			} ) ;
 		}
-		else if ( part.removed )
-		{
-			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , function( match , pre , value , after ) {
+		else if ( part.removed ) {
+			str += part.value.replace( /^(\s*)(\S(?:[^\n]*\S)?)(\s*)$/mg , ( match , pre , value , after ) => {
 				return pre + '<span style="background-color:red;color:white">' + value + '</span>' + after ;
 			} ) ;
 		}
-		else
-		{  
+		else {
 			str += '<span style="color:grey">' + part.value + '</span>' ;
 		}
 	} ) ;
-	
+
 	return str ;
 } ;
 
@@ -3916,7 +3795,7 @@ try{
 	exports.XMLSerializer = XMLSerializer;
 //}
 
-},{"nwmatcher":38,"string-kit":57}],11:[function(require,module,exports){
+},{"nwmatcher":38,"string-kit":56}],11:[function(require,module,exports){
 exports.entityMap = {
        lt: '<',
        gt: '>',
@@ -6818,7 +6697,7 @@ function execLogicFinal( execContext , result )
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":42,"nextgen-events":18,"tree-kit/lib/extend.js":61}],15:[function(require,module,exports){
+},{"_process":41,"nextgen-events":18,"tree-kit/lib/extend.js":60}],15:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -6908,7 +6787,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":13,"_process":42}],16:[function(require,module,exports){
+},{"./async.js":13,"_process":41}],16:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -8802,21 +8681,21 @@ module.exports={
 (function (process,global){
 /*
 	Async Try-Catch
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -8837,21 +8716,18 @@ AsyncTryCatch.prototype.__prototypeVersion__ = require( '../package.json' ).vers
 
 
 
-if ( global.AsyncTryCatch )
-{
-	if ( global.AsyncTryCatch.prototype.__prototypeUID__ === 'async-try-catch/AsyncTryCatch' )
-	{
+if ( global.AsyncTryCatch ) {
+	if ( global.AsyncTryCatch.prototype.__prototypeUID__ === 'async-try-catch/AsyncTryCatch' ) {
 		//console.log( "Already installed:" , global.AsyncTryCatch.prototype.__prototypeVersion__ , "current:" , AsyncTryCatch.prototype.__prototypeVersion__ ) ;
-		
+
 		var currentVersions = AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
 		var installedVersions = global.AsyncTryCatch.prototype.__prototypeVersion__.split( '.' ) ;
-		
+
 		// Basic semver comparison
 		if (
 			installedVersions[ 0 ] !== currentVersions[ 0 ] ||
 			( currentVersions[ 0 ] === "0" && installedVersions[ 1 ] !== currentVersions[ 1 ] )
-		)
-		{
+		) {
 			throw new Error(
 				"Incompatible version of AsyncTryCatch already installed on global.AsyncTryCatch: " +
 				global.AsyncTryCatch.prototype.__prototypeVersion__ +
@@ -8859,13 +8735,11 @@ if ( global.AsyncTryCatch )
 			) ;
 		}
 	}
-	else
-	{
+	else {
 		throw new Error( "Incompatible module already installed on global.AsyncTryCatch" ) ;
 	}
 }
-else
-{
+else {
 	global.AsyncTryCatch = AsyncTryCatch ;
 	global.AsyncTryCatch.stack = [] ;
 	global.AsyncTryCatch.substituted = false ;
@@ -8874,8 +8748,7 @@ else
 
 
 
-if ( process.browser && ! global.setImmediate )
-{
+if ( process.browser && ! global.setImmediate ) {
 	global.setImmediate = function setImmediate( fn ) { return setTimeout( fn , 0 ) ; } ;
 	global.clearImmediate = function clearImmediate( timer ) { return clearTimeout( timer ) ; } ;
 }
@@ -8889,26 +8762,24 @@ if ( ! global.Vanilla.nextTick ) { global.Vanilla.nextTick = process.nextTick ; 
 
 
 
-AsyncTryCatch.try = function try_( fn )
-{
+AsyncTryCatch.try = function try_( fn ) {
 	var self = Object.create( AsyncTryCatch.prototype , {
 		fn: { value: fn , enumerable: true } ,
 		parent: { value: global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] }
 	} ) ;
-	
+
 	return self ;
 } ;
 
 
 
-AsyncTryCatch.prototype.catch = function catch_( catchFn )
-{
+AsyncTryCatch.prototype.catch = function catch_( catchFn ) {
 	Object.defineProperties( this , {
 		catchFn: { value: catchFn , enumerable: true }
 	} ) ;
-	
+
 	if ( ! global.AsyncTryCatch.substituted ) { AsyncTryCatch.substitute() ; }
-	
+
 	try {
 		global.AsyncTryCatch.stack.push( this ) ;
 		this.fn() ;
@@ -8918,98 +8789,93 @@ AsyncTryCatch.prototype.catch = function catch_( catchFn )
 		global.AsyncTryCatch.stack.pop() ;
 		this.callCatchFn( error ) ;
 	}
-	
+
 } ;
 
 
 
 // Handle the bubble up
-AsyncTryCatch.prototype.callCatchFn = function callCatchFn( error )
-{
-	if ( ! this.parent )
-	{
+AsyncTryCatch.prototype.callCatchFn = function callCatchFn( error ) {
+	if ( ! this.parent ) {
 		this.catchFn( error ) ;
 		return ;
 	}
-	
+
 	try {
 		global.AsyncTryCatch.stack.push( this.parent ) ;
 		this.catchFn( error ) ;
 		global.AsyncTryCatch.stack.pop() ;
 	}
-	catch ( error ) {
+	catch ( error_ ) {
 		global.AsyncTryCatch.stack.pop() ;
-		this.parent.callCatchFn( error ) ;
+		this.parent.callCatchFn( error_ ) ;
 	}
 } ;
 
 
 
 // for setTimeout(), setImmediate(), process.nextTick()
-AsyncTryCatch.timerWrapper = function timerWrapper( originalMethod , fn )
-{
-	var fn , context , wrapperFn ,
-		args = Array.prototype.slice.call( arguments , 1 ) ;
-	
-	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
-	{
-		return originalMethod.apply( this , args ) ;
+AsyncTryCatch.timerWrapper = function timerWrapper( originalMethod , fn , ... args ) {
+	var context , wrapperFn ;
+
+	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length ) {
+		return originalMethod.call( this , fn , ... args ) ;
 	}
-	
+
 	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
-	
-	wrapperFn = function timerWrapperFn() {
+
+	wrapperFn = function timerWrapperFn( ... wrapperArgs ) {
+		var returnVal ;
+
 		try {
 			global.AsyncTryCatch.stack.push( context ) ;
-			return fn.apply( this , arguments ) ;
+			returnVal = fn.call( this , ... wrapperArgs ) ;
 			global.AsyncTryCatch.stack.pop() ;
+			return returnVal ;
 		}
 		catch ( error ) {
 			global.AsyncTryCatch.stack.pop() ;
 			context.callCatchFn( error ) ;
 		}
 	} ;
-	
-	args[ 0 ] = wrapperFn ;
-	
-	return originalMethod.apply( this , args ) ;
+
+	return originalMethod.call( this , wrapperFn , ... args ) ;
 } ;
 
 
 
 // for Node-EventEmitter-compatible .addListener()
-AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod , eventName , fn , options , onceWrapper )
-{
-	var fn , context , wrapperFn , onceWrapperFired ;
-	
+AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod , eventName , fn , options , onceWrapper ) {
+	var context , wrapperFn , onceWrapperFired ;
+
 	// NextGen event compatibility
-	if ( typeof fn === 'object' )
-	{
+	if ( typeof fn === 'object' ) {
 		options = fn ;
 		fn = options.fn ;
 		delete options.fn ;
 	}
-	
-	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length )
-	{
+
+	if ( typeof fn !== 'function' || ! global.AsyncTryCatch.stack.length ) {
 		return originalMethod.call( this , eventName , fn , options ) ;
 	}
-	
+
 	context = global.AsyncTryCatch.stack[ global.AsyncTryCatch.stack.length - 1 ] ;
-	
-	if ( onceWrapper )
-	{
+
+	if ( onceWrapper ) {
 		onceWrapperFired = false ;
-		
-		wrapperFn = function listenerOnceWrapperFn() {
+
+		wrapperFn = function listenerOnceWrapperFn( ... wrapperArgs ) {
+			var returnVal ;
+
 			if ( onceWrapperFired ) { return ; }
 			onceWrapperFired = true ;
 			this.removeListener( eventName , wrapperFn ) ;
-			
+
 			try {
 				global.AsyncTryCatch.stack.push( context ) ;
-				return fn.apply( this , arguments ) ;
+				returnVal = fn.call( this , ... wrapperArgs ) ;
 				global.AsyncTryCatch.stack.pop() ;
+				return returnVal ;
 			}
 			catch ( error ) {
 				global.AsyncTryCatch.stack.pop() ;
@@ -9017,13 +8883,15 @@ AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod ,
 			}
 		} ;
 	}
-	else
-	{
-		wrapperFn = function listenerWrapperFn() {
+	else {
+		wrapperFn = function listenerWrapperFn( ... wrapperArgs ) {
+			var returnVal ;
+
 			try {
 				global.AsyncTryCatch.stack.push( context ) ;
-				return fn.apply( this , arguments ) ;
+				returnVal = fn.call( this , ... wrapperArgs ) ;
 				global.AsyncTryCatch.stack.pop() ;
+				return returnVal ;
 			}
 			catch ( error ) {
 				global.AsyncTryCatch.stack.pop() ;
@@ -9031,11 +8899,11 @@ AsyncTryCatch.addListenerWrapper = function addListenerWrapper( originalMethod ,
 			}
 		} ;
 	}
-	
+
 	// This is used to indicate to node.js core events that this function is a wrapper to another.
 	// E.g. it is used internally by .removeListener() to find the registered wrapper from the original userland listener.
 	wrapperFn.listener = fn ;
-	
+
 	return originalMethod.call( this , eventName , wrapperFn , options ) ;
 } ;
 
@@ -9046,95 +8914,100 @@ AsyncTryCatch.setImmediate = AsyncTryCatch.timerWrapper.bind( undefined , global
 AsyncTryCatch.nextTick = AsyncTryCatch.timerWrapper.bind( process , global.Vanilla.nextTick ) ;
 
 // NodeEvents on()/addListener() replacement
-AsyncTryCatch.addListener = function addListener( eventName , fn )
-{
+AsyncTryCatch.addListener = function addListener( eventName , fn ) {
 	return AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListener , eventName , fn ) ;
 } ;
 
 // NodeEvents once() replacement
-AsyncTryCatch.addListenerOnce = function addListenerOnce( eventName , fn )
-{
+AsyncTryCatch.addListenerOnce = function addListenerOnce( eventName , fn ) {
 	return AsyncTryCatch.addListenerWrapper.call( this , AsyncTryCatch.NodeEvents.__addListener , eventName , fn , undefined , true ) ;
 } ;
 
 // NodeEvents removeListener() replacement
-AsyncTryCatch.removeListener = function removeListener( eventName , fn )
-{
+AsyncTryCatch.removeListener = function removeListener( eventName , fn ) {
 	return AsyncTryCatch.NodeEvents.__removeListener.call( this , eventName , fn ) ;
 } ;
 
 // NextGen Events on()/addListener() replacement
-AsyncTryCatch.ngevAddListener = function ngevAddListener( eventName , fn , options )
-{
-	if ( ! options ) { options = {} ; }
-	if ( options.id === undefined ) { options.id = fn ; }
-	
+AsyncTryCatch.ngevAddListener = function ngevAddListener( eventName , fn , options ) {
+	// Ensure there is an id argument
+	if ( fn && typeof fn === 'object' ) {
+		if ( fn.id === undefined ) { fn.id = fn.fn ; }
+	}
+	else if ( options && typeof options === 'object' ) {
+		if ( options.id === undefined ) { options.id = fn ; }
+	}
+	else {
+		options = { id: fn } ;
+	}
+
 	return AsyncTryCatch.addListenerWrapper.call( this ,
 		AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].on ,
 		eventName , fn , options ) ;
 } ;
 
 // NextGen Events once() replacement
-AsyncTryCatch.ngevAddListenerOnce = function ngevAddListenerOnce( eventName , fn , options )
-{
-	if ( ! options ) { options = {} ; }
-	if ( options.id === undefined ) { options.id = fn ; }
-	
+AsyncTryCatch.ngevAddListenerOnce = function ngevAddListenerOnce( eventName , fn , options ) {
+	// Ensure there is an id argument
+	if ( fn && typeof fn === 'object' ) {
+		if ( fn.id === undefined ) { fn.id = fn.fn ; }
+	}
+	else if ( options && typeof options === 'object' ) {
+		if ( options.id === undefined ) { options.id = fn ; }
+	}
+	else {
+		options = { id: fn } ;
+	}
+
 	return AsyncTryCatch.addListenerWrapper.call( this ,
 		AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].once ,
 		eventName , fn , options ) ;
 } ;
 
 // NextGen Events off()/removeListener() replacement
-AsyncTryCatch.ngevRemoveListener = function ngevRemoveListener( eventName , id )
-{
+AsyncTryCatch.ngevRemoveListener = function ngevRemoveListener( eventName , id ) {
 	return AsyncTryCatch.NextGenEvents[ this.asyncTryCatchId ].off.call( this , eventName , id ) ;
 } ;
 
 
 
-AsyncTryCatch.substitute = function substitute()
-{
+AsyncTryCatch.substitute = function substitute() {
 	// This test should be done by the caller, because substitution could be incomplete
 	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
 	//if ( global.AsyncTryCatch.substituted ) { return ; }
-	
+
 	global.AsyncTryCatch.substituted = true ;
-	
+
 	global.setTimeout = AsyncTryCatch.setTimeout ;
 	global.setImmediate = AsyncTryCatch.setTimeout ;
 	process.nextTick = AsyncTryCatch.nextTick ;
-	
+
 	// Global is checked first, in case we are running inside a browser
 	try {
 		AsyncTryCatch.NodeEvents = global.EventEmitter || require( 'events' ) ;
-	} catch ( error ) {}
-	
-	if ( AsyncTryCatch.NodeEvents )
-	{
-		if ( ! AsyncTryCatch.NodeEvents.__addListener )
-		{
+	}
+	catch ( error ) {}
+
+	if ( AsyncTryCatch.NodeEvents ) {
+		if ( ! AsyncTryCatch.NodeEvents.__addListener ) {
 			AsyncTryCatch.NodeEvents.__addListener = AsyncTryCatch.NodeEvents.prototype.on ;
 		}
-		
-		if ( ! AsyncTryCatch.NodeEvents.__addListenerOnce )
-		{
+
+		if ( ! AsyncTryCatch.NodeEvents.__addListenerOnce ) {
 			AsyncTryCatch.NodeEvents.__addListenerOnce = AsyncTryCatch.NodeEvents.prototype.once ;
 		}
-		
-		if ( ! AsyncTryCatch.NodeEvents.__removeListener )
-		{
+
+		if ( ! AsyncTryCatch.NodeEvents.__removeListener ) {
 			AsyncTryCatch.NodeEvents.__removeListener = AsyncTryCatch.NodeEvents.prototype.removeListener ;
 		}
-		
+
 		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.addListener ;
 		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.addListener ;
 		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.addListenerOnce ;
 		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.removeListener ;
 	}
-	
-	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ )
-	{
+
+	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ ) {
 		//console.log( 'substituting NextGenEvents' , i ) ;
 		AsyncTryCatch.NextGenEvents[ i ].prototype.on = AsyncTryCatch.ngevAddListener ;
 		AsyncTryCatch.NextGenEvents[ i ].prototype.addListener = AsyncTryCatch.ngevAddListener ;
@@ -9146,28 +9019,25 @@ AsyncTryCatch.substitute = function substitute()
 
 
 
-AsyncTryCatch.restore = function restore()
-{
+AsyncTryCatch.restore = function restore() {
 	// This test should be done by the caller, because substitution could be incomplete
 	// E.g. browser case: Node Events or NextGen Events are not loaded/accessible at time
 	//if ( ! global.AsyncTryCatch.substituted ) { return ; }
-	
+
 	global.AsyncTryCatch.substituted = false ;
-	
+
 	global.setTimeout = global.Vanilla.setTimeout ;
 	global.setImmediate = global.Vanilla.setImmediate ;
 	process.nextTick = global.Vanilla.nextTick ;
-	
-	if ( AsyncTryCatch.NodeEvents )
-	{
+
+	if ( AsyncTryCatch.NodeEvents ) {
 		AsyncTryCatch.NodeEvents.prototype.on = AsyncTryCatch.NodeEvents.__addListener ;
 		AsyncTryCatch.NodeEvents.prototype.addListener = AsyncTryCatch.NodeEvents.__addListener ;
 		AsyncTryCatch.NodeEvents.prototype.once = AsyncTryCatch.NodeEvents.__addListenerOnce ;
 		AsyncTryCatch.NodeEvents.prototype.removeListener = AsyncTryCatch.NodeEvents.__removeListener ;
 	}
-	
-	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ )
-	{
+
+	for ( var i = 0 ; i < AsyncTryCatch.NextGenEvents.length ; i ++ ) {
 		AsyncTryCatch.NextGenEvents[ i ].prototype.on = AsyncTryCatch.NextGenEvents[ i ].on ;
 		AsyncTryCatch.NextGenEvents[ i ].prototype.addListener = AsyncTryCatch.NextGenEvents[ i ].on ;
 		AsyncTryCatch.NextGenEvents[ i ].prototype.once = AsyncTryCatch.NextGenEvents[ i ].once ;
@@ -9179,53 +9049,31 @@ AsyncTryCatch.restore = function restore()
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":22,"_process":42,"events":28}],22:[function(require,module,exports){
+},{"../package.json":22,"_process":41,"events":28}],22:[function(require,module,exports){
 module.exports={
-  "_args": [
-    [
-      {
-        "raw": "async-try-catch@^0.3.4",
-        "scope": null,
-        "escapedName": "async-try-catch",
-        "name": "async-try-catch",
-        "rawSpec": "^0.3.4",
-        "spec": ">=0.3.4 <0.4.0",
-        "type": "range"
-      },
-      "/home/cedric/inside/github/tea-time"
-    ]
-  ],
-  "_from": "async-try-catch@>=0.3.4 <0.4.0",
-  "_id": "async-try-catch@0.3.4",
-  "_inCache": true,
+  "_from": "async-try-catch@0.3.6",
+  "_id": "async-try-catch@0.3.6",
+  "_inBundle": false,
+  "_integrity": "sha512-EUoyv/bGT2zMdfz61Vlxa/IZwro0UZ76Pprt7uyuk0032+Zk9S6F0MwobujNehVzYmcSYmsToz99YQAYJi743w==",
   "_location": "/async-try-catch",
-  "_nodeVersion": "4.5.0",
-  "_npmOperationalInternal": {
-    "host": "packages-16-east.internal.npmjs.com",
-    "tmp": "tmp/async-try-catch-0.3.4.tgz_1473947980260_0.13601095625199378"
-  },
-  "_npmUser": {
-    "name": "cronvel",
-    "email": "cedric.ronvel@gmail.com"
-  },
-  "_npmVersion": "2.15.9",
   "_phantomChildren": {},
   "_requested": {
-    "raw": "async-try-catch@^0.3.4",
-    "scope": null,
-    "escapedName": "async-try-catch",
+    "type": "version",
+    "registry": true,
+    "raw": "async-try-catch@0.3.6",
     "name": "async-try-catch",
-    "rawSpec": "^0.3.4",
-    "spec": ">=0.3.4 <0.4.0",
-    "type": "range"
+    "escapedName": "async-try-catch",
+    "rawSpec": "0.3.6",
+    "saveSpec": null,
+    "fetchSpec": "0.3.6"
   },
   "_requiredBy": [
+    "#USER",
     "/"
   ],
-  "_resolved": "https://registry.npmjs.org/async-try-catch/-/async-try-catch-0.3.4.tgz",
-  "_shasum": "e481b68ff368cbfca3a8b24150eb3e6b4b3c1682",
-  "_shrinkwrap": null,
-  "_spec": "async-try-catch@^0.3.4",
+  "_resolved": "https://registry.npmjs.org/async-try-catch/-/async-try-catch-0.3.6.tgz",
+  "_shasum": "8a632b2bf39fee1e184f9c83478dfdf09328610a",
+  "_spec": "async-try-catch@0.3.6",
   "_where": "/home/cedric/inside/github/tea-time",
   "author": {
     "name": "Cédric Ronvel"
@@ -9233,32 +9081,29 @@ module.exports={
   "bugs": {
     "url": "https://github.com/cronvel/async-try-catch/issues"
   },
+  "bundleDependencies": false,
   "copyright": {
     "title": "Async Try-Catch",
     "years": [
       2015,
-      2016
+      2018
     ],
     "owner": "Cédric Ronvel"
   },
   "dependencies": {},
+  "deprecated": false,
   "description": "Async try catch",
   "devDependencies": {
     "browserify": "^13.1.0",
     "expect.js": "^0.3.1",
     "jshint": "^2.9.3",
     "mocha": "^3.0.2",
-    "nextgen-events": "^0.9.7",
-    "uglify-js": "^2.7.3"
+    "nextgen-events": "^0.12.3",
+    "uglify-js-es6": "^2.8.9"
   },
   "directories": {
     "test": "test"
   },
-  "dist": {
-    "shasum": "e481b68ff368cbfca3a8b24150eb3e6b4b3c1682",
-    "tarball": "https://registry.npmjs.org/async-try-catch/-/async-try-catch-0.3.4.tgz"
-  },
-  "gitHead": "ab55eb1391c246e79f8482d6ffd292f0d808094a",
   "homepage": "https://github.com/cronvel/async-try-catch#readme",
   "keywords": [
     "async",
@@ -9267,15 +9112,7 @@ module.exports={
   ],
   "license": "MIT",
   "main": "lib/AsyncTryCatch.js",
-  "maintainers": [
-    {
-      "name": "cronvel",
-      "email": "cedric.ronvel@gmail.com"
-    }
-  ],
   "name": "async-try-catch",
-  "optionalDependencies": {},
-  "readme": "ERROR: No README data found!",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cronvel/async-try-catch.git"
@@ -9283,7 +9120,7 @@ module.exports={
   "scripts": {
     "test": "mocha -R dot"
   },
-  "version": "0.3.4"
+  "version": "0.3.6"
 }
 
 },{}],23:[function(require,module,exports){
@@ -13434,6 +13271,116 @@ domKit.removeWhiteSpaces = function removeWhiteSpaces( $container , onlyWhiteLin
 
 
 
+// Transform-related method
+
+domKit.parseMatrix = function parseMatrix( str )
+{
+	var matches = str.match( /(matrix|matrix3d)\(([0-9., -]+)\)/ ) ;
+	
+	if ( ! matches ) { return null ; }
+	
+	return matches[ 2 ].trim().split( / ?, ?/ ).map( function( e ) {
+		return parseFloat( e ) ;
+	} ) ;
+} ;
+
+
+
+domKit.decomposeMatrix = function decomposeMatrix( mat )
+{
+	if ( mat.length === 6 ) { return domKit.decomposeMatrix2d( mat ) ; }
+	if ( mat.length === 16 ) { return domKit.decomposeMatrix3d( mat ) ; }
+	else { return null ; }
+} ;
+
+
+
+// From: https://stackoverflow.com/questions/16359246/how-to-extract-position-rotation-and-scale-from-matrix-svg
+domKit.decomposeMatrix2d = function decomposeMatrix2d( mat )
+{
+	var angle = Math.atan2( mat[1] , mat[0] ) ,
+		denom = mat[0] * mat[0] + mat[1] * mat[1] ,
+		scaleX = Math.sqrt( denom ) ,
+		scaleY = ( mat[0] * mat[3] - mat[2] * mat[1] ) / scaleX ,
+		skewX = Math.atan2( mat[0] * mat[2] + mat[1] * mat[3] , denom ) ;
+	
+	return {
+		rotate: 180 * angle / Math.PI ,  // in degrees
+		scaleX: scaleX ,
+		scaleY: scaleY ,
+		skewX: 180 * skewX / Math.PI ,  // in degree
+		skewY: 0 ,  // always 0 in this decomposition
+		translateX: mat[4] ,
+		translateY: mat[5]
+	} ;
+} ;
+
+
+
+// https://stackoverflow.com/questions/15024828/transforming-3d-matrix-into-readable-format
+// supports only scale*rotate*translate matrix
+domKit.decomposeMatrix3d = function decomposeMatrix3d( mat )
+{
+	var radians = Math.PI / 180 ;
+
+	var sX = Math.sqrt( mat[0] * mat[0] + mat[1] * mat[1] + mat[2] * mat[2] ) ,
+		sY = Math.sqrt( mat[4] * mat[4] + mat[5] * mat[5] + mat[6] * mat[6] ) ,
+		sZ = Math.sqrt( mat[8] * mat[8] + mat[9] * mat[9] + mat[10] * mat[10] ) ;
+
+	var rX = Math.atan2( - mat[9] / sZ , mat[10] / sZ ) / radians ,
+		rY = Math.asin( mat[8] / sZ ) / radians ,
+		rZ = Math.atan2( - mat[4] / sY , mat[0] / sX ) / radians ;
+
+	if ( mat[4] === 1 || mat[4] === -1 )
+	{
+		rX = 0 ;
+		rY = mat[4] * - Math.PI / 2 ;
+		rZ = mat[4] * Math.atan2( mat[6] / sY , mat[5] / sY ) / radians ;
+	}
+
+	var tX = mat[12] / sX ,
+		tY = mat[13] / sX ,
+		tZ = mat[14] / sX ;
+	
+	return {
+		translateX: tX ,
+		translateY: tY ,
+		translateZ: tZ ,
+		rotateX: rX ,
+		rotateY: rY ,
+		rotateZ: rZ ,
+		scaleX: sX ,
+		scaleY: sY ,
+		scaleZ: sZ
+	} ;
+} ;
+
+
+
+domKit.stringifyTransform = function stringifyTransform( object )
+{
+	var str = [] ;
+	
+	if ( object.translateX ) { str.push( 'translateX(' + object.translateX + 'px)' ) ; }
+	if ( object.translateY ) { str.push( 'translateY(' + object.translateY + 'px)' ) ; }
+	if ( object.translateZ ) { str.push( 'translateZ(' + object.translateZ + 'px)' ) ; }
+	if ( object.rotate ) { str.push( 'rotate(' + object.rotate + 'deg)' ) ; }
+	if ( object.rotateX ) { str.push( 'rotateX(' + object.rotateX + 'deg)' ) ; }
+	if ( object.rotateY ) { str.push( 'rotateY(' + object.rotateY + 'deg)' ) ; }
+	if ( object.rotateZ ) { str.push( 'rotateZ(' + object.rotateZ + 'deg)' ) ; }
+	if ( object.scaleX ) { str.push( 'scaleX(' + object.scaleX + ')' ) ; }
+	if ( object.scaleY ) { str.push( 'scaleY(' + object.scaleY + ')' ) ; }
+	if ( object.scaleZ ) { str.push( 'scaleZ(' + object.scaleZ + ')' ) ; }
+	if ( object.skewX ) { str.push( 'skewX(' + object.skewX + 'deg)' ) ; }
+	if ( object.skewY ) { str.push( 'skewY(' + object.skewY + 'deg)' ) ; }
+	
+	return str.join( ' ' ) ;
+} ;
+
+
+
+
+
 		/* Function useful for .batch() as callback */
 		/* ... to avoid defining again and again the same callback function */
 
@@ -13449,7 +13396,7 @@ domKit.html = function html( $element , html ) { $element.innerHTML = html ; } ;
 
 
 }).call(this,require('_process'))
-},{"@cronvel/xmldom":9,"_process":42}],28:[function(require,module,exports){
+},{"@cronvel/xmldom":9,"_process":41}],28:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -17580,24 +17527,24 @@ function isSlowBuffer (obj) {
 }
 
 },{}],35:[function(require,module,exports){
-(function (global){
+(function (process,global){
 /*
-	Next Gen Events
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
+	Next-Gen Events
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -17611,86 +17558,99 @@ function isSlowBuffer (obj) {
 
 
 
-function NextGenEvents() { return Object.create( NextGenEvents.prototype ) ; }
+// Some features needs a portable nextTick
+const nextTick = process.browser ? window.setImmediate : process.nextTick ;
+
+
+
+if ( ! global.__NEXTGEN_EVENTS__ ) {
+	global.__NEXTGEN_EVENTS__ = {
+		recursions: 0
+	} ;
+}
+
+var globalData = global.__NEXTGEN_EVENTS__ ;
+
+
+
+function NextGenEvents() {}
 module.exports = NextGenEvents ;
 NextGenEvents.prototype.__prototypeUID__ = 'nextgen-events/NextGenEvents' ;
 NextGenEvents.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
 
-			/* Basic features, more or less compatible with Node.js */
+
+
+/* Basic features, more or less compatible with Node.js */
 
 
 
 NextGenEvents.SYNC = -Infinity ;
+NextGenEvents.DESYNC = -1 ;
 
 // Not part of the prototype, because it should not pollute userland's prototype.
 // It has an eventEmitter as 'this' anyway (always called using call()).
-NextGenEvents.init = function init()
-{
+NextGenEvents.init = function init() {
 	Object.defineProperty( this , '__ngev' , {
 		configurable: true ,
-		value: {
-			nice: NextGenEvents.SYNC ,
-			interruptible: false ,
-			recursion: 0 ,
-			contexts: {} ,
-			
-			// States by events
-			states: {} ,
-			
-			// State groups by events
-			stateGroups: {} ,
-			
-			// Listeners by events
-			listeners: {
-				// Special events
-				error: [] ,
-				interrupt: [] ,
-				newListener: [] ,
-				removeListener: []
-			}
-		}
+		value: new NextGenEvents.Internal()
 	} ) ;
 } ;
 
 
 
-NextGenEvents.initFrom = function initFrom( from )
-{
+NextGenEvents.Internal = function Internal( from ) {
+	this.nice = NextGenEvents.SYNC ;
+	this.interruptible = false ;
+	this.contexts = {} ;
+	this.desync = setImmediate ;
+	this.depth = 0 ;
+
+	// States by events
+	this.states = {} ;
+
+	// State groups by events
+	this.stateGroups = {} ;
+
+	// Listeners by events
+	this.listeners = {
+		// Special events
+		error: [] ,
+		interrupt: [] ,
+		newListener: [] ,
+		removeListener: []
+	} ;
+
+	if ( from ) {
+		this.nice = from.nice ;
+		this.interruptible = from.interruptible ;
+		Object.assign( this.states , from.states ) ,
+		Object.assign( this.stateGroups , from.stateGroups ) ,
+
+		Object.keys( from.listeners ).forEach( eventName => {
+			this.listeners[ eventName ] = from.listeners[ eventName ].slice() ;
+		} ) ;
+
+		// Copy all contexts
+		Object.keys( from.contexts ).forEach( contextName => {
+			var context = from.contexts[ contextName ] ;
+
+			this.addListenerContext( contextName , {
+				nice: context.nice ,
+				status: context.status ,
+				serial: context.serial
+			} ) ;
+		} ) ;
+	}
+} ;
+
+
+
+NextGenEvents.initFrom = function initFrom( from ) {
 	if ( ! from.__ngev ) { NextGenEvents.init.call( from ) ; }
-	
+
 	Object.defineProperty( this , '__ngev' , {
 		configurable: true ,
-		value: {
-			nice: from.__ngev.nice ,
-			interruptible: from.__ngev.interruptible ,
-			recursion: 0 ,
-			contexts: {} ,
-			
-			// States by events
-			states: Object.assign( {} , from.__ngev.states ) ,
-			
-			// State groups by events
-			stateGroups: Object.assign( {} , from.__ngev.stateGroups ) ,
-			
-			// Listeners by events
-			listeners: {}
-		}
-	} ) ;
-	
-	// Copy all listeners
-	Object.keys( from.__ngev.listeners ).forEach( eventName => {
-		this.__ngev.listeners[ eventName ] = from.__ngev.listeners[ eventName ].slice() ;
-	} ) ;
-	
-	// Copy all contexts
-	Object.keys( from.__ngev.contexts ).forEach( contextName => {
-		var context = from.__ngev.contexts[ contextName ] ;
-		
-		this.addListenerContext( contextName , {
-			nice: context.nice ,
-			status: context.status ,
-			serial: context.serial
-		} ) ;
+		value: new NextGenEvents.Internal( from.__ngev )
 	} ) ;
 } ;
 
@@ -17701,60 +17661,54 @@ NextGenEvents.initFrom = function initFrom( from )
 		* listeners that are present locally but not in all foreigner are removed (one of the foreigner has removed it)
 		* listeners that are not present locally but present in at least one foreigner are copied
 */
-NextGenEvents.mergeListeners = function mergeListeners( foreigners )
-{
+NextGenEvents.mergeListeners = function mergeListeners( foreigners ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
+
 	// Backup the current listeners...
 	var oldListeners = this.__ngev.listeners ;
-	
-	
+
+
 	// Reset listeners...
 	this.__ngev.listeners = {} ;
-	
+
 	Object.keys( oldListeners ).forEach( eventName => {
 		this.__ngev.listeners[ eventName ] = [] ;
 	} ) ;
-	
+
 	foreigners.forEach( foreigner => {
 		if ( ! foreigner.__ngev ) { NextGenEvents.init.call( foreigner ) ; }
-		
+
 		Object.keys( foreigner.__ngev.listeners ).forEach( eventName => {
 			if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
 		} ) ;
 	} ) ;
-	
-	
+
+
 	// Now we can scan by eventName first
 	Object.keys( this.__ngev.listeners ).forEach( eventName => {
-		
+
 		var i , iMax , blacklist = [] ;
-		
+
 		// First pass: find all removed listeners and add them to the blacklist
-		if ( oldListeners[ eventName ] )
-		{
+		if ( oldListeners[ eventName ] ) {
 			oldListeners[ eventName ].forEach( listener => {
-				for ( i = 0 , iMax = foreigners.length ; i < iMax ; i ++ )
-				{
+				for ( i = 0 , iMax = foreigners.length ; i < iMax ; i ++ ) {
 					if (
 						! foreigners[ i ].__ngev.listeners[ eventName ] ||
 						foreigners[ i ].__ngev.listeners[ eventName ].indexOf( listener ) === -1
-					)
-					{
-						//console.error( "Missing listener" , eventName , listener , foreigners[ i ] ) ;
+					) {
 						blacklist.push( listener ) ;
 						break ;
 					}
 				}
 			} ) ;
 		}
-		
+
 		// Second pass: add all listeners still not present and that are not blacklisted
 		foreigners.forEach( foreigner => {
-			
+
 			foreigner.__ngev.listeners[ eventName ].forEach( listener => {
-				if ( this.__ngev.listeners[ eventName ].indexOf( listener ) === -1 && blacklist.indexOf( listener ) === -1 )
-				{
+				if ( this.__ngev.listeners[ eventName ].indexOf( listener ) === -1 && blacklist.indexOf( listener ) === -1 ) {
 					this.__ngev.listeners[ eventName ].push( listener ) ;
 				}
 			} ) ;
@@ -17770,17 +17724,30 @@ NextGenEvents.filterOutCallback = function( what , currentElement ) { return wha
 
 
 // .addListener( eventName , [fn] , [options] )
-NextGenEvents.prototype.addListener = function addListener( eventName , fn , options )
-{
+NextGenEvents.prototype.addListener = function addListener( eventName , fn , options ) {
 	var listener = {} , newListenerListeners ;
-	
+
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-	
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".addListener(): argument #0 should be a non-empty string" ) ; }
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
+
+	if ( ! eventName || typeof eventName !== 'string' ) {
+		throw new TypeError( ".addListener(): argument #0 should be a non-empty string" ) ;
+	}
+
+	if ( typeof fn !== 'function' ) {
+		if ( options === true && fn && typeof fn === 'object' ) {
+			// We want to use the current object as the listener object (used by Spellcast's serializer)
+			options = listener = fn ;
+			fn = undefined ;
+		}
+		else {
+			options = fn ;
+			fn = undefined ;
+		}
+	}
+
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
+
 	listener.fn = fn || options.fn ;
 	listener.id = options.id !== undefined ? options.id : listener.fn ;
 	listener.once = !! options.once ;
@@ -17788,31 +17755,28 @@ NextGenEvents.prototype.addListener = function addListener( eventName , fn , opt
 	listener.eventObject = !! options.eventObject ;
 	listener.nice = options.nice !== undefined ? Math.floor( options.nice ) : NextGenEvents.SYNC ;
 	listener.context = typeof options.context === 'string' ? options.context : null ;
-	
-	if ( typeof listener.fn !== 'function' )
-	{
+
+	if ( typeof listener.fn !== 'function' ) {
 		throw new TypeError( ".addListener(): a function or an object with a 'fn' property which value is a function should be provided" ) ;
 	}
-	
+
 	// Implicit context creation
-	if ( listener.context && typeof listener.context === 'string' && ! this.__ngev.contexts[ listener.context ] )
-	{
+	if ( listener.context && typeof listener.context === 'string' && ! this.__ngev.contexts[ listener.context ] ) {
 		this.addListenerContext( listener.context ) ;
 	}
-	
+
 	// Note: 'newListener' and 'removeListener' event return an array of listener, but not the event name.
 	// So the event's name can be retrieved in the listener itself.
 	listener.event = eventName ;
-	
-	if ( this.__ngev.listeners.newListener.length )
-	{
+
+	if ( this.__ngev.listeners.newListener.length ) {
 		// Extra care should be taken with the 'newListener' event, we should avoid recursion
 		// in the case that eventName === 'newListener', but inside a 'newListener' listener,
 		// .listenerCount() should report correctly
 		newListenerListeners = this.__ngev.listeners.newListener.slice() ;
-		
+
 		this.__ngev.listeners[ eventName ].push( listener ) ;
-		
+
 		// Return an array, because one day, .addListener() may support multiple event addition at once,
 		// e.g.: .addListener( { request: onRequest, close: onClose, error: onError } ) ;
 		NextGenEvents.emitEvent( {
@@ -17821,16 +17785,16 @@ NextGenEvents.prototype.addListener = function addListener( eventName , fn , opt
 			args: [ [ listener ] ] ,
 			listeners: newListenerListeners
 		} ) ;
-		
+
 		if ( this.__ngev.states[ eventName ] ) { NextGenEvents.emitToOneListener( this.__ngev.states[ eventName ] , listener ) ; }
-		
+
 		return this ;
 	}
-	
+
 	this.__ngev.listeners[ eventName ].push( listener ) ;
-	
+
 	if ( this.__ngev.states[ eventName ] ) { NextGenEvents.emitToOneListener( this.__ngev.states[ eventName ] , listener ) ; }
-	
+
 	return this ;
 } ;
 
@@ -17840,48 +17804,42 @@ NextGenEvents.prototype.on = NextGenEvents.prototype.addListener ;
 
 // Shortcut
 // .once( eventName , [fn] , [options] )
-NextGenEvents.prototype.once = function once( eventName , fn , options )
-{
+NextGenEvents.prototype.once = function once( eventName , fn , options ) {
 	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
 	else if ( options && typeof options === 'object' ) { options.once = true ; }
 	else { options = { once: true } ; }
-	
+
 	return this.addListener( eventName , fn , options ) ;
 } ;
 
 
 
-NextGenEvents.prototype.removeListener = function removeListener( eventName , id )
-{
+NextGenEvents.prototype.removeListener = function removeListener( eventName , id ) {
 	var i , length , newListeners = [] , removedListeners = [] ;
-	
+
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeListener(): argument #0 should be a non-empty string" ) ; }
-	
+
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-	
+
 	length = this.__ngev.listeners[ eventName ].length ;
-	
+
 	// It's probably faster to create a new array of listeners
-	for ( i = 0 ; i < length ; i ++ )
-	{
-		if ( this.__ngev.listeners[ eventName ][ i ].id === id )
-		{
+	for ( i = 0 ; i < length ; i ++ ) {
+		if ( this.__ngev.listeners[ eventName ][ i ].id === id ) {
 			removedListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
 		}
-		else
-		{
+		else {
 			newListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
 		}
 	}
-	
+
 	this.__ngev.listeners[ eventName ] = newListeners ;
-	
-	if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
-	{
+
+	if ( removedListeners.length && this.__ngev.listeners.removeListener.length ) {
 		this.emit( 'removeListener' , removedListeners ) ;
 	}
-	
+
 	return this ;
 } ;
 
@@ -17889,112 +17847,87 @@ NextGenEvents.prototype.off = NextGenEvents.prototype.removeListener ;
 
 
 
-NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventName )
-{
+NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventName ) {
 	var removedListeners ;
-	
+
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
-	if ( eventName )
-	{
+
+	if ( eventName ) {
 		// Remove all listeners for a particular event
-		
+
 		if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeAllListeners(): argument #0 should be undefined or a non-empty string" ) ; }
-		
+
 		if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-		
+
 		removedListeners = this.__ngev.listeners[ eventName ] ;
 		this.__ngev.listeners[ eventName ] = [] ;
-		
-		if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
-		{
+
+		if ( removedListeners.length && this.__ngev.listeners.removeListener.length ) {
 			this.emit( 'removeListener' , removedListeners ) ;
 		}
 	}
-	else
-	{
+	else {
 		// Remove all listeners for any events
 		// 'removeListener' listeners cannot be triggered: they are already deleted
 		this.__ngev.listeners = {} ;
 	}
-	
+
 	return this ;
 } ;
 
 
 
-NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , context )
-{
-	var returnValue , serial , listenerCallback ;
-	
+NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , contextScope , serial ) {
+	var returnValue , listenerCallback ;
+
 	if ( event.interrupt ) { return ; }
-	
-	if ( listener.async )
-	{
-		//serial = context && context.serial ;
-		if ( context )
-		{
-			serial = context.serial ;
-			context.ready = ! serial ;
+
+	if ( listener.async ) {
+		if ( contextScope ) {
+			contextScope.ready = ! serial ;
 		}
-		
+
 		listenerCallback = ( arg ) => {
-			
+
 			event.listenersDone ++ ;
-			
+
 			// Async interrupt
-			if ( arg && event.emitter.__ngev.interruptible && ! event.interrupt && event.name !== 'interrupt' )
-			{
+			if ( arg && event.emitter.__ngev.interruptible && ! event.interrupt && event.name !== 'interrupt' ) {
 				event.interrupt = arg ;
-				
-				if ( event.callback )
-				{
-					event.callback( event.interrupt , event ) ;
-					delete event.callback ;
-				}
-				
+
+				if ( event.callback ) { NextGenEvents.emitCallback( event ) ; }
+
 				event.emitter.emit( 'interrupt' , event.interrupt ) ;
 			}
-			else if ( event.listenersDone >= event.listeners.length && event.callback )
-			{
-				event.callback( undefined , event ) ;
-				delete event.callback ;
+			else if ( event.listenersDone >= event.listeners.length && event.callback ) {
+				NextGenEvents.emitCallback( event ) ;
 			}
-			
+
 			// Process the queue if serialized
-			if ( serial ) { NextGenEvents.processQueue.call( event.emitter , listener.context , true ) ; }
-			
+			if ( serial ) { NextGenEvents.processScopeQueue( event.emitter , contextScope , true , true ) ; }
 		} ;
-		
+
 		if ( listener.eventObject ) { listener.fn( event , listenerCallback ) ; }
 		else { returnValue = listener.fn.apply( undefined , event.args.concat( listenerCallback ) ) ; }
 	}
-	else
-	{
+	else {
 		if ( listener.eventObject ) { listener.fn( event ) ; }
 		else { returnValue = listener.fn.apply( undefined , event.args ) ; }
-		
+
 		event.listenersDone ++ ;
 	}
-	
+
 	// Interrupt if non-falsy return value, if the emitter is interruptible, not already interrupted (emit once),
 	// and not within an 'interrupt' event.
-	if ( returnValue && event.emitter.__ngev.interruptible && ! event.interrupt && event.name !== 'interrupt' )
-	{
+	if ( returnValue && event.emitter.__ngev.interruptible && ! event.interrupt && event.name !== 'interrupt' ) {
 		event.interrupt = returnValue ;
-		
-		if ( event.callback )
-		{
-			event.callback( event.interrupt , event ) ;
-			delete event.callback ;
-		}
-		
+
+		if ( event.callback ) { NextGenEvents.emitCallback( event ) ; }
+
 		event.emitter.emit( 'interrupt' , event.interrupt ) ;
 	}
-	else if ( event.listenersDone >= event.listeners.length && event.callback )
-	{
-		event.callback( undefined , event ) ;
-		delete event.callback ;
+	else if ( event.listenersDone >= event.listeners.length && event.callback ) {
+		NextGenEvents.emitCallback( event ) ;
 	}
 } ;
 
@@ -18008,47 +17941,49 @@ var nextEventId = 0 ;
 /*
 	emit( [nice] , eventName , [arg1] , [arg2] , [...] , [emitCallback] )
 */
-NextGenEvents.prototype.emit = function emit()
-{
+NextGenEvents.prototype.emit = function emit( ... args ) {
 	var event ;
-	
-	event = { emitter: this } ;
-	
+
+	event = {
+		emitter: this ,
+		interrupt: null ,
+		sync: true
+	} ;
+
 	// Arguments handling
-	if ( typeof arguments[ 0 ] === 'number' )
-	{
-		event.nice = Math.floor( arguments[ 0 ] ) ;
-		event.name = arguments[ 1 ] ;
-		if ( ! event.name || typeof event.name !== 'string' ) { throw new TypeError( ".emit(): when argument #0 is a number, argument #1 should be a non-empty string" ) ; }
-		
-		if ( typeof arguments[ arguments.length - 1 ] === 'function' )
-		{
-			event.callback = arguments[ arguments.length - 1 ] ;
-			event.args = Array.prototype.slice.call( arguments , 2 , -1 ) ;
+	if ( typeof args[ 0 ] === 'number' ) {
+		event.nice = Math.floor( args[ 0 ] ) ;
+		event.name = args[ 1 ] ;
+
+		if ( ! event.name || typeof event.name !== 'string' ) {
+			throw new TypeError( ".emit(): when argument #0 is a number, argument #1 should be a non-empty string" ) ;
 		}
-		else
-		{
-			event.args = Array.prototype.slice.call( arguments , 2 ) ;
+
+		if ( typeof args[ args.length - 1 ] === 'function' ) {
+			event.callback = args[ args.length - 1 ] ;
+			event.args = args.slice( 2 , -1 ) ;
+		}
+		else {
+			event.args = args.slice( 2 ) ;
 		}
 	}
-	else
-	{
+	else {
 		//event.nice = this.__ngev.nice ;
-		event.name = arguments[ 0 ] ;
-		if ( ! event.name || typeof event.name !== 'string' ) { throw new TypeError( ".emit(): argument #0 should be an number or a non-empty string" ) ; }
-		event.args = Array.prototype.slice.call( arguments , 1 ) ;
-		
-		if ( typeof arguments[ arguments.length - 1 ] === 'function' )
-		{
-			event.callback = arguments[ arguments.length - 1 ] ;
-			event.args = Array.prototype.slice.call( arguments , 1 , -1 ) ;
+		event.name = args[ 0 ] ;
+
+		if ( ! event.name || typeof event.name !== 'string' ) {
+			throw new TypeError( ".emit(): argument #0 should be an number or a non-empty string" ) ;
 		}
-		else
-		{
-			event.args = Array.prototype.slice.call( arguments , 1 ) ;
+
+		if ( typeof args[ args.length - 1 ] === 'function' ) {
+			event.callback = args[ args.length - 1 ] ;
+			event.args = args.slice( 1 , -1 ) ;
+		}
+		else {
+			event.args = args.slice( 1 ) ;
 		}
 	}
-	
+
 	return NextGenEvents.emitEvent( event ) ;
 } ;
 
@@ -18063,82 +17998,76 @@ NextGenEvents.prototype.emit = function emit()
 		* callback: (optional) a callback for emit
 		* listeners: (optional) override the listeners array stored in __ngev
 */
-NextGenEvents.emitEvent = function emitEvent( event )
-{
+NextGenEvents.emitEvent = function emitEvent( event ) {
 	var self = event.emitter ,
 		i , iMax , count = 0 , state , removedListeners ;
-	
+
 	if ( ! self.__ngev ) { NextGenEvents.init.call( self ) ; }
-	
+
 	state = self.__ngev.states[ event.name ] ;
-	
+
 	// This is a state event, register it now!
-	if ( state !== undefined )
-	{
+	if ( state !== undefined ) {
 		if ( state && event.args.length === state.args.length &&
-			event.args.every( ( arg , index ) => arg === state.args[ index ] ) )
-		{
+			event.args.every( ( arg , index ) => arg === state.args[ index ] ) ) {
 			// The emitter is already in this exact state, skip it now!
 			return ;
 		}
-		
+
 		// Unset all states of that group
 		self.__ngev.stateGroups[ event.name ].forEach( ( eventName ) => {
 			self.__ngev.states[ eventName ] = null ;
 		} ) ;
-		
+
 		self.__ngev.states[ event.name ] = event ;
 	}
-	
+
 	if ( ! self.__ngev.listeners[ event.name ] ) { self.__ngev.listeners[ event.name ] = [] ; }
-	
+
 	event.id = nextEventId ++ ;
 	event.listenersDone = 0 ;
 	event.once = !! event.once ;
-	
+
 	if ( event.nice === undefined || event.nice === null ) { event.nice = self.__ngev.nice ; }
-	
+
 	// Trouble arise when a listener is removed from another listener, while we are still in the loop.
 	// So we have to COPY the listener array right now!
 	if ( ! event.listeners ) { event.listeners = self.__ngev.listeners[ event.name ].slice() ; }
-	
-	// Increment self.__ngev.recursion
-	self.__ngev.recursion ++ ;
+
+	// Increment globalData.recursions
+	globalData.recursions ++ ;
+	event.depth = self.__ngev.depth ++ ;
 	removedListeners = [] ;
-	
+
 	// Emit the event to all listeners!
-	for ( i = 0 , iMax = event.listeners.length ; i < iMax ; i ++ )
-	{
+	for ( i = 0 , iMax = event.listeners.length ; i < iMax ; i ++ ) {
 		count ++ ;
 		NextGenEvents.emitToOneListener( event , event.listeners[ i ] , removedListeners ) ;
 	}
-	
-	// Decrement recursion
-	self.__ngev.recursion -- ;
-	
+
+	// Decrement globalData.recursions
+	globalData.recursions -- ;
+	if ( ! event.callback ) { self.__ngev.depth -- ; }
+
 	// Emit 'removeListener' after calling listeners
-	if ( removedListeners.length && self.__ngev.listeners.removeListener.length )
-	{
+	if ( removedListeners.length && self.__ngev.listeners.removeListener.length ) {
 		self.emit( 'removeListener' , removedListeners ) ;
 	}
-	
-	
+
+
 	// 'error' event is a special case: it should be listened for, or it will throw an error
-	if ( ! count )
-	{
-		if ( event.name === 'error' )
-		{
+	if ( ! count ) {
+		if ( event.name === 'error' ) {
 			if ( event.args[ 0 ] ) { throw event.args[ 0 ] ; }
 			else { throw Error( "Uncaught, unspecified 'error' event." ) ; }
 		}
-		
-		if ( event.callback )
-		{
-			event.callback( undefined , event ) ;
-			delete event.callback ;
-		}
+
+		if ( event.callback ) { NextGenEvents.emitCallback( event ) ; }
 	}
-	
+
+	// Leaving sync mode
+	event.sync = false ;
+
 	return event ;
 } ;
 
@@ -18146,136 +18075,154 @@ NextGenEvents.emitEvent = function emitEvent( event )
 
 // If removedListeners is not given, then one-time listener emit the 'removeListener' event,
 // if given: that's the caller business to do it
-NextGenEvents.emitToOneListener = function emitToOneListener( event , listener , removedListeners )
-{	
+NextGenEvents.emitToOneListener = function emitToOneListener( event , listener , removedListeners ) {
 	var self = event.emitter ,
-		context , currentNice , emitRemoveListener = false ;
-	
+		context , contextScope , serial , currentNice , emitRemoveListener = false ;
+
 	context = listener.context && self.__ngev.contexts[ listener.context ] ;
-	
+
 	// If the listener context is disabled...
 	if ( context && context.status === NextGenEvents.CONTEXT_DISABLED ) { return ; }
-	
+
 	// The nice value for this listener...
-	if ( context ) { currentNice = Math.max( event.nice , listener.nice , context.nice ) ; }
-	else { currentNice = Math.max( event.nice , listener.nice ) ; }
-	
-	
-	if ( listener.once )
-	{
+	if ( context ) {
+		currentNice = Math.max( event.nice , listener.nice , context.nice ) ;
+		serial = context.serial ;
+		contextScope = NextGenEvents.getContextScope( context , event.depth ) ;
+	}
+	else {
+		currentNice = Math.max( event.nice , listener.nice ) ;
+	}
+
+
+	if ( listener.once ) {
 		// We should remove the current listener RIGHT NOW because of recursive .emit() issues:
 		// one listener may eventually fire this very same event synchronously during the current loop.
 		self.__ngev.listeners[ event.name ] = self.__ngev.listeners[ event.name ].filter(
 			NextGenEvents.filterOutCallback.bind( undefined , listener )
 		) ;
-		
+
 		if ( removedListeners ) { removedListeners.push( listener ) ; }
 		else { emitRemoveListener = true ; }
 	}
-	
-	if ( context && ( context.status === NextGenEvents.CONTEXT_QUEUED || ! context.ready ) )
-	{
-		// Almost all works should be done by .emit(), and little few should be done by .processQueue()
-		context.queue.push( { event: event , listener: listener , nice: currentNice } ) ;
+
+	if ( context && ( context.status === NextGenEvents.CONTEXT_QUEUED || ! contextScope.ready ) ) {
+		// Almost all works should be done by .emit(), and little few should be done by .processScopeQueue()
+		contextScope.queue.push( { event: event , listener: listener , nice: currentNice } ) ;
 	}
-	else
-	{
+	else {
 		try {
-			if ( currentNice < 0 )
-			{
-				if ( self.__ngev.recursion >= - currentNice )
-				{
-					setImmediate( NextGenEvents.listenerWrapper.bind( self , listener , event , context ) ) ;
+			if ( currentNice < 0 ) {
+				if ( globalData.recursions >= -currentNice ) {
+					self.__ngev.desync( NextGenEvents.listenerWrapper.bind( self , listener , event , contextScope , serial ) ) ;
 				}
-				else
-				{
-					NextGenEvents.listenerWrapper.call( self , listener , event , context ) ;
+				else {
+					NextGenEvents.listenerWrapper.call( self , listener , event , contextScope , serial ) ;
 				}
 			}
-			else
-			{
-				setTimeout( NextGenEvents.listenerWrapper.bind( self , listener , event , context ) , currentNice ) ;
+			else {
+				setTimeout( NextGenEvents.listenerWrapper.bind( self , listener , event , contextScope , serial ) , currentNice ) ;
 			}
 		}
 		catch ( error ) {
-			// Catch error, just to decrement self.__ngev.recursion, re-throw after that...
-			self.__ngev.recursion -- ;
+			// Catch error, just to decrement globalData.recursions, re-throw after that...
+			globalData.recursions -- ;
 			throw error ;
 		}
 	}
-	
+
 	// Emit 'removeListener' after calling the listener
-	if ( emitRemoveListener && self.__ngev.listeners.removeListener.length )
-	{
+	if ( emitRemoveListener && self.__ngev.listeners.removeListener.length ) {
 		self.emit( 'removeListener' , [ listener ] ) ;
 	}
 } ;
 
 
 
-NextGenEvents.prototype.listeners = function listeners( eventName )
-{
+NextGenEvents.emitCallback = function emitCallback( event ) {
+	var callback = event.callback ;
+	delete event.callback ;
+
+	if ( event.sync && event.emitter.__ngev.nice !== NextGenEvents.SYNC ) {
+		// Force desync if global nice value is not SYNC
+		event.emitter.__ngev.desync( () => {
+			event.emitter.__ngev.depth -- ;
+			callback( event.interrupt , event ) ;
+		} ) ;
+	}
+	else {
+		event.emitter.__ngev.depth -- ;
+		callback( event.interrupt , event ) ;
+	}
+} ;
+
+
+
+NextGenEvents.prototype.listeners = function listeners( eventName ) {
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listeners(): argument #0 should be a non-empty string" ) ; }
-	
+
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-	
+
 	// Do not return the array, shallow copy it
 	return this.__ngev.listeners[ eventName ].slice() ;
 } ;
 
 
 
-NextGenEvents.listenerCount = function( emitter , eventName )
-{
+NextGenEvents.listenerCount = function( emitter , eventName ) {
 	if ( ! emitter || ! ( emitter instanceof NextGenEvents ) ) { throw new TypeError( ".listenerCount(): argument #0 should be an instance of NextGenEvents" ) ; }
 	return emitter.listenerCount( eventName ) ;
 } ;
 
 
 
-NextGenEvents.prototype.listenerCount = function( eventName )
-{
+NextGenEvents.prototype.listenerCount = function( eventName ) {
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listenerCount(): argument #1 should be a non-empty string" ) ; }
-	
+
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-	
+
 	return this.__ngev.listeners[ eventName ].length ;
 } ;
 
 
 
-NextGenEvents.prototype.setNice = function setNice( nice )
-{
+NextGenEvents.prototype.setNice = function setNice( nice ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
-	
-	this.__ngev.nice = Math.floor( +nice || 0 ) ;
+
+	this.__ngev.nice = Math.floor( + nice || 0 ) ;
 } ;
 
 
 
-NextGenEvents.prototype.setInterruptible = function setInterruptible( value )
-{
+NextGenEvents.prototype.desyncUseNextTick = function desyncUseNextTick( useNextTick ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
-	
+
+	this.__ngev.desync = useNextTick ? nextTick : setImmediate ;
+} ;
+
+
+
+NextGenEvents.prototype.setInterruptible = function setInterruptible( value ) {
+	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
+	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
+
 	this.__ngev.interruptible = !! value ;
 } ;
 
 
 
 // Make two objects share the same event bus
-NextGenEvents.share = function( source , target )
-{
-	if ( ! ( source instanceof NextGenEvents ) || ! ( target instanceof NextGenEvents ) )
-	{
+NextGenEvents.share = function( source , target ) {
+	if ( ! ( source instanceof NextGenEvents ) || ! ( target instanceof NextGenEvents ) ) {
 		throw new TypeError( 'NextGenEvents.share() arguments should be instances of NextGenEvents' ) ;
 	}
-	
+
 	if ( ! source.__ngev ) { NextGenEvents.init.call( source ) ; }
-	
+
 	Object.defineProperty( target , '__ngev' , {
 		configurable: true ,
 		value: source.__ngev
@@ -18284,11 +18231,10 @@ NextGenEvents.share = function( source , target )
 
 
 
-NextGenEvents.reset = function reset( emitter )
-{
+NextGenEvents.reset = function reset( emitter ) {
 	Object.defineProperty( emitter , '__ngev' , {
-        configurable: true ,
-        value: null
+		configurable: true ,
+		value: null
 	} ) ;
 } ;
 
@@ -18304,61 +18250,53 @@ NextGenEvents.noop = function() {} ;
 
 
 
-			/* Next Gen feature: states! */
+/* Next Gen feature: states! */
 
 
 
 // .defineStates( exclusiveState1 , [exclusiveState2] , [exclusiveState3] , ... )
-NextGenEvents.prototype.defineStates = function defineStates()
-{
-	var self = this ,
-		states = Array.prototype.slice.call( arguments ) ;
-	
+NextGenEvents.prototype.defineStates = function defineStates( ... states ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
+
 	states.forEach( ( state ) => {
-		self.__ngev.states[ state ] = null ;
-		self.__ngev.stateGroups[ state ] = states ;
+		this.__ngev.states[ state ] = null ;
+		this.__ngev.stateGroups[ state ] = states ;
 	} ) ;
 } ;
 
 
 
-NextGenEvents.prototype.hasState = function hasState( state )
-{
+NextGenEvents.prototype.hasState = function hasState( state ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	return !! this.__ngev.states[ state ] ;
 } ;
 
 
 
-NextGenEvents.prototype.getAllStates = function getAllStates()
-{
-	var self = this ;
+NextGenEvents.prototype.getAllStates = function getAllStates() {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	return Object.keys( this.__ngev.states ).filter( e => self.__ngev.states[ e ] ) ;
+	return Object.keys( this.__ngev.states ).filter( e => this.__ngev.states[ e ] ) ;
 } ;
 
 
 
 
 
-			/* Next Gen feature: groups! */
+/* Next Gen feature: groups! */
 
 
 
-NextGenEvents.groupAddListener = function groupAddListener( emitters , eventName , fn , options )
-{
+NextGenEvents.groupAddListener = function groupAddListener( emitters , eventName , fn , options ) {
 	// Manage arguments
 	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
+
 	fn = fn || options.fn ;
 	delete options.fn ;
-	
+
 	// Preserve the listener ID, so groupRemoveListener() will work as expected
 	options.id = options.id || fn ;
-	
+
 	emitters.forEach( ( emitter ) => {
 		emitter.addListener( eventName , fn.bind( undefined , emitter ) , options ) ;
 	} ) ;
@@ -18369,39 +18307,37 @@ NextGenEvents.groupOn = NextGenEvents.groupAddListener ;
 
 
 // Once per emitter
-NextGenEvents.groupOnce = function groupOnce( emitters , eventName , fn , options )
-{
+NextGenEvents.groupOnce = function groupOnce( emitters , eventName , fn , options ) {
 	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
 	else if ( options && typeof options === 'object' ) { options.once = true ; }
 	else { options = { once: true } ; }
-	
+
 	return this.groupAddListener( emitters , eventName , fn , options ) ;
 } ;
 
 
 
 // Globally once, only one event could be emitted, by the first emitter to emit
-NextGenEvents.groupGlobalOnce = function groupGlobalOnce( emitters , eventName , fn , options )
-{
+NextGenEvents.groupGlobalOnce = function groupGlobalOnce( emitters , eventName , fn , options ) {
 	var fnWrapper , triggered = false ;
-	
+
 	// Manage arguments
 	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
+
 	fn = fn || options.fn ;
 	delete options.fn ;
-	
+
 	// Preserve the listener ID, so groupRemoveListener() will work as expected
 	options.id = options.id || fn ;
-	
-	fnWrapper = function() {	// use arguments
+
+	fnWrapper = ( ... args ) => {
 		if ( triggered ) { return ; }
 		triggered = true ;
 		NextGenEvents.groupRemoveListener( emitters , eventName , options.id ) ;
-		fn.apply( undefined , arguments ) ;
+		fn( ... args ) ;
 	} ;
-	
+
 	emitters.forEach( ( emitter ) => {
 		emitter.once( eventName , fnWrapper.bind( undefined , emitter ) , options ) ;
 	} ) ;
@@ -18410,32 +18346,31 @@ NextGenEvents.groupGlobalOnce = function groupGlobalOnce( emitters , eventName ,
 
 
 // Globally once, only one event could be emitted, by the last emitter to emit
-NextGenEvents.groupGlobalOnceAll = function groupGlobalOnceAll( emitters , eventName , fn , options )
-{
+NextGenEvents.groupGlobalOnceAll = function groupGlobalOnceAll( emitters , eventName , fn , options ) {
 	var fnWrapper , triggered = false , count = emitters.length ;
-	
+
 	// Manage arguments
 	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
+
 	fn = fn || options.fn ;
 	delete options.fn ;
-	
+
 	// Preserve the listener ID, so groupRemoveListener() will work as expected
 	options.id = options.id || fn ;
-	
-	fnWrapper = function() {	// use arguments
+
+	fnWrapper = ( ... args ) => {
 		if ( triggered ) { return ; }
 		if ( -- count ) { return ; }
-		
+
 		// So this is the last emitter...
-		
+
 		triggered = true ;
 		// No need to remove listeners: there are already removed anyway
 		//NextGenEvents.groupRemoveListener( emitters , eventName , options.id ) ;
-		fn.apply( undefined , arguments ) ;
+		fn( ... args ) ;
 	} ;
-	
+
 	emitters.forEach( ( emitter ) => {
 		emitter.once( eventName , fnWrapper.bind( undefined , emitter ) , options ) ;
 	} ) ;
@@ -18443,8 +18378,7 @@ NextGenEvents.groupGlobalOnceAll = function groupGlobalOnceAll( emitters , event
 
 
 
-NextGenEvents.groupRemoveListener = function groupRemoveListener( emitters , eventName , id )
-{
+NextGenEvents.groupRemoveListener = function groupRemoveListener( emitters , eventName , id ) {
 	emitters.forEach( ( emitter ) => {
 		emitter.removeListener( eventName , id ) ;
 	} ) ;
@@ -18454,8 +18388,7 @@ NextGenEvents.groupOff = NextGenEvents.groupRemoveListener ;
 
 
 
-NextGenEvents.groupRemoveAllListeners = function groupRemoveAllListeners( emitters , eventName )
-{
+NextGenEvents.groupRemoveAllListeners = function groupRemoveAllListeners( emitters , eventName ) {
 	emitters.forEach( ( emitter ) => {
 		emitter.removeAllListeners( eventName ) ;
 	} ) ;
@@ -18463,41 +18396,36 @@ NextGenEvents.groupRemoveAllListeners = function groupRemoveAllListeners( emitte
 
 
 
-NextGenEvents.groupEmit = function groupEmit( emitters )
-{
-	var eventName , nice , argStart = 2 , argEnd , args , count = emitters.length ,
+NextGenEvents.groupEmit = function groupEmit( emitters , ... args ) {
+	var eventName , nice , argStart = 1 , argEnd , count = emitters.length ,
 		callback , callbackWrapper , callbackTriggered = false ;
-	
-	if ( typeof arguments[ arguments.length - 1 ] === 'function' )
-	{
+
+	if ( typeof args[ args.length - 1 ] === 'function' ) {
 		argEnd = -1 ;
-		callback = arguments[ arguments.length - 1 ] ;
-		
+		callback = args[ args.length - 1 ] ;
+
 		callbackWrapper = ( interruption ) => {
 			if ( callbackTriggered ) { return ; }
-			
-			if ( interruption )
-			{
+
+			if ( interruption ) {
 				callbackTriggered = true ;
 				callback( interruption ) ;
 			}
-			else if ( ! -- count )
-			{
+			else if ( ! -- count ) {
 				callbackTriggered = true ;
 				callback() ;
 			}
 		} ;
 	}
-	
-	if ( typeof arguments[ 1 ] === 'number' )
-	{
-		argStart = 3 ;
-		nice = typeof arguments[ 1 ] ;
+
+	if ( typeof args[ 0 ] === 'number' ) {
+		argStart = 2 ;
+		nice = typeof args[ 0 ] ;
 	}
-	
-	eventName = arguments[ argStart - 1 ] ;
-	args = Array.prototype.slice.call( arguments , argStart , argEnd ) ;
-	
+
+	eventName = args[ argStart - 1 ] ;
+	args = args.slice( argStart , argEnd ) ;
+
 	emitters.forEach( ( emitter ) => {
 		NextGenEvents.emitEvent( {
 			emitter: emitter ,
@@ -18511,12 +18439,9 @@ NextGenEvents.groupEmit = function groupEmit( emitters )
 
 
 
-NextGenEvents.groupDefineStates = function groupDefineStates( emitters )
-{
-	var args = Array.prototype.slice.call( arguments , 1 ) ;
-	
+NextGenEvents.groupDefineStates = function groupDefineStates( emitters , ... args ) {
 	emitters.forEach( ( emitter ) => {
-		emitter.defineStates.apply( emitter , args ) ;
+		emitter.defineStates( ... args ) ;
 	} ) ;
 } ;
 
@@ -18524,7 +18449,7 @@ NextGenEvents.groupDefineStates = function groupDefineStates( emitters )
 
 
 
-			/* Next Gen feature: contexts! */
+/* Next Gen feature: contexts! */
 
 
 
@@ -18534,195 +18459,186 @@ NextGenEvents.CONTEXT_QUEUED = 2 ;
 
 
 
-NextGenEvents.prototype.addListenerContext = function addListenerContext( contextName , options )
-{
+NextGenEvents.prototype.addListenerContext = function addListenerContext( contextName , options ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
+
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".addListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
-	if ( ! this.__ngev.contexts[ contextName ] )
-	{
-		// A context IS an event emitter too!
-		this.__ngev.contexts[ contextName ] = Object.create( NextGenEvents.prototype ) ;
-		this.__ngev.contexts[ contextName ].nice = NextGenEvents.SYNC ;
-		this.__ngev.contexts[ contextName ].ready = true ;
-		this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_ENABLED ;
-		this.__ngev.contexts[ contextName ].serial = false ;
-		this.__ngev.contexts[ contextName ].queue = [] ;
+
+	var context = this.__ngev.contexts[ contextName ] ;
+
+	if ( ! context ) {
+		context = this.__ngev.contexts[ contextName ] = {
+			nice: NextGenEvents.SYNC ,
+			ready: true ,
+			status: NextGenEvents.CONTEXT_ENABLED ,
+			scopes: {}
+		} ;
 	}
-	
-	if ( options.nice !== undefined ) { this.__ngev.contexts[ contextName ].nice = Math.floor( options.nice ) ; }
-	if ( options.status !== undefined ) { this.__ngev.contexts[ contextName ].status = options.status ; }
-	if ( options.serial !== undefined ) { this.__ngev.contexts[ contextName ].serial = !! options.serial ; }
-	
+
+	if ( options.nice !== undefined ) { context.nice = Math.floor( options.nice ) ; }
+	if ( options.status !== undefined ) { context.status = options.status ; }
+	if ( options.serial !== undefined ) { context.serial = !! options.serial ; }
+
 	return this ;
 } ;
 
 
 
-NextGenEvents.prototype.disableListenerContext = function disableListenerContext( contextName )
-{
+NextGenEvents.getContextScope = function getContextScope( context , scopeName ) {
+	var scope = context.scopes[ scopeName ] ;
+
+	if ( ! scope ) {
+		scope = context.scopes[ scopeName ] = {
+			ready: true ,
+			queue: []
+		} ;
+	}
+
+	return scope ;
+} ;
+
+
+
+NextGenEvents.prototype.disableListenerContext = function disableListenerContext( contextName ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".disableListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
+
 	this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_DISABLED ;
-	
+
 	return this ;
 } ;
 
 
 
-NextGenEvents.prototype.enableListenerContext = function enableListenerContext( contextName )
-{
+NextGenEvents.prototype.enableListenerContext = function enableListenerContext( contextName ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".enableListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
-	this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_ENABLED ;
-	
-	if ( this.__ngev.contexts[ contextName ].queue.length > 0 ) { NextGenEvents.processQueue.call( this , contextName ) ; }
-	
+
+	var context = this.__ngev.contexts[ contextName ] ;
+
+	context.status = NextGenEvents.CONTEXT_ENABLED ;
+
+	Object.values( context.scopes ).forEach( contextScope => {
+		if ( contextScope.queue.length > 0 ) { NextGenEvents.processScopeQueue( this , contextScope , context.serial ) ; }
+	} ) ;
+
 	return this ;
 } ;
 
 
 
-NextGenEvents.prototype.queueListenerContext = function queueListenerContext( contextName )
-{
+NextGenEvents.prototype.queueListenerContext = function queueListenerContext( contextName ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".queueListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
+
 	this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_QUEUED ;
-	
+
 	return this ;
 } ;
 
 
 
-NextGenEvents.prototype.serializeListenerContext = function serializeListenerContext( contextName , value )
-{
+NextGenEvents.prototype.serializeListenerContext = function serializeListenerContext( contextName , value ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".serializeListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
+
 	this.__ngev.contexts[ contextName ].serial = value === undefined ? true : !! value ;
-	
+
 	return this ;
 } ;
 
 
 
-NextGenEvents.prototype.setListenerContextNice = function setListenerContextNice( contextName , nice )
-{
+NextGenEvents.prototype.setListenerContextNice = function setListenerContextNice( contextName , nice ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".setListenerContextNice(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
+
 	this.__ngev.contexts[ contextName ].nice = Math.floor( nice ) ;
-	
+
 	return this ;
 } ;
 
 
 
-NextGenEvents.prototype.destroyListenerContext = function destroyListenerContext( contextName )
-{
+NextGenEvents.prototype.destroyListenerContext = function destroyListenerContext( contextName ) {
 	var i , length , eventName , newListeners , removedListeners = [] ;
-	
+
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".disableListenerContext(): argument #0 should be a non-empty string" ) ; }
-	
+
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
+
 	// We don't care if a context actually exists, all listeners tied to that contextName will be removed
-	
-	for ( eventName in this.__ngev.listeners )
-	{
+
+	for ( eventName in this.__ngev.listeners ) {
 		newListeners = null ;
 		length = this.__ngev.listeners[ eventName ].length ;
-		
-		for ( i = 0 ; i < length ; i ++ )
-		{
-			if ( this.__ngev.listeners[ eventName ][ i ].context === contextName )
-			{
+
+		for ( i = 0 ; i < length ; i ++ ) {
+			if ( this.__ngev.listeners[ eventName ][ i ].context === contextName ) {
 				newListeners = [] ;
 				removedListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
 			}
-			else if ( newListeners )
-			{
+			else if ( newListeners ) {
 				newListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
 			}
 		}
-		
+
 		if ( newListeners ) { this.__ngev.listeners[ eventName ] = newListeners ; }
 	}
-	
+
 	if ( this.__ngev.contexts[ contextName ] ) { delete this.__ngev.contexts[ contextName ] ; }
-	
-	if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
-	{
+
+	if ( removedListeners.length && this.__ngev.listeners.removeListener.length ) {
 		this.emit( 'removeListener' , removedListeners ) ;
 	}
-	
+
 	return this ;
 } ;
 
 
 
-// To be used with .call(), it should not pollute the prototype
-NextGenEvents.processQueue = function processQueue( contextName , isCompletionCallback )
-{
-	var context , job ;
-	
-	// The context doesn't exist anymore, so just abort now
-	if ( ! this.__ngev.contexts[ contextName ] ) { return ; }
-	
-	context = this.__ngev.contexts[ contextName ] ;
-	
-	if ( isCompletionCallback ) { context.ready = true ; }
-	
-	// Should work on serialization here
-	
-	//console.log( ">>> " , context ) ;
-	
+NextGenEvents.processScopeQueue = function processScopeQueue( self , contextScope , serial , isCompletionCallback ) {
+	var job ;
+
+	if ( isCompletionCallback ) { contextScope.ready = true ; }
+
 	// Increment recursion
-	this.__ngev.recursion ++ ;
-	
-	while ( context.ready && context.queue.length )
-	{
-		job = context.queue.shift() ;
-		
+	globalData.recursions ++ ;
+
+	while ( contextScope.ready && contextScope.queue.length ) {
+		job = contextScope.queue.shift() ;
+
 		// This event has been interrupted, drop it now!
 		if ( job.event.interrupt ) { continue ; }
-		
+
 		try {
-			if ( job.nice < 0 )
-			{
-				if ( this.__ngev.recursion >= - job.nice )
-				{
-					setImmediate( NextGenEvents.listenerWrapper.bind( this , job.listener , job.event , context ) ) ;
+			if ( job.nice < 0 ) {
+				if ( globalData.recursions >= -job.nice ) {
+					self.__ngev.desync( NextGenEvents.listenerWrapper.bind( self , job.listener , job.event , contextScope , serial ) ) ;
 				}
-				else
-				{
-					NextGenEvents.listenerWrapper.call( this , job.listener , job.event , context ) ;
+				else {
+					NextGenEvents.listenerWrapper.call( self , job.listener , job.event , contextScope , serial ) ;
 				}
 			}
-			else
-			{
-				setTimeout( NextGenEvents.listenerWrapper.bind( this , job.listener , job.event , context ) , job.nice ) ;
+			else {
+				setTimeout( NextGenEvents.listenerWrapper.bind( self , job.listener , job.event , contextScope , serial ) , job.nice ) ;
 			}
 		}
 		catch ( error ) {
-			// Catch error, just to decrement this.__ngev.recursion, re-throw after that...
-			this.__ngev.recursion -- ;
+			// Catch error, just to decrement globalData.recursions, re-throw after that...
+			globalData.recursions -- ;
 			throw error ;
 		}
 	}
-	
+
 	// Decrement recursion
-	this.__ngev.recursion -- ;
+	globalData.recursions -- ;
 } ;
 
 
@@ -18734,14 +18650,11 @@ NextGenEvents.off = NextGenEvents.prototype.off ;
 
 
 
-if ( global.AsyncTryCatch )
-{
+if ( global.AsyncTryCatch ) {
 	NextGenEvents.prototype.asyncTryCatchId = global.AsyncTryCatch.NextGenEvents.length ;
 	global.AsyncTryCatch.NextGenEvents.push( NextGenEvents ) ;
-	
-	if ( global.AsyncTryCatch.substituted )
-	{
-		//console.log( 'live subsitute' ) ;
+
+	if ( global.AsyncTryCatch.substituted ) {
 		global.AsyncTryCatch.substitute() ;
 	}
 }
@@ -18752,34 +18665,583 @@ if ( global.AsyncTryCatch )
 NextGenEvents.Proxy = require( './Proxy.js' ) ;
 
 
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":37,"./Proxy.js":36}],36:[function(require,module,exports){
-arguments[4][19][0].apply(exports,arguments)
-},{"./NextGenEvents.js":35,"dup":19}],37:[function(require,module,exports){
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../package.json":37,"./Proxy.js":36,"_process":41}],36:[function(require,module,exports){
+/*
+	Next-Gen Events
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+// Create the object && export it
+function Proxy() { return Proxy.create() ; }
+module.exports = Proxy ;
+
+var NextGenEvents = require( './NextGenEvents.js' ) ;
+var MESSAGE_TYPE = 'NextGenEvents/message' ;
+
+function noop() {}
+
+
+
+Proxy.create = function create() {
+	var self = Object.create( Proxy.prototype , {
+		localServices: { value: {} , enumerable: true } ,
+		remoteServices: { value: {} , enumerable: true } ,
+		nextAckId: { value: 1 , writable: true , enumerable: true }
+	} ) ;
+
+	return self ;
+} ;
+
+
+
+// Add a local service accessible remotely
+Proxy.prototype.addLocalService = function addLocalService( id , emitter , options ) {
+	this.localServices[ id ] = LocalService.create( this , id , emitter , options ) ;
+	return this.localServices[ id ] ;
+} ;
+
+
+
+// Add a remote service accessible locally
+Proxy.prototype.addRemoteService = function addRemoteService( id ) {
+	this.remoteServices[ id ] = RemoteService.create( this , id ) ;
+	return this.remoteServices[ id ] ;
+} ;
+
+
+
+// Destroy the proxy
+Proxy.prototype.destroy = function destroy() {
+	Object.keys( this.localServices ).forEach( ( id ) => {
+		this.localServices[ id ].destroy() ;
+		delete this.localServices[ id ] ;
+	} ) ;
+
+	Object.keys( this.remoteServices ).forEach( ( id ) => {
+		this.remoteServices[ id ].destroy() ;
+		delete this.remoteServices[ id ] ;
+	} ) ;
+
+	this.receive = this.send = noop ;
+} ;
+
+
+
+// Push an event message.
+Proxy.prototype.push = function push( message ) {
+	if (
+		message.__type !== MESSAGE_TYPE ||
+		! message.service || typeof message.service !== 'string' ||
+		! message.event || typeof message.event !== 'string' ||
+		! message.method
+	) {
+		return ;
+	}
+
+	switch ( message.method ) {
+		// Those methods target a remote service
+		case 'event' :
+			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveEvent( message ) ;
+		case 'ackEmit' :
+			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveAckEmit( message ) ;
+
+		// Those methods target a local service
+		case 'emit' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveEmit( message ) ;
+		case 'listen' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveListen( message ) ;
+		case 'ignore' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveIgnore( message ) ;
+		case 'ackEvent' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveAckEvent( message ) ;
+
+		default :
+			return ;
+	}
+} ;
+
+
+
+// This is the method to receive and decode data from the other side of the communication channel, most of time another proxy.
+// In most case, this should be overwritten.
+Proxy.prototype.receive = function receive( raw ) {
+	this.push( raw ) ;
+} ;
+
+
+
+// This is the method used to send data to the other side of the communication channel, most of time another proxy.
+// This MUST be overwritten in any case.
+Proxy.prototype.send = function send() {
+	throw new Error( 'The send() method of the Proxy MUST be extended/overwritten' ) ;
+} ;
+
+
+
+/* Local Service */
+
+
+
+function LocalService( proxy , id , emitter , options ) { return LocalService.create( proxy , id , emitter , options ) ; }
+Proxy.LocalService = LocalService ;
+
+
+
+LocalService.create = function create( proxy , id , emitter , options ) {
+	var self = Object.create( LocalService.prototype , {
+		proxy: { value: proxy , enumerable: true } ,
+		id: { value: id , enumerable: true } ,
+		emitter: { value: emitter , writable: true , enumerable: true } ,
+		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		events: { value: {} , enumerable: true } ,
+		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
+		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
+		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
+		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
+		destroyed: { value: false , writable: true , enumerable: true }
+	} ) ;
+
+	return self ;
+} ;
+
+
+
+// Destroy a service
+LocalService.prototype.destroy = function destroy() {
+	Object.keys( this.events ).forEach( ( eventName ) => {
+		this.emitter.off( eventName , this.events[ eventName ] ) ;
+		delete this.events[ eventName ] ;
+	} ) ;
+
+	this.emitter = null ;
+	this.destroyed = true ;
+} ;
+
+
+
+// Remote want to emit on the local service
+LocalService.prototype.receiveEmit = function receiveEmit( message ) {
+	if ( this.destroyed || ! this.canEmit || ( message.ack && ! this.canAck ) ) { return ; }
+
+	var event = {
+		emitter: this.emitter ,
+		name: message.event ,
+		args: message.args || []
+	} ;
+
+	if ( message.ack ) {
+		event.callback = ( interruption ) => {
+
+			this.proxy.send( {
+				__type: MESSAGE_TYPE ,
+				service: this.id ,
+				method: 'ackEmit' ,
+				ack: message.ack ,
+				event: message.event ,
+				interruption: interruption
+			} ) ;
+		} ;
+	}
+
+	NextGenEvents.emitEvent( event ) ;
+} ;
+
+
+
+// Remote want to listen to an event of the local service
+LocalService.prototype.receiveListen = function receiveListen( message ) {
+	if ( this.destroyed || ! this.canListen || ( message.ack && ! this.canAck ) ) { return ; }
+
+	if ( message.ack ) {
+		if ( this.events[ message.event ] ) {
+			if ( this.events[ message.event ].ack ) { return ; }
+
+			// There is already an event, but not featuring ack, remove that listener now
+			this.emitter.off( message.event , this.events[ message.event ] ) ;
+		}
+
+		this.events[ message.event ] = LocalService.forwardWithAck.bind( this ) ;
+		this.events[ message.event ].ack = true ;
+		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true , async: true } ) ;
+	}
+	else {
+		if ( this.events[ message.event ] ) {
+			if ( ! this.events[ message.event ].ack ) { return ; }
+
+			// Remote want to downgrade:
+			// there is already an event, but featuring ack so we remove that listener now
+			this.emitter.off( message.event , this.events[ message.event ] ) ;
+		}
+
+		this.events[ message.event ] = LocalService.forward.bind( this ) ;
+		this.events[ message.event ].ack = false ;
+		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true } ) ;
+	}
+} ;
+
+
+
+// Remote do not want to listen to that event of the local service anymore
+LocalService.prototype.receiveIgnore = function receiveIgnore( message ) {
+	if ( this.destroyed || ! this.canListen ) { return ; }
+
+	if ( ! this.events[ message.event ] ) { return ; }
+
+	this.emitter.off( message.event , this.events[ message.event ] ) ;
+	this.events[ message.event ] = null ;
+} ;
+
+
+
+//
+LocalService.prototype.receiveAckEvent = function receiveAckEvent( message ) {
+	if (
+		this.destroyed || ! this.canListen || ! this.canAck || ! message.ack ||
+		! this.events[ message.event ] || ! this.events[ message.event ].ack
+	) {
+		return ;
+	}
+
+	this.internalEvents.emit( 'ack' , message ) ;
+} ;
+
+
+
+// Send an event from the local service to remote
+LocalService.forward = function forward( event ) {
+	if ( this.destroyed ) { return ; }
+
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'event' ,
+		event: event.name ,
+		args: event.args
+	} ) ;
+} ;
+
+LocalService.forward.ack = false ;
+
+
+
+// Send an event from the local service to remote, with ACK
+LocalService.forwardWithAck = function forwardWithAck( event , callback ) {
+	if ( this.destroyed ) { return ; }
+
+	if ( ! event.callback ) {
+		// There is no emit callback, no need to ack this one
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'event' ,
+			event: event.name ,
+			args: event.args
+		} ) ;
+
+		callback() ;
+		return ;
+	}
+
+	var triggered = false ;
+	var ackId = this.proxy.nextAckId ++ ;
+
+	var onAck = ( message ) => {
+		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
+		//if ( message.event !== event ) { return ; }	// Do we care?
+		triggered = true ;
+		this.internalEvents.off( 'ack' , onAck ) ;
+		callback() ;
+	} ;
+
+	this.internalEvents.on( 'ack' , onAck ) ;
+
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'event' ,
+		event: event.name ,
+		ack: ackId ,
+		args: event.args
+	} ) ;
+} ;
+
+LocalService.forwardWithAck.ack = true ;
+
+
+
+/* Remote Service */
+
+
+
+function RemoteService( proxy , id ) { return RemoteService.create( proxy , id ) ; }
+//RemoteService.prototype = Object.create( NextGenEvents.prototype ) ;
+//RemoteService.prototype.constructor = RemoteService ;
+Proxy.RemoteService = RemoteService ;
+
+
+
+var EVENT_NO_ACK = 1 ;
+var EVENT_ACK = 2 ;
+
+
+
+RemoteService.create = function create( proxy , id ) {
+	var self = Object.create( RemoteService.prototype , {
+		proxy: { value: proxy , enumerable: true } ,
+		id: { value: id , enumerable: true } ,
+		// This is the emitter where everything is routed to
+		emitter: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		events: { value: {} , enumerable: true } ,
+		destroyed: { value: false , writable: true , enumerable: true }
+
+		/*	Useless for instance, unless some kind of service capabilities discovery mechanism exists
+		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
+		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
+		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
+		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
+		*/
+	} ) ;
+
+	return self ;
+} ;
+
+
+
+// Destroy a service
+RemoteService.prototype.destroy = function destroy() {
+	this.emitter.removeAllListeners() ;
+	this.emitter = null ;
+	Object.keys( this.events ).forEach( ( eventName ) => { delete this.events[ eventName ] ; } ) ;
+	this.destroyed = true ;
+} ;
+
+
+
+// Local code want to emit to remote service
+RemoteService.prototype.emit = function emit( eventName , ... args ) {
+	if ( this.destroyed ) { return ; }
+
+	var callback , ackId , triggered ;
+
+	if ( typeof eventName === 'number' ) { throw new TypeError( 'Cannot emit with a nice value on a remote service' ) ; }
+
+	if ( typeof args[ args.length - 1 ] !== 'function' ) {
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'emit' ,
+			event: eventName ,
+			args: args
+		} ) ;
+
+		return ;
+	}
+
+	callback = args.pop() ;
+	ackId = this.proxy.nextAckId ++ ;
+	triggered = false ;
+
+	var onAck = ( message ) => {
+		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
+		//if ( message.event !== event ) { return ; }	// Do we care?
+		triggered = true ;
+		this.internalEvents.off( 'ack' , onAck ) ;
+		callback( message.interruption ) ;
+	} ;
+
+	this.internalEvents.on( 'ack' , onAck ) ;
+
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'emit' ,
+		ack: ackId ,
+		event: eventName ,
+		args: args
+	} ) ;
+} ;
+
+
+
+// Local code want to listen to an event of remote service
+RemoteService.prototype.addListener = function addListener( eventName , fn , options ) {
+	if ( this.destroyed ) { return ; }
+
+	// Manage arguments the same way NextGenEvents#addListener() does
+	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	options.fn = fn || options.fn ;
+
+	this.emitter.addListener( eventName , options ) ;
+
+	// No event was added...
+	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) { return ; }
+
+	// If the event is successfully listened to and was not remotely listened...
+	if ( options.async && this.events[ eventName ] !== EVENT_ACK ) {
+		// We need to listen to or upgrade this event
+		this.events[ eventName ] = EVENT_ACK ;
+
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'listen' ,
+			ack: true ,
+			event: eventName
+		} ) ;
+	}
+	else if ( ! options.async && ! this.events[ eventName ] ) {
+		// We need to listen to this event
+		this.events[ eventName ] = EVENT_NO_ACK ;
+
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'listen' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+RemoteService.prototype.on = RemoteService.prototype.addListener ;
+
+// This is a shortcut to this.addListener()
+RemoteService.prototype.once = NextGenEvents.prototype.once ;
+
+
+
+// Local code want to ignore an event of remote service
+RemoteService.prototype.removeListener = function removeListener( eventName , id ) {
+	if ( this.destroyed ) { return ; }
+
+	this.emitter.removeListener( eventName , id ) ;
+
+	// If no more listener are locally tied to with event and the event was remotely listened...
+	if (
+		( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) &&
+		this.events[ eventName ]
+	) {
+		this.events[ eventName ] = 0 ;
+
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'ignore' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+RemoteService.prototype.off = RemoteService.prototype.removeListener ;
+
+
+
+// A remote service sent an event we are listening to, emit on the service representing the remote
+RemoteService.prototype.receiveEvent = function receiveEvent( message ) {
+	if ( this.destroyed || ! this.events[ message.event ] ) { return ; }
+
+	var event = {
+		emitter: this.emitter ,
+		name: message.event ,
+		args: message.args || []
+	} ;
+
+	if ( message.ack ) {
+		event.callback = () => {
+
+			this.proxy.send( {
+				__type: MESSAGE_TYPE ,
+				service: this.id ,
+				method: 'ackEvent' ,
+				ack: message.ack ,
+				event: message.event
+			} ) ;
+		} ;
+	}
+
+	NextGenEvents.emitEvent( event ) ;
+
+	var eventName = event.name ;
+
+	// Here we should catch if the event is still listened to ('once' type listeners)
+	//if ( this.events[ eventName ]	) // not needed, already checked at the begining of the function
+	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) {
+		this.events[ eventName ] = 0 ;
+
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'ignore' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+
+
+//
+RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message ) {
+	if ( this.destroyed || ! message.ack || this.events[ message.event ] !== EVENT_ACK ) {
+		return ;
+	}
+
+	this.internalEvents.emit( 'ack' , message ) ;
+} ;
+
+
+
+},{"./NextGenEvents.js":35}],37:[function(require,module,exports){
 module.exports={
-  "_from": "nextgen-events@0.10.0",
-  "_id": "nextgen-events@0.10.0",
+  "_from": "nextgen-events@0.13.0",
+  "_id": "nextgen-events@0.13.0",
   "_inBundle": false,
-  "_integrity": "sha1-9H1NIOwRS/mfSPjEmujUq2Ni7s0=",
+  "_integrity": "sha512-+MuSfdF10xlUG2F7elNM3YENy+QnEBtetCPrQnYwCKFCIFw/UGbDXDjW9Vn/cvHBUTH4Y7DRgz6HZlLEM7zHYg==",
   "_location": "/nextgen-events",
   "_phantomChildren": {},
   "_requested": {
     "type": "version",
     "registry": true,
-    "raw": "nextgen-events@0.10.0",
+    "raw": "nextgen-events@0.13.0",
     "name": "nextgen-events",
     "escapedName": "nextgen-events",
-    "rawSpec": "0.10.0",
+    "rawSpec": "0.13.0",
     "saveSpec": null,
-    "fetchSpec": "0.10.0"
+    "fetchSpec": "0.13.0"
   },
   "_requiredBy": [
     "#USER",
     "/"
   ],
-  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.10.0.tgz",
-  "_shasum": "f47d4d20ec114bf99f48f8c49ae8d4ab6362eecd",
-  "_spec": "nextgen-events@0.10.0",
+  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.13.0.tgz",
+  "_shasum": "320771b90eea892ec09398d9de69233e58677b2a",
+  "_spec": "nextgen-events@0.13.0",
   "_where": "/home/cedric/inside/github/tea-time",
   "author": {
     "name": "Cédric Ronvel"
@@ -18799,7 +19261,7 @@ module.exports={
     "title": "Next-Gen Events",
     "years": [
       2015,
-      2016
+      2018
     ],
     "owner": "Cédric Ronvel"
   },
@@ -18807,18 +19269,18 @@ module.exports={
   "deprecated": false,
   "description": "The next generation of events handling for javascript! New: abstract away the network!",
   "devDependencies": {
-    "browserify": "^14.3.0",
+    "browserify": "^14.4.0",
     "expect.js": "^0.3.1",
     "jshint": "^2.9.2",
     "mocha": "^2.5.3",
     "uglify-js-es6": "^2.8.9",
-    "ws": "^2.2.3"
+    "ws": "^3.2.0"
   },
   "directories": {
     "test": "test"
   },
   "engines": {
-    "node": ">=4.5.0"
+    "node": ">=6.0.0"
   },
   "homepage": "https://github.com/cronvel/nextgen-events#readme",
   "keywords": [
@@ -18843,7 +19305,7 @@ module.exports={
   "scripts": {
     "test": "mocha -R dot"
   },
-  "version": "0.10.0"
+  "version": "0.13.0"
 }
 
 },{}],38:[function(require,module,exports){
@@ -18854,9 +19316,9 @@ module.exports={
  * nwmatcher.js - A fast CSS selector engine and matcher
  *
  * Author: Diego Perini <diego.perini at gmail com>
- * Version: 1.4.1
+ * Version: 1.4.3
  * Created: 20070722
- * Release: 20170610
+ * Release: 20171011
  *
  * License:
  *  http://javascript.nwbox.com/NWMatcher/MIT-LICENSE
@@ -18877,7 +19339,7 @@ module.exports={
 
 })(this, function(global) {
 
-  var version = 'nwmatcher-1.4.1',
+  var version = 'nwmatcher-1.4.3',
 
   // processing context & root element
   doc = global.document,
@@ -18972,7 +19434,7 @@ module.exports={
     // structural pseudo-classes and child selectors
     spseudos: /^\:(root|empty|(?:first|last|only)(?:-child|-of-type)|nth(?:-last)?(?:-child|-of-type)\(\s*(even|odd|(?:[-+]{0,1}\d*n\s*)?[-+]{0,1}\s*\d*)\s*\))?(.*)/i,
     // uistates + dynamic + negation pseudo-classes
-    dpseudos: /^\:(link|visited|target|active|focus|hover|checked|disabled|enabled|selected|lang\(([-\w]{2,})\)|not\(\s*(:nth(?:-last)?(?:-child|-of-type)\(\s*(?:even|odd|(?:[-+]{0,1}\d*n\s*)?[-+]{0,1}\s*\d*)\s*\)|[^()]*)\s*\))?(.*)/i,
+    dpseudos: /^\:(link|visited|target|active|focus|hover|checked|disabled|enabled|selected|lang\(([-\w]{2,})\)|(?:matches|not)\(\s*(:nth(?:-last)?(?:-child|-of-type)\(\s*(?:even|odd|(?:[-+]{0,1}\d*n\s*)?[-+]{0,1}\s*\d*)\s*\)|[^()]*)\s*\))?(.*)/i,
     // pseudo-elements selectors
     epseudos: /^((?:[:]{1,2}(?:after|before|first-letter|first-line))|(?:[:]{2,2}(?:selection|backdrop|placeholder)))?(.*)/i,
     // E > F
@@ -19705,6 +20167,9 @@ module.exports={
     // ':not()' pseudo-classes as for specifications
     SIMPLENOT: true,
 
+    // true to match lowercase tag names of SVG elements in HTML
+    SVG_LCASE: false,
+
     // strict QSA match all non-unique IDs (false)
     // speed & libs compat match unique ID (true)
     UNIQUE_ID: true,
@@ -19752,7 +20217,7 @@ module.exports={
       // build attribute string
       attrcheck = '(' + quotedvalue + '|' + identifier + ')';
       attributes = whitespace + '*(' + identifier + '(?::' + identifier + ')?)' +
-        whitespace + '*(?:' + operators + whitespace + '*' + attrcheck + ')?' + whitespace + '*';
+        whitespace + '*(?:' + operators + whitespace + '*' + attrcheck + ')?' + whitespace + '*' + '(i)?' + whitespace + '*';
       attrmatcher = attributes.replace(attrcheck, '([\\x22\\x27]*)((?:\\\\?.)*?)\\3');
 
       // build pseudoclass string
@@ -19918,9 +20383,10 @@ module.exports={
         else if ((match = selector.match(Patterns.tagName))) {
           // both tagName and nodeName properties may be upper/lower case
           // depending on their creation NAMESPACE in createElementNS()
+          test = Config.SVG_LCASE ? '||e.nodeName=="' + match[1].toLowerCase() + '"' : '';
           source = 'if(e.nodeName' + (XML_DOCUMENT ?
             '=="' + match[1] + '"' : '.toUpperCase()' +
-            '=="' + match[1].toUpperCase() + '"') +
+            '=="' + match[1].toUpperCase() + '"' + test) +
             '){' + source + '}';
         }
 
@@ -19959,7 +20425,7 @@ module.exports={
           if (match[2] && match[4] && (test = Operators[match[2]])) {
             match[4] = (/\\/).test(match[4]) ? convertEscapes(match[4]) : match[4];
             // case treatment depends on document type
-            type = XML_DOCUMENT ? 0 : HTML_TABLE[expr.toLowerCase()];
+            type = match[5] == 'i' || HTML_TABLE[expr.toLowerCase()];
             test = test.replace(/\%m/g, type ? match[4].toLowerCase() : match[4]);
           } else if (match[2] == '!=' || match[2] == '=') {
             test = 'n' + match[2] + '=""';
@@ -19976,30 +20442,28 @@ module.exports={
         // E + F (F adiacent sibling of E)
         else if ((match = selector.match(Patterns.adjacent))) {
           source = NATIVE_TRAVERSAL_API ?
-            'var N' + k + '=e;while(e&&(e=e.previousElementSibling)){' + source + 'break;}e=N' + k + ';' :
-            'var N' + k + '=e;while(e&&(e=e.previousSibling)){if(e.nodeName>"@"){' + source + 'break;}}e=N' + k + ';';
+            'var N' + k + '=e;if((e=e.previousElementSibling)){' + source + '}e=N' + k + ';' :
+            'var N' + k + '=e;while((e=e.previousSibling)){if(e.nodeType==1){' + source + 'break;}}e=N' + k + ';';
         }
 
         // *** General sibling combinator
         // E ~ F (F relative sibling of E)
         else if ((match = selector.match(Patterns.relative))) {
           source = NATIVE_TRAVERSAL_API ?
-            ('var N' + k + '=e;e=e.parentNode.firstElementChild;' +
-            'while(e&&e!==N' + k + '){' + source + 'e=e.nextElementSibling;}e=N' + k + ';') :
-            ('var N' + k + '=e;e=e.parentNode.firstChild;' +
-            'while(e&&e!==N' + k + '){if(e.nodeName>"@"){' + source + '}e=e.nextSibling;}e=N' + k + ';');
+            'var N' + k + '=e;while((e=e.previousElementSibling)){' + source + '}e=N' + k + ';' :
+            'var N' + k + '=e;while((e=e.previousSibling)){if(e.nodeType==1){' + source + '}}e=N' + k + ';';
         }
 
         // *** Child combinator
         // E > F (F children of E)
         else if ((match = selector.match(Patterns.children))) {
-          source = 'var N' + k + '=e;while(e&&e!==h&&e!==g&&(e=e.parentNode)){' + source + 'break;}e=N' + k + ';';
+          source = 'var N' + k + '=e;if((e=e.parentNode)&&e.nodeType==1){' + source + '}e=N' + k + ';';
         }
 
         // *** Descendant combinator
         // E F (E ancestor of F)
         else if ((match = selector.match(Patterns.ancestor))) {
-          source = 'var N' + k + '=e;while(e&&e!==h&&e!==g&&(e=e.parentNode)){' + source + '}e=N' + k + ';';
+          source = 'var N' + k + '=e;while((e=e.parentNode)&&e.nodeType==1){' + source + '}e=N' + k + ';';
         }
 
         // *** Structural pseudo-classes
@@ -20078,12 +20542,19 @@ module.exports={
 
         // *** negation, user action and target pseudo-classes
         // *** UI element states and dynamic pseudo-classes
+        // CSS4 :matches 
         // CSS3 :not, :checked, :enabled, :disabled, :target
         // CSS3 :active, :hover, :focus
         // CSS3 :link, :visited
         else if ((match = selector.match(Patterns.dpseudos)) && match[1]) {
 
           switch (match[1].match(/^\w+/)[0]) {
+            // CSS4 matches pseudo-class
+            case 'matches':
+              expr = match[3].replace(reTrimSpaces, '');
+              source = 'if(s.match(e, "' + expr.replace(/\x22/g, '\\"') + '",g)){' + source +'}';
+              break;
+
             // CSS3 negation pseudo-class
             case 'not':
               // compile nested selectors, DO NOT pass the callback parameter
@@ -20392,7 +20863,7 @@ module.exports={
         }
 
         // ID optimization RTL, to reduce number of elements to visit
-        if (Config.UNIQUE_ID && (parts = lastSlice.match(Optimize.ID)) && (token = parts[1])) {
+        if (Config.UNIQUE_ID && lastSlice && (parts = lastSlice.match(Optimize.ID)) && (token = parts[1])) {
           if ((element = _byId(token, from))) {
             if (match(element, selector)) {
               callback && callback(element);
@@ -20420,12 +20891,12 @@ module.exports={
           return elements;
         }
 
-        if (!NATIVE_GEBCN && (parts = lastSlice.match(Optimize.TAG)) && (token = parts[1])) {
+        if (!NATIVE_GEBCN && lastSlice && (parts = lastSlice.match(Optimize.TAG)) && (token = parts[1])) {
           if ((elements = _byTag(token, from)).length === 0) { return [ ]; }
           selector = selector.slice(0, lastPosition) + selector.slice(lastPosition).replace(token, '*');
         }
 
-        else if ((parts = lastSlice.match(Optimize.CLASS)) && (token = parts[1])) {
+        else if (lastSlice && (parts = lastSlice.match(Optimize.CLASS)) && (token = parts[1])) {
           if ((elements = _byClass(token, from)).length === 0) { return [ ]; }
           selector = selector.slice(0, lastPosition) + selector.slice(lastPosition).replace('.' + token,
             reOptimizeSelector.test(selector.charAt(selector.indexOf(token) - 1)) ? '' : '*');
@@ -20441,7 +20912,7 @@ module.exports={
             reOptimizeSelector.test(selector.charAt(selector.indexOf(token) - 1)) ? '' : '*');
         }
 
-        else if (NATIVE_GEBCN && (parts = lastSlice.match(Optimize.TAG)) && (token = parts[1])) {
+        else if (NATIVE_GEBCN && lastSlice && (parts = lastSlice.match(Optimize.TAG)) && (token = parts[1])) {
           if ((elements = _byTag(token, from)).length === 0) { return [ ]; }
           selector = selector.slice(0, lastPosition) + selector.slice(lastPosition).replace(token, '*');
         }
@@ -20777,234 +21248,6 @@ module.exports = function isArguments(value) {
 };
 
 },{}],41:[function(require,module,exports){
-(function (process){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-// resolves . and .. elements in a path array with directory names there
-// must be no slashes, empty elements, or device names (c:\) in the array
-// (so also no leading and trailing slashes - it does not distinguish
-// relative and absolute paths)
-function normalizeArray(parts, allowAboveRoot) {
-  // if the path tries to go above the root, `up` ends up > 0
-  var up = 0;
-  for (var i = parts.length - 1; i >= 0; i--) {
-    var last = parts[i];
-    if (last === '.') {
-      parts.splice(i, 1);
-    } else if (last === '..') {
-      parts.splice(i, 1);
-      up++;
-    } else if (up) {
-      parts.splice(i, 1);
-      up--;
-    }
-  }
-
-  // if the path is allowed to go above the root, restore leading ..s
-  if (allowAboveRoot) {
-    for (; up--; up) {
-      parts.unshift('..');
-    }
-  }
-
-  return parts;
-}
-
-// Split a filename into [root, dir, basename, ext], unix version
-// 'root' is just a slash, or nothing.
-var splitPathRe =
-    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
-var splitPath = function(filename) {
-  return splitPathRe.exec(filename).slice(1);
-};
-
-// path.resolve([from ...], to)
-// posix version
-exports.resolve = function() {
-  var resolvedPath = '',
-      resolvedAbsolute = false;
-
-  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-    var path = (i >= 0) ? arguments[i] : process.cwd();
-
-    // Skip empty and invalid entries
-    if (typeof path !== 'string') {
-      throw new TypeError('Arguments to path.resolve must be strings');
-    } else if (!path) {
-      continue;
-    }
-
-    resolvedPath = path + '/' + resolvedPath;
-    resolvedAbsolute = path.charAt(0) === '/';
-  }
-
-  // At this point the path should be resolved to a full absolute path, but
-  // handle relative paths to be safe (might happen when process.cwd() fails)
-
-  // Normalize the path
-  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
-    return !!p;
-  }), !resolvedAbsolute).join('/');
-
-  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
-};
-
-// path.normalize(path)
-// posix version
-exports.normalize = function(path) {
-  var isAbsolute = exports.isAbsolute(path),
-      trailingSlash = substr(path, -1) === '/';
-
-  // Normalize the path
-  path = normalizeArray(filter(path.split('/'), function(p) {
-    return !!p;
-  }), !isAbsolute).join('/');
-
-  if (!path && !isAbsolute) {
-    path = '.';
-  }
-  if (path && trailingSlash) {
-    path += '/';
-  }
-
-  return (isAbsolute ? '/' : '') + path;
-};
-
-// posix version
-exports.isAbsolute = function(path) {
-  return path.charAt(0) === '/';
-};
-
-// posix version
-exports.join = function() {
-  var paths = Array.prototype.slice.call(arguments, 0);
-  return exports.normalize(filter(paths, function(p, index) {
-    if (typeof p !== 'string') {
-      throw new TypeError('Arguments to path.join must be strings');
-    }
-    return p;
-  }).join('/'));
-};
-
-
-// path.relative(from, to)
-// posix version
-exports.relative = function(from, to) {
-  from = exports.resolve(from).substr(1);
-  to = exports.resolve(to).substr(1);
-
-  function trim(arr) {
-    var start = 0;
-    for (; start < arr.length; start++) {
-      if (arr[start] !== '') break;
-    }
-
-    var end = arr.length - 1;
-    for (; end >= 0; end--) {
-      if (arr[end] !== '') break;
-    }
-
-    if (start > end) return [];
-    return arr.slice(start, end - start + 1);
-  }
-
-  var fromParts = trim(from.split('/'));
-  var toParts = trim(to.split('/'));
-
-  var length = Math.min(fromParts.length, toParts.length);
-  var samePartsLength = length;
-  for (var i = 0; i < length; i++) {
-    if (fromParts[i] !== toParts[i]) {
-      samePartsLength = i;
-      break;
-    }
-  }
-
-  var outputParts = [];
-  for (var i = samePartsLength; i < fromParts.length; i++) {
-    outputParts.push('..');
-  }
-
-  outputParts = outputParts.concat(toParts.slice(samePartsLength));
-
-  return outputParts.join('/');
-};
-
-exports.sep = '/';
-exports.delimiter = ':';
-
-exports.dirname = function(path) {
-  var result = splitPath(path),
-      root = result[0],
-      dir = result[1];
-
-  if (!root && !dir) {
-    // No dirname whatsoever
-    return '.';
-  }
-
-  if (dir) {
-    // It has a dirname, strip trailing slash
-    dir = dir.substr(0, dir.length - 1);
-  }
-
-  return root + dir;
-};
-
-
-exports.basename = function(path, ext) {
-  var f = splitPath(path)[2];
-  // TODO: make this comparison case-insensitive on windows?
-  if (ext && f.substr(-1 * ext.length) === ext) {
-    f = f.substr(0, f.length - ext.length);
-  }
-  return f;
-};
-
-
-exports.extname = function(path) {
-  return splitPath(path)[3];
-};
-
-function filter (xs, f) {
-    if (xs.filter) return xs.filter(f);
-    var res = [];
-    for (var i = 0; i < xs.length; i++) {
-        if (f(xs[i], i, xs)) res.push(xs[i]);
-    }
-    return res;
-}
-
-// String.prototype.substr - negative index don't work in IE8
-var substr = 'ab'.substr(-1) === 'b'
-    ? function (str, start, len) { return str.substr(start, len) }
-    : function (str, start, len) {
-        if (start < 0) start = str.length + start;
-        return str.substr(start, len);
-    }
-;
-
-}).call(this,require('_process'))
-},{"_process":42}],42:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -21190,7 +21433,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],43:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -21727,7 +21970,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],44:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -21813,7 +22056,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],45:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -21900,13 +22143,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],46:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":44,"./encode":45}],47:[function(require,module,exports){
+},{"./decode":43,"./encode":44}],46:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -21985,7 +22228,7 @@ module.exports = {
 
 
 
-},{}],48:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -22037,7 +22280,8 @@ camel.toCamelCase = function toCamelCase( str )
 
 
 // Transform camel case to alphanum separated by minus
-camel.camelCaseToDashed = function camelCaseToDashed( str )
+camel.camelCaseToDash =
+camel.camelCaseToDashed = function camelCaseToDash( str )
 {
 	if ( ! str || typeof str !== 'string' ) { return '' ; }
 	
@@ -22050,7 +22294,7 @@ camel.camelCaseToDashed = function camelCaseToDashed( str )
 
 
 
-},{}],49:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -22154,7 +22398,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],50:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 (function (Buffer){
 /*
 	String Kit
@@ -22699,7 +22943,7 @@ exports.format.hasFormatting = function hasFormatting( str )
 
 
 }).call(this,require("buffer").Buffer)
-},{"./ansi.js":47,"./inspect.js":51,"buffer":25}],51:[function(require,module,exports){
+},{"./ansi.js":46,"./inspect.js":50,"buffer":25}],50:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -22753,7 +22997,9 @@ var ansi = require( './ansi.js' ) ;
 			* 'none': (default) normal output suitable for console.log() or writing in a file
 			* 'color': colorful output suitable for terminal
 			* 'html': html output
+			* any object: full controle, inheriting from 'none'
 		* depth: depth limit, default: 3
+		* maxLength: length limit for strings, default: 200
 		* noFunc: do not display functions
 		* noDescriptor: do not display descriptor information
 		* noType: do not display type and constructor
@@ -22763,6 +23009,8 @@ var ansi = require( './ansi.js' ) ;
 		* sort: sort the keys
 		* minimal: imply noFunc: true, noDescriptor: true, noType: true, enumOnly: true, proto: false and funcDetails: false.
 		  Display a minimal JSON-like output
+		* protoBlackList: `Set` of blacklisted object prototype (will not recurse inside it)
+		* propertyBlackList: `Set` of blacklisted property names (will not even display it)
 		* useInspect? use .inspect() method when available on an object
 */
 
@@ -22775,8 +23023,10 @@ function inspect( options , variable )
 	
 	if ( ! options.style ) { options.style = inspectStyle.none ; }
 	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
+	else { options.style = Object.assign( {} , inspectStyle.none , options.style ) ; }
 	
 	if ( options.depth === undefined ) { options.depth = 3 ; }
+	if ( options.maxLength === undefined ) { options.maxLength = 200 ; }
 	
 	// /!\ nofunc is deprecated
 	if ( options.nofunc ) { options.noFunc = true ; }
@@ -22798,7 +23048,7 @@ function inspect( options , variable )
 
 function inspect_( runtime , options , variable )
 {
-	var i , funcName , length , propertyList , constructor , keyIsProperty ,
+	var i , funcName , length , proto , propertyList , constructor , keyIsProperty ,
 		type , pre , indent , isArray , isFunc , specialObject ,
 		str = '' , key = '' , descriptorStr = '' , descriptor , nextAncestors ;
 	
@@ -22876,9 +23126,18 @@ function inspect_( runtime , options , variable )
 	}
 	else if ( type === 'string' )
 	{
-		str += pre + '"' + options.style.string( escape.control( variable ) ) + '" ' +
-			( options.noType ? '' : options.style.type( 'string' ) + options.style.length( '(' + variable.length + ')' ) ) +
-			descriptorStr + options.style.nl ;
+		if ( variable.length > options.maxLength )
+		{
+			str += pre + '"' + options.style.string( escape.control( variable.slice( 0 , options.maxLength - 1 ) ) ) + '…" ' +
+				( options.noType ? '' : options.style.type( 'string' ) + options.style.length( '(' + variable.length + ' - TRUNCATED)' ) ) +
+				descriptorStr + options.style.nl ;
+		}
+		else
+		{
+			str += pre + '"' + options.style.string( escape.control( variable ) ) + '" ' +
+				( options.noType ? '' : options.style.type( 'string' ) + options.style.length( '(' + variable.length + ')' ) ) +
+				descriptorStr + options.style.nl ;
+		}
 	}
 	else if ( Buffer.isBuffer( variable ) )
 	{
@@ -22909,6 +23168,7 @@ function inspect_( runtime , options , variable )
 		else { constructor = variable.constructor.name ; }
 		
 		constructor = options.style.constructorName( constructor ) ;
+		proto = Object.getPrototypeOf( variable ) ;
 		
 		str += pre ;
 		
@@ -22927,7 +23187,11 @@ function inspect_( runtime , options , variable )
 		// Special Objects
 		specialObject = specialObjectSubstitution( variable ) ;
 		
-		if ( specialObject !== undefined )
+		if ( options.protoBlackList && options.protoBlackList.has( proto ) )
+		{
+			str += options.style.limit( '[skip]' ) + options.style.nl ;
+		}
+		else if ( specialObject !== undefined )
 		{
 			str += '=> ' + inspect_( {
 					depth: runtime.depth ,
@@ -22964,6 +23228,11 @@ function inspect_( runtime , options , variable )
 			
 			for ( i = 0 ; i < propertyList.length ; i ++ )
 			{
+				if ( ! isArray && options.propertyBlackList && options.propertyBlackList.has( propertyList[ i ] ) ) {
+					//str += options.style.limit( '[skip]' ) + options.style.nl ;
+					continue ;
+				}
+				
 				try {
 					descriptor = Object.getOwnPropertyDescriptor( variable , propertyList[ i ] ) ;
 					
@@ -23022,7 +23291,7 @@ function inspect_( runtime , options , variable )
 						keyIsProperty: true
 					} ,
 					options ,
-					variable.__proto__	// jshint ignore:line
+					proto
 				) ;
 			}
 			
@@ -23058,6 +23327,12 @@ function specialObjectSubstitution( variable )
 {
 	switch ( variable.constructor.name )
 	{
+		case 'String' :
+			if ( variable instanceof String )
+			{
+				return variable.toString() ;
+			}
+			break ;
 		case 'Date' :
 			if ( variable instanceof Date )
 			{
@@ -23265,9 +23540,9 @@ inspectStyle.html = Object.assign( {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")},require('_process'))
-},{"../../is-buffer/index.js":34,"./ansi.js":47,"./escape.js":49,"_process":42}],52:[function(require,module,exports){
+},{"../../is-buffer/index.js":34,"./ansi.js":46,"./escape.js":48,"_process":41}],51:[function(require,module,exports){
 module.exports={"߀":"0","́":""," ":" ","Ⓐ":"A","Ａ":"A","À":"A","Á":"A","Â":"A","Ầ":"A","Ấ":"A","Ẫ":"A","Ẩ":"A","Ã":"A","Ā":"A","Ă":"A","Ằ":"A","Ắ":"A","Ẵ":"A","Ẳ":"A","Ȧ":"A","Ǡ":"A","Ä":"A","Ǟ":"A","Ả":"A","Å":"A","Ǻ":"A","Ǎ":"A","Ȁ":"A","Ȃ":"A","Ạ":"A","Ậ":"A","Ặ":"A","Ḁ":"A","Ą":"A","Ⱥ":"A","Ɐ":"A","Ꜳ":"AA","Æ":"AE","Ǽ":"AE","Ǣ":"AE","Ꜵ":"AO","Ꜷ":"AU","Ꜹ":"AV","Ꜻ":"AV","Ꜽ":"AY","Ⓑ":"B","Ｂ":"B","Ḃ":"B","Ḅ":"B","Ḇ":"B","Ƀ":"B","Ɓ":"B","ｃ":"C","Ⓒ":"C","Ｃ":"C","Ꜿ":"C","Ḉ":"C","Ç":"C","Ⓓ":"D","Ｄ":"D","Ḋ":"D","Ď":"D","Ḍ":"D","Ḑ":"D","Ḓ":"D","Ḏ":"D","Đ":"D","Ɗ":"D","Ɖ":"D","ᴅ":"D","Ꝺ":"D","Ð":"Dh","Ǳ":"DZ","Ǆ":"DZ","ǲ":"Dz","ǅ":"Dz","ɛ":"E","Ⓔ":"E","Ｅ":"E","È":"E","É":"E","Ê":"E","Ề":"E","Ế":"E","Ễ":"E","Ể":"E","Ẽ":"E","Ē":"E","Ḕ":"E","Ḗ":"E","Ĕ":"E","Ė":"E","Ë":"E","Ẻ":"E","Ě":"E","Ȅ":"E","Ȇ":"E","Ẹ":"E","Ệ":"E","Ȩ":"E","Ḝ":"E","Ę":"E","Ḙ":"E","Ḛ":"E","Ɛ":"E","Ǝ":"E","ᴇ":"E","ꝼ":"F","Ⓕ":"F","Ｆ":"F","Ḟ":"F","Ƒ":"F","Ꝼ":"F","Ⓖ":"G","Ｇ":"G","Ǵ":"G","Ĝ":"G","Ḡ":"G","Ğ":"G","Ġ":"G","Ǧ":"G","Ģ":"G","Ǥ":"G","Ɠ":"G","Ꞡ":"G","Ᵹ":"G","Ꝿ":"G","ɢ":"G","Ⓗ":"H","Ｈ":"H","Ĥ":"H","Ḣ":"H","Ḧ":"H","Ȟ":"H","Ḥ":"H","Ḩ":"H","Ḫ":"H","Ħ":"H","Ⱨ":"H","Ⱶ":"H","Ɥ":"H","Ⓘ":"I","Ｉ":"I","Ì":"I","Í":"I","Î":"I","Ĩ":"I","Ī":"I","Ĭ":"I","İ":"I","Ï":"I","Ḯ":"I","Ỉ":"I","Ǐ":"I","Ȉ":"I","Ȋ":"I","Ị":"I","Į":"I","Ḭ":"I","Ɨ":"I","Ⓙ":"J","Ｊ":"J","Ĵ":"J","Ɉ":"J","ȷ":"J","Ⓚ":"K","Ｋ":"K","Ḱ":"K","Ǩ":"K","Ḳ":"K","Ķ":"K","Ḵ":"K","Ƙ":"K","Ⱪ":"K","Ꝁ":"K","Ꝃ":"K","Ꝅ":"K","Ꞣ":"K","Ⓛ":"L","Ｌ":"L","Ŀ":"L","Ĺ":"L","Ľ":"L","Ḷ":"L","Ḹ":"L","Ļ":"L","Ḽ":"L","Ḻ":"L","Ł":"L","Ƚ":"L","Ɫ":"L","Ⱡ":"L","Ꝉ":"L","Ꝇ":"L","Ꞁ":"L","Ǉ":"LJ","ǈ":"Lj","Ⓜ":"M","Ｍ":"M","Ḿ":"M","Ṁ":"M","Ṃ":"M","Ɱ":"M","Ɯ":"M","ϻ":"M","Ꞥ":"N","Ƞ":"N","Ⓝ":"N","Ｎ":"N","Ǹ":"N","Ń":"N","Ñ":"N","Ṅ":"N","Ň":"N","Ṇ":"N","Ņ":"N","Ṋ":"N","Ṉ":"N","Ɲ":"N","Ꞑ":"N","ᴎ":"N","Ǌ":"NJ","ǋ":"Nj","Ⓞ":"O","Ｏ":"O","Ò":"O","Ó":"O","Ô":"O","Ồ":"O","Ố":"O","Ỗ":"O","Ổ":"O","Õ":"O","Ṍ":"O","Ȭ":"O","Ṏ":"O","Ō":"O","Ṑ":"O","Ṓ":"O","Ŏ":"O","Ȯ":"O","Ȱ":"O","Ö":"O","Ȫ":"O","Ỏ":"O","Ő":"O","Ǒ":"O","Ȍ":"O","Ȏ":"O","Ơ":"O","Ờ":"O","Ớ":"O","Ỡ":"O","Ở":"O","Ợ":"O","Ọ":"O","Ộ":"O","Ǫ":"O","Ǭ":"O","Ø":"O","Ǿ":"O","Ɔ":"O","Ɵ":"O","Ꝋ":"O","Ꝍ":"O","Œ":"OE","Ƣ":"OI","Ꝏ":"OO","Ȣ":"OU","Ⓟ":"P","Ｐ":"P","Ṕ":"P","Ṗ":"P","Ƥ":"P","Ᵽ":"P","Ꝑ":"P","Ꝓ":"P","Ꝕ":"P","Ⓠ":"Q","Ｑ":"Q","Ꝗ":"Q","Ꝙ":"Q","Ɋ":"Q","Ⓡ":"R","Ｒ":"R","Ŕ":"R","Ṙ":"R","Ř":"R","Ȑ":"R","Ȓ":"R","Ṛ":"R","Ṝ":"R","Ŗ":"R","Ṟ":"R","Ɍ":"R","Ɽ":"R","Ꝛ":"R","Ꞧ":"R","Ꞃ":"R","Ⓢ":"S","Ｓ":"S","ẞ":"S","Ś":"S","Ṥ":"S","Ŝ":"S","Ṡ":"S","Š":"S","Ṧ":"S","Ṣ":"S","Ṩ":"S","Ș":"S","Ş":"S","Ȿ":"S","Ꞩ":"S","Ꞅ":"S","Ⓣ":"T","Ｔ":"T","Ṫ":"T","Ť":"T","Ṭ":"T","Ț":"T","Ţ":"T","Ṱ":"T","Ṯ":"T","Ŧ":"T","Ƭ":"T","Ʈ":"T","Ⱦ":"T","Ꞇ":"T","Þ":"Th","Ꜩ":"TZ","Ⓤ":"U","Ｕ":"U","Ù":"U","Ú":"U","Û":"U","Ũ":"U","Ṹ":"U","Ū":"U","Ṻ":"U","Ŭ":"U","Ü":"U","Ǜ":"U","Ǘ":"U","Ǖ":"U","Ǚ":"U","Ủ":"U","Ů":"U","Ű":"U","Ǔ":"U","Ȕ":"U","Ȗ":"U","Ư":"U","Ừ":"U","Ứ":"U","Ữ":"U","Ử":"U","Ự":"U","Ụ":"U","Ṳ":"U","Ų":"U","Ṷ":"U","Ṵ":"U","Ʉ":"U","Ⓥ":"V","Ｖ":"V","Ṽ":"V","Ṿ":"V","Ʋ":"V","Ꝟ":"V","Ʌ":"V","Ꝡ":"VY","Ⓦ":"W","Ｗ":"W","Ẁ":"W","Ẃ":"W","Ŵ":"W","Ẇ":"W","Ẅ":"W","Ẉ":"W","Ⱳ":"W","Ⓧ":"X","Ｘ":"X","Ẋ":"X","Ẍ":"X","Ⓨ":"Y","Ｙ":"Y","Ỳ":"Y","Ý":"Y","Ŷ":"Y","Ỹ":"Y","Ȳ":"Y","Ẏ":"Y","Ÿ":"Y","Ỷ":"Y","Ỵ":"Y","Ƴ":"Y","Ɏ":"Y","Ỿ":"Y","Ⓩ":"Z","Ｚ":"Z","Ź":"Z","Ẑ":"Z","Ż":"Z","Ž":"Z","Ẓ":"Z","Ẕ":"Z","Ƶ":"Z","Ȥ":"Z","Ɀ":"Z","Ⱬ":"Z","Ꝣ":"Z","ⓐ":"a","ａ":"a","ẚ":"a","à":"a","á":"a","â":"a","ầ":"a","ấ":"a","ẫ":"a","ẩ":"a","ã":"a","ā":"a","ă":"a","ằ":"a","ắ":"a","ẵ":"a","ẳ":"a","ȧ":"a","ǡ":"a","ä":"a","ǟ":"a","ả":"a","å":"a","ǻ":"a","ǎ":"a","ȁ":"a","ȃ":"a","ạ":"a","ậ":"a","ặ":"a","ḁ":"a","ą":"a","ⱥ":"a","ɐ":"a","ɑ":"a","ꜳ":"aa","æ":"ae","ǽ":"ae","ǣ":"ae","ꜵ":"ao","ꜷ":"au","ꜹ":"av","ꜻ":"av","ꜽ":"ay","ⓑ":"b","ｂ":"b","ḃ":"b","ḅ":"b","ḇ":"b","ƀ":"b","ƃ":"b","ɓ":"b","Ƃ":"b","ⓒ":"c","ć":"c","ĉ":"c","ċ":"c","č":"c","ç":"c","ḉ":"c","ƈ":"c","ȼ":"c","ꜿ":"c","ↄ":"c","C":"c","Ć":"c","Ĉ":"c","Ċ":"c","Č":"c","Ƈ":"c","Ȼ":"c","ⓓ":"d","ｄ":"d","ḋ":"d","ď":"d","ḍ":"d","ḑ":"d","ḓ":"d","ḏ":"d","đ":"d","ƌ":"d","ɖ":"d","ɗ":"d","Ƌ":"d","Ꮷ":"d","ԁ":"d","Ɦ":"d","ð":"dh","ǳ":"dz","ǆ":"dz","ⓔ":"e","ｅ":"e","è":"e","é":"e","ê":"e","ề":"e","ế":"e","ễ":"e","ể":"e","ẽ":"e","ē":"e","ḕ":"e","ḗ":"e","ĕ":"e","ė":"e","ë":"e","ẻ":"e","ě":"e","ȅ":"e","ȇ":"e","ẹ":"e","ệ":"e","ȩ":"e","ḝ":"e","ę":"e","ḙ":"e","ḛ":"e","ɇ":"e","ǝ":"e","ⓕ":"f","ｆ":"f","ḟ":"f","ƒ":"f","ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ⓖ":"g","ｇ":"g","ǵ":"g","ĝ":"g","ḡ":"g","ğ":"g","ġ":"g","ǧ":"g","ģ":"g","ǥ":"g","ɠ":"g","ꞡ":"g","ꝿ":"g","ᵹ":"g","ⓗ":"h","ｈ":"h","ĥ":"h","ḣ":"h","ḧ":"h","ȟ":"h","ḥ":"h","ḩ":"h","ḫ":"h","ẖ":"h","ħ":"h","ⱨ":"h","ⱶ":"h","ɥ":"h","ƕ":"hv","ⓘ":"i","ｉ":"i","ì":"i","í":"i","î":"i","ĩ":"i","ī":"i","ĭ":"i","ï":"i","ḯ":"i","ỉ":"i","ǐ":"i","ȉ":"i","ȋ":"i","ị":"i","į":"i","ḭ":"i","ɨ":"i","ı":"i","ⓙ":"j","ｊ":"j","ĵ":"j","ǰ":"j","ɉ":"j","ⓚ":"k","ｋ":"k","ḱ":"k","ǩ":"k","ḳ":"k","ķ":"k","ḵ":"k","ƙ":"k","ⱪ":"k","ꝁ":"k","ꝃ":"k","ꝅ":"k","ꞣ":"k","ⓛ":"l","ｌ":"l","ŀ":"l","ĺ":"l","ľ":"l","ḷ":"l","ḹ":"l","ļ":"l","ḽ":"l","ḻ":"l","ſ":"l","ł":"l","ƚ":"l","ɫ":"l","ⱡ":"l","ꝉ":"l","ꞁ":"l","ꝇ":"l","ɭ":"l","ǉ":"lj","ⓜ":"m","ｍ":"m","ḿ":"m","ṁ":"m","ṃ":"m","ɱ":"m","ɯ":"m","ⓝ":"n","ｎ":"n","ǹ":"n","ń":"n","ñ":"n","ṅ":"n","ň":"n","ṇ":"n","ņ":"n","ṋ":"n","ṉ":"n","ƞ":"n","ɲ":"n","ŉ":"n","ꞑ":"n","ꞥ":"n","ԉ":"n","ǌ":"nj","ⓞ":"o","ｏ":"o","ò":"o","ó":"o","ô":"o","ồ":"o","ố":"o","ỗ":"o","ổ":"o","õ":"o","ṍ":"o","ȭ":"o","ṏ":"o","ō":"o","ṑ":"o","ṓ":"o","ŏ":"o","ȯ":"o","ȱ":"o","ö":"o","ȫ":"o","ỏ":"o","ő":"o","ǒ":"o","ȍ":"o","ȏ":"o","ơ":"o","ờ":"o","ớ":"o","ỡ":"o","ở":"o","ợ":"o","ọ":"o","ộ":"o","ǫ":"o","ǭ":"o","ø":"o","ǿ":"o","ꝋ":"o","ꝍ":"o","ɵ":"o","ɔ":"o","ᴑ":"o","œ":"oe","ƣ":"oi","ꝏ":"oo","ȣ":"ou","ⓟ":"p","ｐ":"p","ṕ":"p","ṗ":"p","ƥ":"p","ᵽ":"p","ꝑ":"p","ꝓ":"p","ꝕ":"p","ρ":"p","ⓠ":"q","ｑ":"q","ɋ":"q","ꝗ":"q","ꝙ":"q","ⓡ":"r","ｒ":"r","ŕ":"r","ṙ":"r","ř":"r","ȑ":"r","ȓ":"r","ṛ":"r","ṝ":"r","ŗ":"r","ṟ":"r","ɍ":"r","ɽ":"r","ꝛ":"r","ꞧ":"r","ꞃ":"r","ⓢ":"s","ｓ":"s","ś":"s","ṥ":"s","ŝ":"s","ṡ":"s","š":"s","ṧ":"s","ṣ":"s","ṩ":"s","ș":"s","ş":"s","ȿ":"s","ꞩ":"s","ꞅ":"s","ẛ":"s","ʂ":"s","ß":"ss","ⓣ":"t","ｔ":"t","ṫ":"t","ẗ":"t","ť":"t","ṭ":"t","ț":"t","ţ":"t","ṱ":"t","ṯ":"t","ŧ":"t","ƭ":"t","ʈ":"t","ⱦ":"t","ꞇ":"t","þ":"th","ꜩ":"tz","ⓤ":"u","ｕ":"u","ù":"u","ú":"u","û":"u","ũ":"u","ṹ":"u","ū":"u","ṻ":"u","ŭ":"u","ü":"u","ǜ":"u","ǘ":"u","ǖ":"u","ǚ":"u","ủ":"u","ů":"u","ű":"u","ǔ":"u","ȕ":"u","ȗ":"u","ư":"u","ừ":"u","ứ":"u","ữ":"u","ử":"u","ự":"u","ụ":"u","ṳ":"u","ų":"u","ṷ":"u","ṵ":"u","ʉ":"u","ⓥ":"v","ｖ":"v","ṽ":"v","ṿ":"v","ʋ":"v","ꝟ":"v","ʌ":"v","ꝡ":"vy","ⓦ":"w","ｗ":"w","ẁ":"w","ẃ":"w","ŵ":"w","ẇ":"w","ẅ":"w","ẘ":"w","ẉ":"w","ⱳ":"w","ⓧ":"x","ｘ":"x","ẋ":"x","ẍ":"x","ⓨ":"y","ｙ":"y","ỳ":"y","ý":"y","ŷ":"y","ỹ":"y","ȳ":"y","ẏ":"y","ÿ":"y","ỷ":"y","ẙ":"y","ỵ":"y","ƴ":"y","ɏ":"y","ỿ":"y","ⓩ":"z","ｚ":"z","ź":"z","ẑ":"z","ż":"z","ž":"z","ẓ":"z","ẕ":"z","ƶ":"z","ȥ":"z","ɀ":"z","ⱬ":"z","ꝣ":"z"}
-},{}],53:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -23307,7 +23582,7 @@ module.exports = function( str )
 
             
 
-},{"./latinize-map.json":52}],54:[function(require,module,exports){
+},{"./latinize-map.json":51}],53:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -23356,7 +23631,24 @@ exports.resize = function resize( str , length )
 
 
 
-},{}],55:[function(require,module,exports){
+exports.occurenceCount = function occurenceCount( str , subStr )
+{
+	if ( ! str || ! subStr ) { return 0 ; }
+	
+	var count = 0 , index = 0 ;
+
+	while ( ( index = str.indexOf( subStr , index ) ) !== -1 )
+	{
+		count ++ ;
+		index += subStr.length ;
+	}
+	
+	return count ;
+} ;
+
+
+
+},{}],54:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -23439,7 +23731,7 @@ polyfill.repeat = function(count)
 
 
 
-},{}],56:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -23498,7 +23790,7 @@ exports.regexp.array2alternatives = function array2alternatives( array )
 
 
 
-},{"./escape.js":49}],57:[function(require,module,exports){
+},{"./escape.js":48}],56:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -23593,7 +23885,7 @@ stringKit.installPolyfills = function installPolyfills()
 
 
 
-},{"./ansi.js":47,"./camel.js":48,"./escape.js":49,"./format.js":50,"./inspect.js":51,"./latinize.js":53,"./misc.js":54,"./polyfill.js":55,"./regexp.js":56,"./toTitleCase.js":58,"./unicode.js":59,"./wordwrap.js":60,"xregexp":24}],58:[function(require,module,exports){
+},{"./ansi.js":46,"./camel.js":47,"./escape.js":48,"./format.js":49,"./inspect.js":50,"./latinize.js":52,"./misc.js":53,"./polyfill.js":54,"./regexp.js":55,"./toTitleCase.js":57,"./unicode.js":58,"./wordwrap.js":59,"xregexp":24}],57:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -23652,7 +23944,7 @@ module.exports = function toTitleCase( str , options )
 
 
 
-},{}],59:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -23912,7 +24204,7 @@ unicode.toFullWidth = function toFullWidth( str )
 
 
 
-},{}],60:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 /*
 	String Kit
 	
@@ -24025,7 +24317,7 @@ module.exports = function wordwrap( str , width , join )
 
 
 
-},{}],61:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 /*
 	Tree Kit
 	
@@ -24366,7 +24658,7 @@ function extendOne( runtime , options , target , source )
 }
 
 
-},{}],62:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -25100,7 +25392,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":63,"punycode":43,"querystring":46}],63:[function(require,module,exports){
+},{"./util":62,"punycode":42,"querystring":45}],62:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -25118,80 +25410,5 @@ module.exports = {
   }
 };
 
-},{}],64:[function(require,module,exports){
-module.exports={
-  "name": "tea-time",
-  "version": "1.0.5",
-  "engines": {
-    "node": ">=6.0.0"
-  },
-  "description": "Unit test: Tea Time!",
-  "main": "lib/TeaTime.js",
-  "bin": {
-    "tea-time": "./bin/tea-time"
-  },
-  "directories": {
-    "test": "test"
-  },
-  "dependencies": {
-    "async-kit": "^2.2.3",
-    "async-try-catch": "^0.3.4",
-    "browserify": "^14.4.0",
-    "diff": "^3.3.1",
-    "dom-kit": "^0.3.6",
-    "falafel": "^2.1.0",
-    "glob": "^7.1.2",
-    "minimist": "^1.2.0",
-    "nextgen-events": "^0.10.0",
-    "string-kit": "^0.6.2",
-    "terminal-kit": "^1.13.11",
-    "tree-kit": "^0.5.26",
-    "ws": "^3.2.0"
-  },
-  "optionalDependencies": {
-    "freedesktop-notifications": "^1.2.2"
-  },
-  "devDependencies": {
-    "uglify-js-es6": "^2.8.9",
-    "expect.js": "^0.3.1",
-    "jshint": "^2.9.4",
-    "mocha": "^3.2.0"
-  },
-  "scripts": {
-    "test": "mocha -R dot"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/cronvel/tea-time.git"
-  },
-  "keywords": [
-    "unit",
-    "test",
-    "bdd",
-    "tdd",
-    "tap",
-    "mocha"
-  ],
-  "author": "Cédric Ronvel",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/cronvel/tea-time/issues"
-  },
-  "config": {
-    "tea-time": {
-      "coverDir": [
-        "sample"
-      ]
-    }
-  },
-  "copyright": {
-    "title": "Tea Time!",
-    "years": [
-      2015,
-      2017
-    ],
-    "owner": "Cédric Ronvel"
-  }
-}
 },{}]},{},[6])(6)
 });
