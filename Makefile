@@ -52,7 +52,7 @@ UGLIFY=./node_modules/.bin/uglifyjs
 
 # Build the browser lib
 browser/tea-time.js: lib/*.js lib/browser-reporters/*.js
-	${BROWSERIFY} lib/browser.js -s createTeaTime -i xregexp -o browser/tea-time.js
+	${BROWSERIFY} lib/browser.js -s createTeaTime -i xregexp -i mongodb -o browser/tea-time.js
 
 # Build the browser minified lib
 browser/tea-time.min.js: browser/tea-time.js

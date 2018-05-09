@@ -2,7 +2,7 @@
 
 # Unit test: Tea Time!
 
-This is a [mocha-compatible](http://mochajs.org/) test framework.
+This is a **battery included** [mocha-compatible](http://mochajs.org/) test framework.
 
 For the doc, start reading the [mocha documentation](http://mochajs.org/).
 
@@ -11,6 +11,10 @@ For the doc, start reading the [mocha documentation](http://mochajs.org/).
 ## Specific *Tea Time!* features:
 
 * Many reporters can be used at once, just using multiple `--reporter` options in the CLI
+
+* **NEW!** Promise-returning (or async function) tests and hooks
+
+* **NEW!** Built-in *expect* assertion (but custom assertion lib can be used as well), through the `expect` global function
 
 * **NEW!** (beta) Built-in test coverage, with in-terminal report, example:
 
