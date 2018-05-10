@@ -28,6 +28,19 @@ var SeventhPromise = require( 'seventh' ) ;
 
 
 
+describe( "Built-in expect assertion lib" , function() {
+	
+	it( "Good expectation" , function() {
+		expect( 'blah' ).to.be.a( 'string' ) ;
+	} ) ;
+	
+	it( "Bad expectation" , function() {
+		expect( 'blah' ).to.be.a( 'number' ) ;
+	} ) ;
+} ) ;
+
+
+
 describe( "Sync tests" , function() {
 	
 	it( "Sync Exception" , function() {
@@ -568,16 +581,4 @@ describe( "Misc tests" , function() {
 it( "Out of suite test" , function() {
 } ) ;
 	
-
-
-describe( "Built-in expect assertion lib" , function() {
-	
-	it( "Good expectation" , function() {
-		expect( 'blah' ).to.be.a( 'string' ) ;
-	} ) ;
-	
-	it( "Bad expectation" , function() {
-		expect( 'blah' ).to.be.a( 'number' ) ;
-	} ) ;
-} ) ;
 
