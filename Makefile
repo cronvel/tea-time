@@ -70,10 +70,6 @@ log/mocha.log: log/npm-dev-install.log lib/*.js test/*.js
 README.md: documentation.md
 	cat documentation.md > README.md
 
-# Mocha Markdown BDD spec
-bdd-spec.md: log/npm-dev-install.log lib/*.js test/*.js
-	cd test ; ${MOCHA} *.js -R markdown > ../bdd-spec.md
-
 # Upgrade version in package.json
 log/upgrade-package.log: lib/*.js test/*.js documentation.md
 	npm version patch -m "Upgrade package.json version to %s" | tee log/upgrade-package.log ; exit $${PIPESTATUS[0]}
@@ -104,7 +100,7 @@ log/npm-dev-install.log: package.json
 
 # Delete files, mostly log and non-versioned files
 clean-all:
-	rm -rf log/*.log README.md bdd-spec.md node_modules
+	rm -rf log/*.log README.md node_modules
 
 # This will fail if we are not on master branch (grep exit 1 if nothing found)
 check-if-master-branch:
