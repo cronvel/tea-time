@@ -1,4 +1,4 @@
-(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.createTeaTime = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.createTeaTime = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 (function (process,global){
 /*
 	Tea Time!
@@ -499,7 +499,7 @@ Cover.prototype.getCoverage = function getCoverage() {
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":61,"falafel":49,"fs":24}],2:[function(require,module,exports){
+},{"_process":55,"falafel":43,"fs":24}],2:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -976,7 +976,9 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 		}
 
 		this.orphanError = null ;
-		this.emit( 'enterTest' , testFn.testName , depth ) ;
+
+		// Add null at the end or NextGen Event will believe that testFn is a completion callback
+		this.emit( 'enterTest' , testFn.testName , depth , testFn , null ) ;
 
 		testWrapper( testFn , ( testError , time , slow ) => {
 
@@ -1395,7 +1397,7 @@ TeaTime.prototype.patchError = function patchError( error ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./Cover.js":1,"async-kit":13,"async-try-catch":21,"doormen/lib/expect.js":33,"nextgen-events":55}],3:[function(require,module,exports){
+},{"./Cover.js":1,"async-kit":13,"async-try-catch":21,"doormen/lib/expect.js":33,"nextgen-events":49}],3:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -2005,7 +2007,7 @@ dom.ready( () => {
 
 
 
-},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":27,"string-kit/lib/inspect.js":70,"url":82}],7:[function(require,module,exports){
+},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":27,"string-kit/lib/inspect.js":64,"url":76}],7:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -2093,7 +2095,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode ) {
 
 
 
-},{"diff":26,"string-kit/lib/inspect.js":70}],8:[function(require,module,exports){
+},{"diff":26,"string-kit/lib/inspect.js":64}],8:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -3828,7 +3830,7 @@ try{
 	exports.XMLSerializer = XMLSerializer;
 //}
 
-},{"nwmatcher":58,"string-kit":76}],11:[function(require,module,exports){
+},{"nwmatcher":52,"string-kit":70}],11:[function(require,module,exports){
 exports.entityMap = {
        lt: '<',
        gt: '>',
@@ -6730,7 +6732,7 @@ function execLogicFinal( execContext , result )
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":61,"nextgen-events":18,"tree-kit/lib/extend.js":81}],15:[function(require,module,exports){
+},{"_process":55,"nextgen-events":18,"tree-kit/lib/extend.js":75}],15:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -6820,7 +6822,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":13,"_process":61}],16:[function(require,module,exports){
+},{"./async.js":13,"_process":55}],16:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -8625,36 +8627,40 @@ RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message )
 
 },{"./NextGenEvents.js":18}],20:[function(require,module,exports){
 module.exports={
-  "_from": "nextgen-events@^0.9.0",
+  "_args": [
+    [
+      "nextgen-events@0.9.9",
+      "/home/cedric/inside/github/tea-time"
+    ]
+  ],
+  "_from": "nextgen-events@0.9.9",
   "_id": "nextgen-events@0.9.9",
   "_inBundle": false,
   "_integrity": "sha1-OaivxKK4RTiMV+LGu5cWcRmGo6A=",
   "_location": "/async-kit/nextgen-events",
   "_phantomChildren": {},
   "_requested": {
-    "type": "range",
+    "type": "version",
     "registry": true,
-    "raw": "nextgen-events@^0.9.0",
+    "raw": "nextgen-events@0.9.9",
     "name": "nextgen-events",
     "escapedName": "nextgen-events",
-    "rawSpec": "^0.9.0",
+    "rawSpec": "0.9.9",
     "saveSpec": null,
-    "fetchSpec": "^0.9.0"
+    "fetchSpec": "0.9.9"
   },
   "_requiredBy": [
     "/async-kit"
   ],
   "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.9.9.tgz",
-  "_shasum": "39a8afc4a2b845388c57e2c6bb9716711986a3a0",
-  "_spec": "nextgen-events@^0.9.0",
-  "_where": "/home/cedric/inside/github/tea-time/node_modules/async-kit",
+  "_spec": "0.9.9",
+  "_where": "/home/cedric/inside/github/tea-time",
   "author": {
     "name": "Cédric Ronvel"
   },
   "bugs": {
     "url": "https://github.com/cronvel/nextgen-events/issues"
   },
-  "bundleDependencies": false,
   "config": {
     "tea-time": {
       "coverDir": [
@@ -8671,7 +8677,6 @@ module.exports={
     "owner": "Cédric Ronvel"
   },
   "dependencies": {},
-  "deprecated": false,
   "description": "The next generation of events handling for javascript! New: abstract away the network!",
   "devDependencies": {
     "browserify": "^14.3.0",
@@ -9082,8 +9087,14 @@ AsyncTryCatch.restore = function restore() {
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":22,"_process":61,"events":48}],22:[function(require,module,exports){
+},{"../package.json":22,"_process":55,"events":42}],22:[function(require,module,exports){
 module.exports={
+  "_args": [
+    [
+      "async-try-catch@0.3.6",
+      "/home/cedric/inside/github/tea-time"
+    ]
+  ],
   "_from": "async-try-catch@0.3.6",
   "_id": "async-try-catch@0.3.6",
   "_inBundle": false,
@@ -9101,12 +9112,10 @@ module.exports={
     "fetchSpec": "0.3.6"
   },
   "_requiredBy": [
-    "#USER",
     "/"
   ],
   "_resolved": "https://registry.npmjs.org/async-try-catch/-/async-try-catch-0.3.6.tgz",
-  "_shasum": "8a632b2bf39fee1e184f9c83478dfdf09328610a",
-  "_spec": "async-try-catch@0.3.6",
+  "_spec": "0.3.6",
   "_where": "/home/cedric/inside/github/tea-time",
   "author": {
     "name": "Cédric Ronvel"
@@ -9114,7 +9123,6 @@ module.exports={
   "bugs": {
     "url": "https://github.com/cronvel/async-try-catch/issues"
   },
-  "bundleDependencies": false,
   "copyright": {
     "title": "Async Try-Catch",
     "years": [
@@ -9124,7 +9132,6 @@ module.exports={
     "owner": "Cédric Ronvel"
   },
   "dependencies": {},
-  "deprecated": false,
   "description": "Async try catch",
   "devDependencies": {
     "browserify": "^13.1.0",
@@ -9173,68 +9180,102 @@ for (var i = 0, len = code.length; i < len; ++i) {
   revLookup[code.charCodeAt(i)] = i
 }
 
+// Support decoding URL-safe base64 strings, as Node.js does.
+// See: https://en.wikipedia.org/wiki/Base64#URL_applications
 revLookup['-'.charCodeAt(0)] = 62
 revLookup['_'.charCodeAt(0)] = 63
 
-function placeHoldersCount (b64) {
+function getLens (b64) {
   var len = b64.length
+
   if (len % 4 > 0) {
     throw new Error('Invalid string. Length must be a multiple of 4')
   }
 
-  // the number of equal signs (place holders)
-  // if there are two placeholders, than the two characters before it
-  // represent one byte
-  // if there is only one, then the three characters before it represent 2 bytes
-  // this is just a cheap hack to not do indexOf twice
-  return b64[len - 2] === '=' ? 2 : b64[len - 1] === '=' ? 1 : 0
+  // Trim off extra bytes after placeholder bytes are found
+  // See: https://github.com/beatgammit/base64-js/issues/42
+  var validLen = b64.indexOf('=')
+  if (validLen === -1) validLen = len
+
+  var placeHoldersLen = validLen === len
+    ? 0
+    : 4 - (validLen % 4)
+
+  return [validLen, placeHoldersLen]
 }
 
+// base64 is 4/3 + up to two characters of the original data
 function byteLength (b64) {
-  // base64 is 4/3 + up to two characters of the original data
-  return (b64.length * 3 / 4) - placeHoldersCount(b64)
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function _byteLength (b64, validLen, placeHoldersLen) {
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
 }
 
 function toByteArray (b64) {
-  var i, l, tmp, placeHolders, arr
-  var len = b64.length
-  placeHolders = placeHoldersCount(b64)
+  var tmp
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
 
-  arr = new Arr((len * 3 / 4) - placeHolders)
+  var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen))
+
+  var curByte = 0
 
   // if there are placeholders, only get up to the last complete 4 chars
-  l = placeHolders > 0 ? len - 4 : len
+  var len = placeHoldersLen > 0
+    ? validLen - 4
+    : validLen
 
-  var L = 0
-
-  for (i = 0; i < l; i += 4) {
-    tmp = (revLookup[b64.charCodeAt(i)] << 18) | (revLookup[b64.charCodeAt(i + 1)] << 12) | (revLookup[b64.charCodeAt(i + 2)] << 6) | revLookup[b64.charCodeAt(i + 3)]
-    arr[L++] = (tmp >> 16) & 0xFF
-    arr[L++] = (tmp >> 8) & 0xFF
-    arr[L++] = tmp & 0xFF
+  for (var i = 0; i < len; i += 4) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 18) |
+      (revLookup[b64.charCodeAt(i + 1)] << 12) |
+      (revLookup[b64.charCodeAt(i + 2)] << 6) |
+      revLookup[b64.charCodeAt(i + 3)]
+    arr[curByte++] = (tmp >> 16) & 0xFF
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
   }
 
-  if (placeHolders === 2) {
-    tmp = (revLookup[b64.charCodeAt(i)] << 2) | (revLookup[b64.charCodeAt(i + 1)] >> 4)
-    arr[L++] = tmp & 0xFF
-  } else if (placeHolders === 1) {
-    tmp = (revLookup[b64.charCodeAt(i)] << 10) | (revLookup[b64.charCodeAt(i + 1)] << 4) | (revLookup[b64.charCodeAt(i + 2)] >> 2)
-    arr[L++] = (tmp >> 8) & 0xFF
-    arr[L++] = tmp & 0xFF
+  if (placeHoldersLen === 2) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 2) |
+      (revLookup[b64.charCodeAt(i + 1)] >> 4)
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 1) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 10) |
+      (revLookup[b64.charCodeAt(i + 1)] << 4) |
+      (revLookup[b64.charCodeAt(i + 2)] >> 2)
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
   }
 
   return arr
 }
 
 function tripletToBase64 (num) {
-  return lookup[num >> 18 & 0x3F] + lookup[num >> 12 & 0x3F] + lookup[num >> 6 & 0x3F] + lookup[num & 0x3F]
+  return lookup[num >> 18 & 0x3F] +
+    lookup[num >> 12 & 0x3F] +
+    lookup[num >> 6 & 0x3F] +
+    lookup[num & 0x3F]
 }
 
 function encodeChunk (uint8, start, end) {
   var tmp
   var output = []
   for (var i = start; i < end; i += 3) {
-    tmp = (uint8[i] << 16) + (uint8[i + 1] << 8) + (uint8[i + 2])
+    tmp =
+      ((uint8[i] << 16) & 0xFF0000) +
+      ((uint8[i + 1] << 8) & 0xFF00) +
+      (uint8[i + 2] & 0xFF)
     output.push(tripletToBase64(tmp))
   }
   return output.join('')
@@ -9244,30 +9285,33 @@ function fromByteArray (uint8) {
   var tmp
   var len = uint8.length
   var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
-  var output = ''
   var parts = []
   var maxChunkLength = 16383 // must be multiple of 3
 
   // go through the array every three bytes, we'll deal with trailing stuff later
   for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
-    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
+    parts.push(encodeChunk(
+      uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)
+    ))
   }
 
   // pad the end with zeros, but make sure to not forget the extra bytes
   if (extraBytes === 1) {
     tmp = uint8[len - 1]
-    output += lookup[tmp >> 2]
-    output += lookup[(tmp << 4) & 0x3F]
-    output += '=='
+    parts.push(
+      lookup[tmp >> 2] +
+      lookup[(tmp << 4) & 0x3F] +
+      '=='
+    )
   } else if (extraBytes === 2) {
-    tmp = (uint8[len - 2] << 8) + (uint8[len - 1])
-    output += lookup[tmp >> 10]
-    output += lookup[(tmp >> 4) & 0x3F]
-    output += lookup[(tmp << 2) & 0x3F]
-    output += '='
+    tmp = (uint8[len - 2] << 8) + uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 10] +
+      lookup[(tmp >> 4) & 0x3F] +
+      lookup[(tmp << 2) & 0x3F] +
+      '='
+    )
   }
-
-  parts.push(output)
 
   return parts.join('')
 }
@@ -9278,7 +9322,7 @@ function fromByteArray (uint8) {
 /*!
  * The buffer module from node.js, for the browser.
  *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @author   Feross Aboukhadijeh <https://feross.org>
  * @license  MIT
  */
 /* eslint-disable no-proto */
@@ -9329,6 +9373,24 @@ function typedArraySupport () {
     return false
   }
 }
+
+Object.defineProperty(Buffer.prototype, 'parent', {
+  get: function () {
+    if (!(this instanceof Buffer)) {
+      return undefined
+    }
+    return this.buffer
+  }
+})
+
+Object.defineProperty(Buffer.prototype, 'offset', {
+  get: function () {
+    if (!(this instanceof Buffer)) {
+      return undefined
+    }
+    return this.byteOffset
+  }
+})
 
 function createBuffer (length) {
   if (length > K_MAX_LENGTH) {
@@ -9381,7 +9443,7 @@ function from (value, encodingOrOffset, length) {
     throw new TypeError('"value" argument must not be a number')
   }
 
-  if (isArrayBuffer(value)) {
+  if (isArrayBuffer(value) || (value && isArrayBuffer(value.buffer))) {
     return fromArrayBuffer(value, encodingOrOffset, length)
   }
 
@@ -9411,7 +9473,7 @@ Buffer.__proto__ = Uint8Array
 
 function assertSize (size) {
   if (typeof size !== 'number') {
-    throw new TypeError('"size" argument must be a number')
+    throw new TypeError('"size" argument must be of type number')
   } else if (size < 0) {
     throw new RangeError('"size" argument must not be negative')
   }
@@ -9465,7 +9527,7 @@ function fromString (string, encoding) {
   }
 
   if (!Buffer.isEncoding(encoding)) {
-    throw new TypeError('"encoding" must be a valid string encoding')
+    throw new TypeError('Unknown encoding: ' + encoding)
   }
 
   var length = byteLength(string, encoding) | 0
@@ -9494,11 +9556,11 @@ function fromArrayLike (array) {
 
 function fromArrayBuffer (array, byteOffset, length) {
   if (byteOffset < 0 || array.byteLength < byteOffset) {
-    throw new RangeError('\'offset\' is out of bounds')
+    throw new RangeError('"offset" is outside of buffer bounds')
   }
 
   if (array.byteLength < byteOffset + (length || 0)) {
-    throw new RangeError('\'length\' is out of bounds')
+    throw new RangeError('"length" is outside of buffer bounds')
   }
 
   var buf
@@ -9529,7 +9591,7 @@ function fromObject (obj) {
   }
 
   if (obj) {
-    if (isArrayBufferView(obj) || 'length' in obj) {
+    if (ArrayBuffer.isView(obj) || 'length' in obj) {
       if (typeof obj.length !== 'number' || numberIsNaN(obj.length)) {
         return createBuffer(0)
       }
@@ -9541,7 +9603,7 @@ function fromObject (obj) {
     }
   }
 
-  throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
+  throw new TypeError('The first argument must be one of type string, Buffer, ArrayBuffer, Array, or Array-like Object.')
 }
 
 function checked (length) {
@@ -9628,6 +9690,9 @@ Buffer.concat = function concat (list, length) {
   var pos = 0
   for (i = 0; i < list.length; ++i) {
     var buf = list[i]
+    if (ArrayBuffer.isView(buf)) {
+      buf = Buffer.from(buf)
+    }
     if (!Buffer.isBuffer(buf)) {
       throw new TypeError('"list" argument must be an Array of Buffers')
     }
@@ -9641,7 +9706,7 @@ function byteLength (string, encoding) {
   if (Buffer.isBuffer(string)) {
     return string.length
   }
-  if (isArrayBufferView(string) || isArrayBuffer(string)) {
+  if (ArrayBuffer.isView(string) || isArrayBuffer(string)) {
     return string.byteLength
   }
   if (typeof string !== 'string') {
@@ -9808,6 +9873,8 @@ Buffer.prototype.toString = function toString () {
   if (arguments.length === 0) return utf8Slice(this, 0, length)
   return slowToString.apply(this, arguments)
 }
+
+Buffer.prototype.toLocaleString = Buffer.prototype.toString
 
 Buffer.prototype.equals = function equals (b) {
   if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
@@ -10029,9 +10096,7 @@ function hexWrite (buf, string, offset, length) {
     }
   }
 
-  // must be an even number of digits
   var strLen = string.length
-  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
 
   if (length > strLen / 2) {
     length = strLen / 2
@@ -10724,6 +10789,7 @@ Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert
 
 // copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
 Buffer.prototype.copy = function copy (target, targetStart, start, end) {
+  if (!Buffer.isBuffer(target)) throw new TypeError('argument should be a Buffer')
   if (!start) start = 0
   if (!end && end !== 0) end = this.length
   if (targetStart >= target.length) targetStart = target.length
@@ -10738,7 +10804,7 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
   if (targetStart < 0) {
     throw new RangeError('targetStart out of bounds')
   }
-  if (start < 0 || start >= this.length) throw new RangeError('sourceStart out of bounds')
+  if (start < 0 || start >= this.length) throw new RangeError('Index out of range')
   if (end < 0) throw new RangeError('sourceEnd out of bounds')
 
   // Are we oob?
@@ -10748,22 +10814,19 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
   }
 
   var len = end - start
-  var i
 
-  if (this === target && start < targetStart && targetStart < end) {
+  if (this === target && typeof Uint8Array.prototype.copyWithin === 'function') {
+    // Use built-in when available, missing from IE11
+    this.copyWithin(targetStart, start, end)
+  } else if (this === target && start < targetStart && targetStart < end) {
     // descending copy from end
-    for (i = len - 1; i >= 0; --i) {
-      target[i + targetStart] = this[i + start]
-    }
-  } else if (len < 1000) {
-    // ascending copy from start
-    for (i = 0; i < len; ++i) {
+    for (var i = len - 1; i >= 0; --i) {
       target[i + targetStart] = this[i + start]
     }
   } else {
     Uint8Array.prototype.set.call(
       target,
-      this.subarray(start, start + len),
+      this.subarray(start, end),
       targetStart
     )
   }
@@ -10786,17 +10849,19 @@ Buffer.prototype.fill = function fill (val, start, end, encoding) {
       encoding = end
       end = this.length
     }
-    if (val.length === 1) {
-      var code = val.charCodeAt(0)
-      if (code < 256) {
-        val = code
-      }
-    }
     if (encoding !== undefined && typeof encoding !== 'string') {
       throw new TypeError('encoding must be a string')
     }
     if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
       throw new TypeError('Unknown encoding: ' + encoding)
+    }
+    if (val.length === 1) {
+      var code = val.charCodeAt(0)
+      if ((encoding === 'utf8' && code < 128) ||
+          encoding === 'latin1') {
+        // Fast path: If `val` fits into a single byte, use that numeric value.
+        val = code
+      }
     }
   } else if (typeof val === 'number') {
     val = val & 255
@@ -10826,6 +10891,10 @@ Buffer.prototype.fill = function fill (val, start, end, encoding) {
       ? val
       : new Buffer(val, encoding)
     var len = bytes.length
+    if (len === 0) {
+      throw new TypeError('The value "' + val +
+        '" is invalid for argument "value"')
+    }
     for (i = 0; i < end - start; ++i) {
       this[i + start] = bytes[i % len]
     }
@@ -10840,6 +10909,8 @@ Buffer.prototype.fill = function fill (val, start, end, encoding) {
 var INVALID_BASE64_RE = /[^+/0-9A-Za-z-_]/g
 
 function base64clean (str) {
+  // Node takes equal signs as end of the Base64 encoding
+  str = str.split('=')[0]
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
   str = str.trim().replace(INVALID_BASE64_RE, '')
   // Node converts strings with length < 2 to ''
@@ -10981,19 +11052,14 @@ function isArrayBuffer (obj) {
       typeof obj.byteLength === 'number')
 }
 
-// Node 0.10 supports `ArrayBuffer` but lacks `ArrayBuffer.isView`
-function isArrayBufferView (obj) {
-  return (typeof ArrayBuffer.isView === 'function') && ArrayBuffer.isView(obj)
-}
-
 function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":23,"ieee754":53}],26:[function(require,module,exports){
+},{"base64-js":23,"ieee754":47}],26:[function(require,module,exports){
 /*!
 
- diff v3.3.1
+ diff v3.5.0
 
 Software License Agreement (BSD License)
 
@@ -11316,7 +11382,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	    return oldPos;
 	  },
 	  /*istanbul ignore start*/ /*istanbul ignore end*/equals: function equals(left, right) {
-	    return left === right || this.options.ignoreCase && left.toLowerCase() === right.toLowerCase();
+	    if (this.options.comparator) {
+	      return this.options.comparator(left, right);
+	    } else {
+	      return left === right || this.options.ignoreCase && left.toLowerCase() === right.toLowerCase();
+	    }
 	  },
 	  /*istanbul ignore start*/ /*istanbul ignore end*/removeEmpty: function removeEmpty(array) {
 	    var ret = [];
@@ -11379,10 +11449,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	    }
 	  }
 
-	  // Special case handle for when one terminal is ignored. For this case we merge the
-	  // terminal into the prior string and drop the change.
+	  // Special case handle for when one terminal is ignored (i.e. whitespace).
+	  // For this case we merge the terminal into the prior string and drop the change.
+	  // This is only available for string mode.
 	  var lastComponent = components[componentLen - 1];
-	  if (componentLen > 1 && (lastComponent.added || lastComponent.removed) && diff.equals('', lastComponent.value)) {
+	  if (componentLen > 1 && typeof lastComponent.value === 'string' && (lastComponent.added || lastComponent.removed) && diff.equals('', lastComponent.value)) {
 	    components[componentLen - 2].value += lastComponent.value;
 	    components.pop();
 	  }
@@ -11660,16 +11731,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	jsonDiff.tokenize = /*istanbul ignore start*/_line.lineDiff /*istanbul ignore end*/.tokenize;
 	jsonDiff.castInput = function (value) {
-	  /*istanbul ignore start*/var /*istanbul ignore end*/undefinedReplacement = this.options.undefinedReplacement;
+	  /*istanbul ignore start*/var _options = /*istanbul ignore end*/this.options,
+	      undefinedReplacement = _options.undefinedReplacement,
+	      _options$stringifyRep = _options.stringifyReplacer,
+	      stringifyReplacer = _options$stringifyRep === undefined ? function (k, v) /*istanbul ignore start*/{
+	    return (/*istanbul ignore end*/typeof v === 'undefined' ? undefinedReplacement : v
+	    );
+	  } : _options$stringifyRep;
 
 
-	  return typeof value === 'string' ? value : JSON.stringify(canonicalize(value), function (k, v) {
-	    if (typeof v === 'undefined') {
-	      return undefinedReplacement;
-	    }
-
-	    return v;
-	  }, '  ');
+	  return typeof value === 'string' ? value : JSON.stringify(canonicalize(value, null, null, stringifyReplacer), stringifyReplacer, '  ');
 	};
 	jsonDiff.equals = function (left, right) {
 	  return (/*istanbul ignore start*/_base2['default'] /*istanbul ignore end*/.prototype.equals.call(jsonDiff, left.replace(/,([\r\n])/g, '$1'), right.replace(/,([\r\n])/g, '$1'))
@@ -11681,10 +11752,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	}
 
 	// This function handles the presence of circular references by bailing out when encountering an
-	// object that is already on the "stack" of items being processed.
-	function canonicalize(obj, stack, replacementStack) {
+	// object that is already on the "stack" of items being processed. Accepts an optional replacer
+	function canonicalize(obj, stack, replacementStack, replacer, key) {
 	  stack = stack || [];
 	  replacementStack = replacementStack || [];
+
+	  if (replacer) {
+	    obj = replacer(key, obj);
+	  }
 
 	  var i = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
 
@@ -11701,7 +11776,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    canonicalizedObj = new Array(obj.length);
 	    replacementStack.push(canonicalizedObj);
 	    for (i = 0; i < obj.length; i += 1) {
-	      canonicalizedObj[i] = canonicalize(obj[i], stack, replacementStack);
+	      canonicalizedObj[i] = canonicalize(obj[i], stack, replacementStack, replacer, key);
 	    }
 	    stack.pop();
 	    replacementStack.pop();
@@ -11717,17 +11792,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	    canonicalizedObj = {};
 	    replacementStack.push(canonicalizedObj);
 	    var sortedKeys = [],
-	        key = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
-	    for (key in obj) {
+	        _key = /*istanbul ignore start*/void 0 /*istanbul ignore end*/;
+	    for (_key in obj) {
 	      /* istanbul ignore else */
-	      if (obj.hasOwnProperty(key)) {
-	        sortedKeys.push(key);
+	      if (obj.hasOwnProperty(_key)) {
+	        sortedKeys.push(_key);
 	      }
 	    }
 	    sortedKeys.sort();
 	    for (i = 0; i < sortedKeys.length; i += 1) {
-	      key = sortedKeys[i];
-	      canonicalizedObj[key] = canonicalize(obj[key], stack, replacementStack);
+	      _key = sortedKeys[i];
+	      canonicalizedObj[_key] = canonicalize(obj[_key], stack, replacementStack, replacer, _key);
 	    }
 	    stack.pop();
 	    replacementStack.pop();
@@ -11756,8 +11831,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
 
 	/*istanbul ignore end*/var arrayDiff = /*istanbul ignore start*/exports. /*istanbul ignore end*/arrayDiff = new /*istanbul ignore start*/_base2['default'] /*istanbul ignore end*/();
-	arrayDiff.tokenize = arrayDiff.join = function (value) {
+	arrayDiff.tokenize = function (value) {
 	  return value.slice();
+	};
+	arrayDiff.join = arrayDiff.removeEmpty = function (value) {
+	  return value;
 	};
 
 	function diffArrays(oldArr, newArr, callback) {
@@ -11820,8 +11898,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	  function hunkFits(hunk, toPos) {
 	    for (var j = 0; j < hunk.lines.length; j++) {
 	      var line = hunk.lines[j],
-	          operation = line[0],
-	          content = line.substr(1);
+	          operation = line.length > 0 ? line[0] : ' ',
+	          content = line.length > 0 ? line.substr(1) : line;
 
 	      if (operation === ' ' || operation === '-') {
 	        // Context sanity check
@@ -11878,8 +11956,8 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    for (var j = 0; j < _hunk.lines.length; j++) {
 	      var line = _hunk.lines[j],
-	          operation = line[0],
-	          content = line.substr(1),
+	          operation = line.length > 0 ? line[0] : ' ',
+	          content = line.length > 0 ? line.substr(1) : line,
 	          delimiter = _hunk.linedelimiters[j];
 
 	      if (operation === ' ') {
@@ -12017,16 +12095,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	  // Parses the --- and +++ headers, if none are found, no lines
 	  // are consumed.
 	  function parseFileHeader(index) {
-	    var headerPattern = /^(---|\+\+\+)\s+([\S ]*)(?:\t(.*?)\s*)?$/;
-	    var fileHeader = headerPattern.exec(diffstr[i]);
+	    var fileHeader = /^(---|\+\+\+)\s+(.*)$/.exec(diffstr[i]);
 	    if (fileHeader) {
 	      var keyPrefix = fileHeader[1] === '---' ? 'old' : 'new';
-	      var fileName = fileHeader[2].replace(/\\\\/g, '\\');
+	      var data = fileHeader[2].split('\t', 2);
+	      var fileName = data[0].replace(/\\\\/g, '\\');
 	      if (/^".*"$/.test(fileName)) {
 	        fileName = fileName.substr(1, fileName.length - 2);
 	      }
 	      index[keyPrefix + 'FileName'] = fileName;
-	      index[keyPrefix + 'Header'] = fileHeader[3];
+	      index[keyPrefix + 'Header'] = (data[1] || '').trim();
 
 	      i++;
 	    }
@@ -12056,7 +12134,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	      if (diffstr[i].indexOf('--- ') === 0 && i + 2 < diffstr.length && diffstr[i + 1].indexOf('+++ ') === 0 && diffstr[i + 2].indexOf('@@') === 0) {
 	        break;
 	      }
-	      var operation = diffstr[i][0];
+	      var operation = diffstr[i].length == 0 && i != diffstr.length - 1 ? ' ' : diffstr[i][0];
 
 	      if (operation === '+' || operation === '-' || operation === ' ' || operation === '\\') {
 	        hunk.lines.push(diffstr[i]);
@@ -12177,27 +12255,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	/*istanbul ignore start*/function _toConsumableArray(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } else { return Array.from(arr); } }
 
 	/*istanbul ignore end*/function calcLineCount(hunk) {
-	  var conflicted = false;
+	  /*istanbul ignore start*/var _calcOldNewLineCount = /*istanbul ignore end*/calcOldNewLineCount(hunk.lines),
+	      oldLines = _calcOldNewLineCount.oldLines,
+	      newLines = _calcOldNewLineCount.newLines;
 
-	  hunk.oldLines = 0;
-	  hunk.newLines = 0;
-
-	  hunk.lines.forEach(function (line) {
-	    if (typeof line !== 'string') {
-	      conflicted = true;
-	      return;
-	    }
-
-	    if (line[0] === '+' || line[0] === ' ') {
-	      hunk.newLines++;
-	    }
-	    if (line[0] === '-' || line[0] === ' ') {
-	      hunk.oldLines++;
-	    }
-	  });
-
-	  if (conflicted) {
+	  if (oldLines !== undefined) {
+	    hunk.oldLines = oldLines;
+	  } else {
 	    delete hunk.oldLines;
+	  }
+
+	  if (newLines !== undefined) {
+	    hunk.newLines = newLines;
+	  } else {
 	    delete hunk.newLines;
 	  }
 	}
@@ -12527,6 +12597,43 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	  state.index += delta;
 	  return true;
+	}
+
+	function calcOldNewLineCount(lines) {
+	  var oldLines = 0;
+	  var newLines = 0;
+
+	  lines.forEach(function (line) {
+	    if (typeof line !== 'string') {
+	      var myCount = calcOldNewLineCount(line.mine);
+	      var theirCount = calcOldNewLineCount(line.theirs);
+
+	      if (oldLines !== undefined) {
+	        if (myCount.oldLines === theirCount.oldLines) {
+	          oldLines += myCount.oldLines;
+	        } else {
+	          oldLines = undefined;
+	        }
+	      }
+
+	      if (newLines !== undefined) {
+	        if (myCount.newLines === theirCount.newLines) {
+	          newLines += myCount.newLines;
+	        } else {
+	          newLines = undefined;
+	        }
+	      }
+	    } else {
+	      if (newLines !== undefined && (line[0] === '+' || line[0] === ' ')) {
+	        newLines++;
+	      }
+	      if (oldLines !== undefined && (line[0] === '-' || line[0] === ' ')) {
+	        oldLines++;
+	      }
+	    }
+	  });
+
+	  return { oldLines: oldLines, newLines: newLines };
 	}
 
 
@@ -13354,7 +13461,7 @@ domKit.html = function html_( $element , html ) { $element.innerHTML = html ; } 
 
 
 }).call(this,require('_process'))
-},{"@cronvel/xmldom":9,"_process":61}],28:[function(require,module,exports){
+},{"@cronvel/xmldom":9,"_process":55}],28:[function(require,module,exports){
 /*
 	Doormen
 
@@ -13590,7 +13697,7 @@ function inspectVar( variable ) {
 		if ( variable.args.length ) {
 			let argStr = "( " + variable.args.map( a => inspectVar( a ) ).join( ', ' ) + " )" ;
 
-			if ( argStr.length < inspectOptions.maxLength ) {
+			if ( argStr.length > inspectOptions.maxLength ) {
 				argStr = argStr.slice( 0 , inspectOptions.maxLength - 1 ) + '…' ;
 			}
 
@@ -13630,15 +13737,31 @@ var vowel = {
 
 
 function assertionError( from , actual , expectationType , ... expectations ) {
+	var middleMessage ;
+
 	var inOpt = {
 		inspect: false ,
 		glue: ' and ' ,
-		showDiff: false
+		showDiff: false ,
+		none: false
 	} ;
+
+	if ( expectationType && typeof expectationType === 'object' ) {
+		middleMessage = expectationType.middleMessage || ' to <insert here your expectation> ' ;
+		expectationType = expectationType.expectationType ;
+	}
+	else {
+		middleMessage = expectationType ;
+	}
 
 	if ( assert[ expectationType ] ) { Object.assign( inOpt , assert[ expectationType ] ) ; }
 
-	var message = 'Expected ' + inspectVar( actual ) + ' ' + expectationType ;
+	var message = '' ;
+
+	if ( actual !== assert.NONE ) { message += 'Expected ' + inspectVar( actual ) + ' ' ; }
+	else if ( ! inOpt.none ) { message += 'Expected nothing ' ; }
+
+	message += middleMessage ;
 
 	if ( expectations.length ) {
 		if ( inOpt.inspect ) {
@@ -13666,22 +13789,21 @@ module.exports = assert ;
 
 
 
+// Constant
+assert.NONE = {} ;
+
+
+
 /*
 	TODO:
 
-	Expect.js:
-	- length
-	- only keys
-	- withArgs (function)
-	- fail useful???
+	Expect.js: everything is implemented
 
 	Chai:
 	- any
 	- all
 	- ownPropertyDescriptor
-	- lengthOf
-	- keys
-	- throw (error matcher)
+	- lengthOf combination with above/below/at least/at most
 	- members
 	- oneOf
 	- functions specific:
@@ -13718,8 +13840,8 @@ assert.isDefined = function isDefined( from , actual ) {
 
 
 // Undefined
-assert['to be not defined'] = assert['to not be defined'] =
-assert['not to be defined'] = assert['to be undefined'] =
+assert['to be not defined'] = assert['to not be defined'] = assert['not to be defined'] =
+assert['to be undefined'] =
 assert.undefined =
 assert.isUndefined = function isUndefined( from , actual ) {
 	if ( actual !== undefined ) {
@@ -13745,7 +13867,8 @@ assert.isTruthy = function isTruthy( from , actual ) {
 
 // Falsy
 assert['to be not ok'] = assert['to not be ok'] = assert['not to be ok'] =
-assert['to be falsy'] = assert['not to be truthy'] = assert['to not be truthy'] =
+assert['to be not truthy'] = assert['to not be truthy'] = assert['not to be truthy'] =
+assert['to be falsy'] =
 assert.nok =
 assert.ko =
 assert.isNotOk =
@@ -13901,7 +14024,7 @@ assert.notStrictEqual.inspect = true ;
 
 
 
-// Equal (but not identical)
+// Equal (different from identical)
 assert['to be equal to'] =
 assert['to equal'] =
 assert['to eql'] =		// compatibility with expect.js
@@ -14014,6 +14137,77 @@ assert.notPartiallyLike = function notPartiallyLike( from , actual , notExpected
 	}
 } ;
 assert.notPartiallyLike.inspect = true ;
+
+
+
+// Shallow clone
+assert['to be shallow clone'] =
+assert['to be shallow clone of'] =
+assert['to be a shallow clone of'] =
+assert.shallowCloneOf = function shallowCloneOf( from , actual , expected ) {
+	if ( typeof actual !== 'function' && ( ! actual || typeof actual !== 'object' ) ) {
+		throw assertionError( from , actual , 'to be be an object or a function' ) ;
+	}
+
+	// Or throw?
+	if ( actual === expected ) { return ; }
+
+	if ( Array.isArray( actual ) ) {
+		if ( ! Array.isArray( expected ) || actual.length !== expected.length ) {
+			throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+		}
+
+		actual.forEach( ( element , index ) => {
+			if ( element !== expected[ index ] ) {
+				throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+			}
+		} ) ;
+	}
+	else {
+		if ( Array.isArray( expected ) ) {
+			throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+		}
+
+		let actualKeys = Object.keys( actual ) ;
+		let expectedKeys = Object.keys( expected ) ;
+
+		if ( actualKeys.length !== expectedKeys.length ) {
+			throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+		}
+
+		// The .hasOwnProperty() check is mandatory, or we have to iterate over actualKeys too
+		expectedKeys.forEach( key => {
+			if ( ! actual.hasOwnProperty( key ) || actual[ key ] !== expected[ key ] ) {
+				throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+			}
+		} ) ;
+	}
+} ;
+assert.shallowCloneOf.inspect = true ;
+
+
+
+// Not shallow clone
+assert['to be not shallow clone'] = assert['to not be shallow clone'] = assert['not to be shallow clone'] =
+assert['to be not shallow clone of'] = assert['to not be shallow clone of'] = assert['not to be shallow clone of'] =
+assert['to be not a shallow clone of'] = assert['to not be a shallow clone of'] = assert['not to be a shallow clone of'] =
+assert.notShallowCloneOf = function notShallowCloneOf( from , actual , notExpected ) {
+	if ( typeof actual !== 'function' && ( ! actual || typeof actual !== 'object' ) ) {
+		throw assertionError( from , actual , 'to be be an object or a function' ) ;
+	}
+
+	// Too boring to code, we use the reverse of shallowClone() now...
+	try {
+		assert.shallowCloneOf( from , actual , notExpected ) ;
+	}
+	catch ( error ) {
+		// Great, it must throw, we can return now
+		return ;
+	}
+
+	throw assertionError( from , actual , 'not to be a shallow clone of' , notExpected ) ;
+} ;
+assert.notShallowCloneOf.inspect = true ;
 
 
 
@@ -14204,15 +14398,57 @@ assert.notMatch = function notMatch( from , actual , notExpected ) {
 
 
 
-assert['to contain'] =
-assert['to include'] =
-assert.include =
-assert.contain = function contain( from , actual , expected ) {
-	if ( typeof actual !== 'string' && ( ! typeChecker.looseObject( actual ) || typeof actual.indexOf !== 'function' ) ) {
-		throw assertionError( from , actual , 'to have an .indexOf() method' ) ;
+assert['to have length'] =
+assert['to have length of'] =
+assert['to have a length of'] =
+assert.lengthOf = function lengthOf( from , actual , expected ) {
+	if ( typeof actual !== 'string' && ( ! actual || typeof actual !== 'object' ) ) {
+		throw assertionError( from , actual , 'to have some length' ) ;
 	}
 
-	if ( actual.indexOf( expected ) === -1 ) {
+	if ( actual.length !== expected ) {
+		throw assertionError( from , actual , 'to have a length of' , expected ) ;
+	}
+} ;
+
+
+
+assert['to have not length'] = assert['to not have length'] = assert['not to have length'] =
+assert['to have length not of'] = assert['to have not length of'] = assert['to not have length of'] = assert['not to have length of'] =
+assert['to have a length not of'] = assert['to have not a length of'] = assert['to not have a length of'] = assert['not to have a length of'] =
+assert.notLengthOf = function notLengthOf( from , actual , notExpected ) {
+	if ( typeof actual !== 'string' && ( ! actual || typeof actual !== 'object' ) ) {
+		throw assertionError( from , actual , 'to have some length' ) ;
+	}
+
+	if ( actual.length === notExpected ) {
+		throw assertionError( from , actual , 'not to have a length of' , notExpected ) ;
+	}
+} ;
+
+
+
+assert['to contain'] =
+assert['to have'] =
+assert['to include'] =
+assert.has =
+assert.include =
+assert.contain = function contain( from , actual , expected ) {
+	var has = false ;
+
+	if ( actual && typeof actual === 'object' ) {
+		if ( Array.isArray( actual ) ) {
+			if ( actual.indexOf( expected ) !== -1 ) { has = true ; }
+		}
+		else if ( typeof actual.has === 'function' ) {
+			if ( actual.has( expected ) ) { has = true ; }
+		}
+	}
+	else if ( typeof actual === 'string' ) {
+		if ( actual.indexOf( expected ) !== -1 ) { has = true ; }
+	}
+
+	if ( ! has ) {
 		throw assertionError( from , actual , 'to contain' , expected ) ;
 	}
 } ;
@@ -14220,17 +14456,27 @@ assert.contain.inspect = true ;
 
 
 
-assert['to not contain'] =
-assert['not to contain'] =
-assert['to not include'] =
-assert['not to include'] =
+assert['to contain not'] = assert['to not contain'] = assert['not to contain'] =
+assert['to have not'] = assert['to not have'] = assert['not to have'] =
+assert['to include not'] = assert['to not include'] = assert['not to include'] =
+assert.hasNot =
 assert.notInclude =
 assert.notContain = function notContain( from , actual , notExpected ) {
-	if ( typeof actual !== 'string' && ( ! typeChecker.looseObject( actual ) || typeof actual.indexOf !== 'function' ) ) {
-		throw assertionError( from , actual , 'to have an .indexOf() method' ) ;
+	var has = false ;
+
+	if ( actual && typeof actual === 'object' ) {
+		if ( Array.isArray( actual ) ) {
+			if ( actual.indexOf( notExpected ) !== -1 ) { has = true ; }
+		}
+		else if ( typeof actual.has === 'function' ) {
+			if ( actual.has( notExpected ) ) { has = true ; }
+		}
+	}
+	else if ( typeof actual === 'string' ) {
+		if ( actual.indexOf( notExpected ) !== -1 ) { has = true ; }
 	}
 
-	if ( actual.indexOf( notExpected ) !== -1 ) {
+	if ( has ) {
 		throw assertionError( from , actual , 'not to contain' , notExpected ) ;
 	}
 } ;
@@ -14243,7 +14489,7 @@ assert.empty = function empty( from , actual ) {
 	var isEmpty = true ;
 
 	if ( actual ) {
-		if ( actual && typeof actual === 'object' ) {
+		if ( typeof actual === 'object' ) {
 			if ( Array.isArray( actual ) ) {
 				if ( actual.length ) { isEmpty = false ; }
 			}
@@ -14269,14 +14515,12 @@ assert.empty = function empty( from , actual ) {
 
 
 
-assert['to be not empty'] =
-assert['to not be empty'] =
-assert['not to be empty'] =
+assert['to be not empty'] = assert['to not be empty'] = assert['not to be empty'] =
 assert.notEmpty = function notEmpty( from , actual ) {
 	var isEmpty = true ;
 
 	if ( actual ) {
-		if ( actual && typeof actual === 'object' ) {
+		if ( typeof actual === 'object' ) {
 			if ( Array.isArray( actual ) ) {
 				if ( actual.length ) { isEmpty = false ; }
 			}
@@ -14311,12 +14555,12 @@ assert['to have keys'] =
 assert.key =
 assert.keys = function keys_( from , actual , ... keys ) {
 	if ( ! typeChecker.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or function' ) ;
+		throw assertionError( from , actual , 'to be an object or a function' ) ;
 	}
 
 	keys.forEach( key => {
 		if ( ! ( key in actual ) ) {
-			throw assertionError( from , actual , 'to have key(s)' , ... keys ) ;
+			throw assertionError( from , actual , 'to have key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -14325,23 +14569,19 @@ assert.keys.glue = ', ' ;
 
 
 
-assert['to have not key'] =
-assert['to not have key'] =
-assert['not to have key'] =
-assert['to have not keys'] =
-assert['to not have keys'] =
-assert['not to have keys'] =
+assert['to have not key'] = assert['to not have key'] = assert['not to have key'] =
+assert['to have not keys'] = assert['to not have keys'] = assert['not to have keys'] =
 assert['to have no key'] =
 assert.noKey =
 assert.notKey =
 assert.notKeys = function notKeys( from , actual , ... keys ) {
 	if ( ! typeChecker.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or function' ) ;
+		throw assertionError( from , actual , 'to be an object or a function' ) ;
 	}
 
 	keys.forEach( key => {
 		if ( key in actual ) {
-			throw assertionError( from , actual , 'not to have key(s)' , ... keys ) ;
+			throw assertionError( from , actual , 'not to have key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -14355,12 +14595,12 @@ assert['to have own keys'] =
 assert.ownKey =
 assert.ownKeys = function ownKeys( from , actual , ... keys ) {
 	if ( ! typeChecker.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or function' ) ;
+		throw assertionError( from , actual , 'to be an object or a function' ) ;
 	}
 
 	keys.forEach( key => {
 		if ( ! actual.hasOwnProperty( key ) ) {
-			throw assertionError( from , actual , 'to have own key(s)' , ... keys ) ;
+			throw assertionError( from , actual , 'to have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -14369,23 +14609,44 @@ assert.ownKeys.glue = ', ' ;
 
 
 
-assert['to have not own key'] =
-assert['to not have own key'] =
-assert['not to have own key'] =
-assert['to have not own keys'] =
-assert['to not have own keys'] =
-assert['not to have own keys'] =
+assert['to only have own key'] = assert['to have only own key'] = assert['to have own only key'] =
+assert['to only have own keys'] = assert['to have only own keys'] = assert['to have own only keys'] =
+assert.onlyOwnKey =
+assert.onlyOwnKeys = function ownKeys( from , actual , ... keys ) {
+	if ( ! typeChecker.looseObject( actual ) ) {
+		throw assertionError( from , actual , 'to be an object or a function' ) ;
+	}
+
+	// First, check if the number of keys match
+	if ( Object.keys( actual ).length !== keys.length ) {
+		throw assertionError( from , actual , 'to only have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
+	}
+
+	// Then, each expected keys should be present
+	keys.forEach( key => {
+		if ( ! actual.hasOwnProperty( key ) ) {
+			throw assertionError( from , actual , 'to only have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
+		}
+	} ) ;
+} ;
+assert.onlyOwnKeys.inspect = true ;
+assert.onlyOwnKeys.glue = ', ' ;
+
+
+
+assert['to have not own key'] = assert['to not have own key'] = assert['not to have own key'] =
+assert['to have not own keys'] = assert['to not have own keys'] = assert['not to have own keys'] =
 assert['to have no own key'] =
 assert.noOwnKey =
 assert.notOwnKey =
 assert.notOwnKeys = function notKeys( from , actual , ... keys ) {
 	if ( ! typeChecker.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or function' ) ;
+		throw assertionError( from , actual , 'to be an object or a function' ) ;
 	}
 
 	keys.forEach( key => {
 		if ( actual.hasOwnProperty( key ) ) {
-			throw assertionError( from , actual , 'not to have own key(s)' , ... keys ) ;
+			throw assertionError( from , actual , 'not to have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -14405,12 +14666,42 @@ assert.property = function property( from , actual , key , value ) {
 
 
 
+assert['to have not property'] = assert['to not have property'] = assert['not to have property'] =
+assert['to have no property'] =
+assert.notProperty = function notProperty( from , actual , key , value ) {
+	if ( arguments.length >= 4 ) {
+		if ( key in actual ) {
+			assert.notEqual( from , actual[ key ] , value ) ;
+		}
+	}
+	else {
+		assert.notKey( from , actual , key ) ;
+	}
+} ;
+
+
+
 assert['to have own property'] =
 assert.ownProperty = function ownProperty( from , actual , key , value ) {
 	assert.ownKey( from , actual , key ) ;
 
 	if ( arguments.length >= 4 ) {
 		assert.equal( from , actual[ key ] , value ) ;
+	}
+} ;
+
+
+
+assert['to have not own property'] = assert['to not have own property'] = assert['not to have own property'] =
+assert['to have no own property'] =
+assert.notOwnProperty = function notOwnProperty( from , actual , key , value ) {
+	if ( arguments.length >= 4 ) {
+		if ( actual.hasOwnProperty( key ) ) {
+			assert.notEqual( from , actual[ key ] , value ) ;
+		}
+	}
+	else {
+		assert.notOwnKey( from , actual , key ) ;
 	}
 } ;
 
@@ -14571,15 +14862,23 @@ assert['to be not an instance of'] =
 assert['to not be an instance of'] =
 assert['not to be an instance of'] =
 assert.notInstanceOf = function notInstanceOf( from , actual , notExpected ) {
-	if ( ! ( actual instanceof notExpected ) ) {
+	if ( actual instanceof notExpected ) {
 		throw assertionError( from , actual , 'not to be an instance of' , notExpected ) ;
 	}
 } ;
-assert.instanceOf.inspect = true ;
+assert.notInstanceOf.inspect = true ;
 
 
 
-},{"./AssertionError.js":28,"./isEqual.js":35,"./typeChecker.js":41,"string-kit/lib/inspect.js":44}],32:[function(require,module,exports){
+// Force failure
+assert.fail = function fail( from , actual , middleMessage , ... expectations ) {
+	throw assertionError( from , actual , { expectationType: 'fail' , middleMessage: middleMessage } , ... expectations ) ;
+} ;
+assert.fail.inspect = true ;
+assert.fail.none = true ;
+
+
+},{"./AssertionError.js":28,"./isEqual.js":35,"./typeChecker.js":41,"string-kit/lib/inspect.js":64}],32:[function(require,module,exports){
 (function (global){
 /*
 	Doormen
@@ -15302,6 +15601,29 @@ doormen.shouldThrow = function shouldThrow( fn , from ) {
 
 
 
+// For internal usage or dev only
+doormen.shouldThrowAssertion = function shouldThrowAssertion( fn , from ) {
+	var error , thrown = false ;
+	from = from || shouldThrowAssertion ;
+
+	try { fn() ; }
+	catch ( error_ ) { thrown = true ; error = error_ ; }
+
+	if ( ! thrown ) {
+		throw new doormen.AssertionError( "Function '" + ( fn.name || '(anonymous)' ) + "' should have thrown." , from ) ;
+	}
+	if ( ! ( error instanceof doormen.AssertionError ) ) {
+		// Throw a new error? Seems better to re-throw with a modified message, or the stack trace would be lost?
+		//throw new doormen.AssertionError( "Function '" + ( fn.name || '(anonymous)' ) + "' should have thrown an AssertionError, but have thrown: " + error , from ) ;
+		error.message = "Function '" + ( fn.name || '(anonymous)' ) + "' should have thrown an AssertionError, instead it had thrown: " + error.message ;
+		throw error ;
+	}
+
+	return error ;
+} ;
+
+
+
 // Inverse validation
 doormen.not = function not( ... args ) {
 	doormen.shouldThrow( () => {
@@ -15320,7 +15642,7 @@ doormen.patch.not = function patchNot( ... args ) {
 
 
 
-// DEPRECATED assertions!
+// DEPRECATED assertions! Only here for backward compatibility
 
 doormen.equals = function equals( left , right ) {
 	var error ;
@@ -15377,7 +15699,7 @@ doormen.not.alike = function notAlike( left , right ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./AssertionError.js":28,"./SchemaError.js":29,"./ValidatorError.js":30,"./assert.js":31,"./expect.js":33,"./filter.js":34,"./isEqual.js":35,"./keywords.js":36,"./mask.js":37,"./sanitizer.js":38,"./schemaSchema.js":39,"./sentence.js":40,"./typeChecker.js":41,"tree-kit/lib/clone.js":80}],33:[function(require,module,exports){
+},{"./AssertionError.js":28,"./SchemaError.js":29,"./ValidatorError.js":30,"./assert.js":31,"./expect.js":33,"./filter.js":34,"./isEqual.js":35,"./keywords.js":36,"./mask.js":37,"./sanitizer.js":38,"./schemaSchema.js":39,"./sentence.js":40,"./typeChecker.js":41,"tree-kit/lib/clone.js":74}],33:[function(require,module,exports){
 /*
 	Doormen
 
@@ -15435,7 +15757,10 @@ function factory( hooks = {} ) {
 		// Sadly, Proxy are not callable on regular object, so the target has to be a function.
 		// The name is purposedly the same.
 		var assertion = function Expect() {} ;	// eslint-disable-line no-shadow
-		assertion.value = value ;
+
+		if ( arguments.length ) { assertion.value = value ; }
+		else { assertion.value = assert.NONE ; }
+
 		assertion.expectationType = null ;
 		assertion.extra = null ;	// Extra-values, for function arguments
 		assertion.expectFn = ExpectFn ;
@@ -15918,7 +16243,7 @@ module.exports = isEqual ;
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")})
-},{"../../is-buffer/index.js":54}],36:[function(require,module,exports){
+},{"../../is-buffer/index.js":48}],36:[function(require,module,exports){
 /*
 	Doormen
 
@@ -16456,7 +16781,7 @@ sanitizer.mongoId = function mongoId( data ) {
 } ;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./doormen.js":32,"mongodb":24,"string-kit/lib/latinize.js":46,"string-kit/lib/toTitleCase.js":47}],39:[function(require,module,exports){
+},{"./doormen.js":32,"mongodb":24,"string-kit/lib/latinize.js":66,"string-kit/lib/toTitleCase.js":71}],39:[function(require,module,exports){
 /*
 	Doormen
 
@@ -17095,877 +17420,6 @@ typeChecker.mongoId = data => {
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
 },{"./doormen":32,"buffer":25}],42:[function(require,module,exports){
-/*
-	String Kit
-
-	Copyright (c) 2014 - 2018 Cédric Ronvel
-
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-// To solve dependency hell, we do not rely on terminal-kit anymore.
-module.exports = {
-	reset: '\x1b[0m' ,
-	bold: '\x1b[1m' ,
-	dim: '\x1b[2m' ,
-	italic: '\x1b[3m' ,
-	underline: '\x1b[4m' ,
-	inverse: '\x1b[7m' ,
-
-	defaultColor: '\x1b[39m' ,
-	black: '\x1b[30m' ,
-	red: '\x1b[31m' ,
-	green: '\x1b[32m' ,
-	yellow: '\x1b[33m' ,
-	blue: '\x1b[34m' ,
-	magenta: '\x1b[35m' ,
-	cyan: '\x1b[36m' ,
-	white: '\x1b[37m' ,
-	brightBlack: '\x1b[90m' ,
-	brightRed: '\x1b[91m' ,
-	brightGreen: '\x1b[92m' ,
-	brightYellow: '\x1b[93m' ,
-	brightBlue: '\x1b[94m' ,
-	brightMagenta: '\x1b[95m' ,
-	brightCyan: '\x1b[96m' ,
-	brightWhite: '\x1b[97m' ,
-
-	defaultBgColor: '\x1b[49m' ,
-	bgBlack: '\x1b[40m' ,
-	bgRed: '\x1b[41m' ,
-	bgGreen: '\x1b[42m' ,
-	bgYellow: '\x1b[43m' ,
-	bgBlue: '\x1b[44m' ,
-	bgMagenta: '\x1b[45m' ,
-	bgCyan: '\x1b[46m' ,
-	bgWhite: '\x1b[47m' ,
-	bgBrightBlack: '\x1b[100m' ,
-	bgBrightRed: '\x1b[101m' ,
-	bgBrightGreen: '\x1b[102m' ,
-	bgBrightYellow: '\x1b[103m' ,
-	bgBrightBlue: '\x1b[104m' ,
-	bgBrightMagenta: '\x1b[105m' ,
-	bgBrightCyan: '\x1b[106m' ,
-	bgBrightWhite: '\x1b[107m'
-} ;
-
-
-
-},{}],43:[function(require,module,exports){
-/*
-	String Kit
-
-	Copyright (c) 2014 - 2018 Cédric Ronvel
-
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-/*
-	Escape collection.
-*/
-
-
-
-"use strict" ;
-
-
-
-// From Mozilla Developper Network
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
-exports.regExp = exports.regExpPattern = function escapeRegExpPattern( str ) {
-	return str.replace( /([.*+?^${}()|[\]/\\])/g , '\\$1' ) ;
-} ;
-
-exports.regExpReplacement = function escapeRegExpReplacement( str ) {
-	return str.replace( /\$/g , '$$$$' ) ;	// This replace any single $ by a double $$
-} ;
-
-
-
-exports.format = function escapeFormat( str ) {
-	return str.replace( /%/g , '%%' ) ;	// This replace any single % by a double %%
-} ;
-
-
-
-exports.jsSingleQuote = function escapeJsSingleQuote( str ) {
-	return exports.control( str ).replace( /'/g , "\\'" ) ;
-} ;
-
-exports.jsDoubleQuote = function escapeJsDoubleQuote( str ) {
-	return exports.control( str ).replace( /"/g , '\\"' ) ;
-} ;
-
-
-
-exports.shellArg = function escapeShellArg( str ) {
-	return '\'' + str.replace( /'/g , "'\\''" ) + '\'' ;
-} ;
-
-
-
-var escapeControlMap = {
-	'\r': '\\r' , '\n': '\\n' , '\t': '\\t' , '\x7f': '\\x7f'
-} ;
-
-// Escape \r \n \t so they become readable again, escape all ASCII control character as well, using \x syntaxe
-exports.control = function escapeControl( str ) {
-	return str.replace( /[\x00-\x1f\x7f]/g , ( match ) => {
-		if ( escapeControlMap[ match ] !== undefined ) { return escapeControlMap[ match ] ; }
-		var hex = match.charCodeAt( 0 ).toString( 16 ) ;
-		if ( hex.length % 2 ) { hex = '0' + hex ; }
-		return '\\x' + hex ;
-	} ) ;
-} ;
-
-
-
-var escapeHtmlMap = {
-	'&': '&amp;' , '<': '&lt;' , '>': '&gt;' , '"': '&quot;' , "'": '&#039;'
-} ;
-
-// Only escape & < > so this is suited for content outside tags
-exports.html = function escapeHtml( str ) {
-	return str.replace( /[&<>]/g , ( match ) => { return escapeHtmlMap[ match ] ; } ) ;
-} ;
-
-// Escape & < > " so this is suited for content inside a double-quoted attribute
-exports.htmlAttr = function escapeHtmlAttr( str ) {
-	return str.replace( /[&<>"]/g , ( match ) => { return escapeHtmlMap[ match ] ; } ) ;
-} ;
-
-// Escape all html special characters & < > " '
-exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
-	return str.replace( /[&<>"']/g , ( match ) => { return escapeHtmlMap[ match ] ; } ) ;
-} ;
-
-
-
-},{}],44:[function(require,module,exports){
-(function (Buffer,process){
-/*
-	String Kit
-
-	Copyright (c) 2014 - 2018 Cédric Ronvel
-
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-/* global Map, Set */
-
-/*
-	Variable inspector.
-*/
-
-
-
-"use strict" ;
-
-
-
-var escape = require( './escape.js' ) ;
-var ansi = require( './ansi.js' ) ;
-
-
-
-/*
-	Inspect a variable, return a string ready to be displayed with console.log(), or even as an HTML output.
-
-	Options:
-		* style:
-			* 'none': (default) normal output suitable for console.log() or writing in a file
-			* 'inline': like 'none', but without newlines
-			* 'color': colorful output suitable for terminal
-			* 'html': html output
-			* any object: full controle, inheriting from 'none'
-		* depth: depth limit, default: 3
-		* maxLength: length limit for strings, default: 200
-		* outputMaxLength: length limit for the inspect output string, default: 5000
-		* noFunc: do not display functions
-		* noDescriptor: do not display descriptor information
-		* noArrayProperty: do not display array properties
-		* noType: do not display type and constructor
-		* enumOnly: only display enumerable properties
-		* funcDetails: display function's details
-		* proto: display object's prototype
-		* sort: sort the keys
-		* minimal: imply noFunc: true, noDescriptor: true, noType: true, enumOnly: true, proto: false and funcDetails: false.
-		  Display a minimal JSON-like output
-		* protoBlackList: `Set` of blacklisted object prototype (will not recurse inside it)
-		* propertyBlackList: `Set` of blacklisted property names (will not even display it)
-		* useInspect? use .inspect() method when available on an object
-*/
-
-function inspect( options , variable ) {
-	if ( arguments.length < 2 ) { variable = options ; options = {} ; }
-	else if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	var runtime = { depth: 0 , ancestors: [] } ;
-
-	if ( ! options.style ) { options.style = inspectStyle.none ; }
-	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
-	else { options.style = Object.assign( {} , inspectStyle.none , options.style ) ; }
-
-	if ( options.depth === undefined ) { options.depth = 3 ; }
-	if ( options.maxLength === undefined ) { options.maxLength = 200 ; }
-	if ( options.outputMaxLength === undefined ) { options.outputMaxLength = 5000 ; }
-
-	// /!\ nofunc is deprecated
-	if ( options.nofunc ) { options.noFunc = true ; }
-
-	if ( options.minimal ) {
-		options.noFunc = true ;
-		options.noDescriptor = true ;
-		options.noType = true ;
-		options.enumOnly = true ;
-		options.funcDetails = false ;
-		options.proto = false ;
-	}
-
-	var str = inspect_( runtime , options , variable ) ;
-
-	if ( str.length > options.outputMaxLength ) {
-		str = str.slice( 0 , options.outputMaxLength - 1 ) + '…' ;
-	}
-
-	return str ;
-}
-
-
-
-function inspect_( runtime , options , variable ) {
-	var i , funcName , length , proto , propertyList , constructor , keyIsProperty ,
-		type , pre , indent , isArray , isFunc , specialObject ,
-		str = '' , key = '' , descriptorStr = '' , descriptor , nextAncestors ;
-
-
-	// Prepare things (indentation, key, descriptor, ... )
-
-	type = typeof variable ;
-	indent = options.style.tab.repeat( runtime.depth ) ;
-
-	if ( type === 'function' && options.noFunc ) { return '' ; }
-
-	if ( runtime.key !== undefined ) {
-		if ( runtime.descriptor ) {
-			descriptorStr = [] ;
-
-			if ( ! runtime.descriptor.configurable ) { descriptorStr.push( '-conf' ) ; }
-			if ( ! runtime.descriptor.enumerable ) { descriptorStr.push( '-enum' ) ; }
-
-			// Already displayed by runtime.forceType
-			//if ( runtime.descriptor.get || runtime.descriptor.set ) { descriptorStr.push( 'getter/setter' ) ; } else
-			if ( ! runtime.descriptor.writable ) { descriptorStr.push( '-w' ) ; }
-
-			//if ( descriptorStr.length ) { descriptorStr = '(' + descriptorStr.join( ' ' ) + ')' ; }
-			if ( descriptorStr.length ) { descriptorStr = descriptorStr.join( ' ' ) ; }
-			else { descriptorStr = '' ; }
-		}
-
-		if ( runtime.keyIsProperty ) {
-			if ( keyNeedingQuotes( runtime.key ) ) {
-				key = '"' + options.style.key( runtime.key ) + '": ' ;
-			}
-			else {
-				key = options.style.key( runtime.key ) + ': ' ;
-			}
-		}
-		else {
-			key = options.style.index( runtime.key ) ;
-		}
-
-		if ( descriptorStr ) { descriptorStr = ' ' + options.style.type( descriptorStr ) ; }
-	}
-
-	pre = runtime.noPre ? '' : indent + key ;
-
-
-	// Describe the current variable
-
-	if ( variable === undefined ) {
-		str += pre + options.style.constant( 'undefined' ) + descriptorStr + options.style.newline ;
-	}
-	else if ( variable === null ) {
-		str += pre + options.style.constant( 'null' ) + descriptorStr + options.style.newline ;
-	}
-	else if ( variable === false ) {
-		str += pre + options.style.constant( 'false' ) + descriptorStr + options.style.newline ;
-	}
-	else if ( variable === true ) {
-		str += pre + options.style.constant( 'true' ) + descriptorStr + options.style.newline ;
-	}
-	else if ( type === 'number' ) {
-		str += pre + options.style.number( variable.toString() ) +
-			( options.noType ? '' : ' ' + options.style.type( 'number' ) ) +
-			descriptorStr + options.style.newline ;
-	}
-	else if ( type === 'string' ) {
-		if ( variable.length > options.maxLength ) {
-			str += pre + '"' + options.style.string( escape.control( variable.slice( 0 , options.maxLength - 1 ) ) ) + '…"' +
-				( options.noType ? '' : ' ' + options.style.type( 'string' ) + options.style.length( '(' + variable.length + ' - TRUNCATED)' ) ) +
-				descriptorStr + options.style.newline ;
-		}
-		else {
-			str += pre + '"' + options.style.string( escape.control( variable ) ) + '"' +
-				( options.noType ? '' : ' ' + options.style.type( 'string' ) + options.style.length( '(' + variable.length + ')' ) ) +
-				descriptorStr + options.style.newline ;
-		}
-	}
-	else if ( Buffer.isBuffer( variable ) ) {
-		str += pre + options.style.inspect( variable.inspect() ) +
-			( options.noType ? '' : ' ' + options.style.type( 'Buffer' ) + options.style.length( '(' + variable.length + ')' ) ) +
-			descriptorStr + options.style.newline ;
-	}
-	else if ( type === 'object' || type === 'function' ) {
-		funcName = length = '' ;
-		isFunc = false ;
-
-		if ( type === 'function' ) {
-			isFunc = true ;
-			funcName = ' ' + options.style.funcName( ( variable.name ? variable.name : '(anonymous)' ) ) ;
-			length = options.style.length( '(' + variable.length + ')' ) ;
-		}
-
-		isArray = false ;
-
-		if ( Array.isArray( variable ) ) {
-			isArray = true ;
-			length = options.style.length( '(' + variable.length + ')' ) ;
-		}
-
-		if ( ! variable.constructor ) { constructor = '(no constructor)' ; }
-		else if ( ! variable.constructor.name ) { constructor = '(anonymous)' ; }
-		else { constructor = variable.constructor.name ; }
-
-		constructor = options.style.constructorName( constructor ) ;
-		proto = Object.getPrototypeOf( variable ) ;
-
-		str += pre ;
-
-		if ( ! options.noType ) {
-			if ( runtime.forceType ) { str += options.style.type( runtime.forceType ) ; }
-			else { str += constructor + funcName + length + ' ' + options.style.type( type ) + descriptorStr ; }
-
-			if ( ! isFunc || options.funcDetails ) { str += ' ' ; }	// if no funcDetails imply no space here
-		}
-
-		propertyList = Object.getOwnPropertyNames( variable ) ;
-
-		if ( options.noArrayProperty && Array.isArray( variable ) ) {
-			propertyList = propertyList.slice( 0 , variable.length ) ;
-		}
-
-		if ( options.sort ) { propertyList.sort() ; }
-
-		// Special Objects
-		specialObject = specialObjectSubstitution( variable ) ;
-
-		if ( options.protoBlackList && options.protoBlackList.has( proto ) ) {
-			str += options.style.limit( '[skip]' ) + options.style.newline ;
-		}
-		else if ( specialObject !== undefined ) {
-			str += '=> ' + inspect_( {
-				depth: runtime.depth ,
-				ancestors: runtime.ancestors ,
-				noPre: true
-			} ,
-			options ,
-			specialObject
-			) ;
-		}
-		else if ( isFunc && ! options.funcDetails ) {
-			str += options.style.newline ;
-		}
-		else if ( ! propertyList.length && ! options.proto ) {
-			str += '{}' + options.style.newline ;
-		}
-		else if ( runtime.depth >= options.depth ) {
-			str += options.style.limit( '[depth limit]' ) + options.style.newline ;
-		}
-		else if ( runtime.ancestors.indexOf( variable ) !== -1 ) {
-			str += options.style.limit( '[circular]' ) + options.style.newline ;
-		}
-		else {
-			str += ( isArray && options.noType ? '[' : '{' ) + options.style.newline ;
-
-			// Do not use .concat() here, it doesn't works as expected with arrays...
-			nextAncestors = runtime.ancestors.slice() ;
-			nextAncestors.push( variable ) ;
-
-			for ( i = 0 ; i < propertyList.length && str.length < options.outputMaxLength ; i ++ ) {
-				if ( ! isArray && options.propertyBlackList && options.propertyBlackList.has( propertyList[ i ] ) ) {
-					//str += options.style.limit( '[skip]' ) + options.style.newline ;
-					continue ;
-				}
-
-				try {
-					descriptor = Object.getOwnPropertyDescriptor( variable , propertyList[ i ] ) ;
-
-					if ( ! descriptor.enumerable && options.enumOnly ) { continue ; }
-
-					keyIsProperty = ! isArray || ! descriptor.enumerable || isNaN( propertyList[ i ] ) ;
-
-					if ( ! options.noDescriptor && ( descriptor.get || descriptor.set ) ) {
-						str += inspect_( {
-							depth: runtime.depth + 1 ,
-							ancestors: nextAncestors ,
-							key: propertyList[ i ] ,
-							keyIsProperty: keyIsProperty ,
-							descriptor: descriptor ,
-							forceType: 'getter/setter'
-						} ,
-						options ,
-						{ get: descriptor.get , set: descriptor.set }
-						) ;
-					}
-					else {
-						str += inspect_( {
-							depth: runtime.depth + 1 ,
-							ancestors: nextAncestors ,
-							key: propertyList[ i ] ,
-							keyIsProperty: keyIsProperty ,
-							descriptor: options.noDescriptor ? undefined : descriptor
-						} ,
-						options ,
-						variable[ propertyList[ i ] ]
-						) ;
-					}
-				}
-				catch ( error ) {
-					str += inspect_( {
-						depth: runtime.depth + 1 ,
-						ancestors: nextAncestors ,
-						key: propertyList[ i ] ,
-						keyIsProperty: keyIsProperty ,
-						descriptor: options.noDescriptor ? undefined : descriptor
-					} ,
-					options ,
-					error
-					) ;
-				}
-
-				if ( i < propertyList.length - 1 ) { str += options.style.comma ; }
-			}
-
-			if ( options.proto ) {
-				str += inspect_( {
-					depth: runtime.depth + 1 ,
-					ancestors: nextAncestors ,
-					key: '__proto__' ,
-					keyIsProperty: true
-				} ,
-				options ,
-				proto
-				) ;
-			}
-
-			str += indent + ( isArray && options.noType ? ']' : '}' ) ;
-			str += options.style.newline ;
-		}
-	}
-
-
-	// Finalizing
-
-
-	if ( runtime.depth === 0 ) {
-		if ( options.style.trim ) { str = str.trim() ; }
-		if ( options.style === 'html' ) { str = escape.html( str ) ; }
-	}
-
-	return str ;
-}
-
-exports.inspect = inspect ;
-
-
-
-function keyNeedingQuotes( key ) {
-	if ( ! key.length ) { return true ; }
-	return false ;
-}
-
-
-
-// Some special object are better written down when substituted by something else
-function specialObjectSubstitution( variable ) {
-	switch ( variable.constructor.name ) {
-		case 'String' :
-			if ( variable instanceof String ) {
-				return variable.toString() ;
-			}
-			break ;
-		case 'RegExp' :
-			if ( variable instanceof RegExp ) {
-				return variable.toString() ;
-			}
-			break ;
-		case 'Date' :
-			if ( variable instanceof Date ) {
-				return variable.toString() + ' [' + variable.getTime() + ']' ;
-			}
-			break ;
-		case 'Set' :
-			if ( typeof Set === 'function' && variable instanceof Set ) {
-				// This is an ES6 'Set' Object
-				return Array.from( variable ) ;
-			}
-			break ;
-		case 'Map' :
-			if ( typeof Map === 'function' && variable instanceof Map ) {
-				// This is an ES6 'Map' Object
-				return Array.from( variable ) ;
-			}
-			break ;
-		case 'ObjectID' :
-			if ( variable._bsontype ) {
-				// This is a MongoDB ObjectID, rather boring to display in its original form
-				// due to esoteric characters that confuse both the user and the terminal displaying it.
-				// Substitute it to its string representation
-				return variable.toString() ;
-			}
-			break ;
-	}
-
-	return ;
-}
-
-
-
-function inspectError( options , error ) {
-	var str = '' , stack , type , code ;
-
-	if ( arguments.length < 2 ) { error = options ; options = {} ; }
-	else if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	if ( ! ( error instanceof Error ) ) {
-		return 'Not an error -- regular variable inspection: ' + inspect( options , error ) ;
-	}
-
-	if ( ! options.style ) { options.style = inspectStyle.none ; }
-	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
-
-	if ( error.stack ) { stack = inspectStack( options , error.stack ) ; }
-
-	type = error.type || error.constructor.name ;
-	code = error.code || error.name || error.errno || error.number ;
-
-	str += options.style.errorType( type ) +
-		( code ? ' [' + options.style.errorType( code ) + ']' : '' ) + ': ' ;
-	str += options.style.errorMessage( error.message ) + '\n' ;
-
-	if ( stack ) { str += options.style.errorStack( stack ) + '\n' ; }
-
-	return str ;
-}
-
-exports.inspectError = inspectError ;
-
-
-
-function inspectStack( options , stack ) {
-	if ( arguments.length < 2 ) { stack = options ; options = {} ; }
-	else if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	if ( ! options.style ) { options.style = inspectStyle.none ; }
-	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
-
-	if ( ! stack ) { return ; }
-
-	if ( ( options.browser || process.browser ) && stack.indexOf( '@' ) !== -1 ) {
-		// Assume a Firefox-compatible stack-trace here...
-		stack = stack
-		.replace( /[</]*(?=@)/g , '' )	// Firefox output some WTF </</</</< stuff in its stack trace -- removing that
-		.replace(
-			/^\s*([^@]*)\s*@\s*([^\n]*)(?::([0-9]+):([0-9]+))?$/mg ,
-			( matches , method , file , line , column ) => {
-				return options.style.errorStack( '    at ' ) +
-						( method ? options.style.errorStackMethod( method ) + ' ' : '' ) +
-						options.style.errorStack( '(' ) +
-						( file ? options.style.errorStackFile( file ) : options.style.errorStack( 'unknown' ) ) +
-						( line ? options.style.errorStack( ':' ) + options.style.errorStackLine( line ) : '' ) +
-						( column ? options.style.errorStack( ':' ) + options.style.errorStackColumn( column ) : '' ) +
-						options.style.errorStack( ')' ) ;
-			}
-		) ;
-	}
-	else {
-		stack = stack.replace( /^[^\n]*\n/ , '' ) ;
-		stack = stack.replace(
-			/^\s*(at)\s+(?:((?:new +)?[^\s:()[\]\n]+(?:\([^)]+\))?)\s)?(?:\[as ([^\s:()[\]\n]+)\]\s)?(?:\(?([^:()[\]\n]+):([0-9]+):([0-9]+)\)?)?$/mg ,
-			( matches , at , method , as , file , line , column ) => {
-				return options.style.errorStack( '    at ' ) +
-					( method ? options.style.errorStackMethod( method ) + ' ' : '' ) +
-					( as ? options.style.errorStack( '[as ' ) + options.style.errorStackMethodAs( as ) + options.style.errorStack( '] ' ) : '' ) +
-					options.style.errorStack( '(' ) +
-					( file ? options.style.errorStackFile( file ) : options.style.errorStack( 'unknown' ) ) +
-					( line ? options.style.errorStack( ':' ) + options.style.errorStackLine( line ) : '' ) +
-					( column ? options.style.errorStack( ':' ) + options.style.errorStackColumn( column ) : '' ) +
-					options.style.errorStack( ')' ) ;
-			}
-		) ;
-	}
-
-	return stack ;
-}
-
-exports.inspectStack = inspectStack ;
-
-
-
-// Inspect's styles
-
-var inspectStyle = {} ;
-
-var inspectStyleNoop = str => str ;
-
-
-
-inspectStyle.none = {
-	trim: false ,
-	tab: '    ' ,
-	newline: '\n' ,
-	comma: '' ,
-	limit: inspectStyleNoop ,
-	type: str => '<' + str + '>' ,
-	constant: inspectStyleNoop ,
-	funcName: inspectStyleNoop ,
-	constructorName: str => '<' + str + '>' ,
-	length: inspectStyleNoop ,
-	key: inspectStyleNoop ,
-	index: str => '[' + str + '] ' ,
-	number: inspectStyleNoop ,
-	inspect: inspectStyleNoop ,
-	string: inspectStyleNoop ,
-	errorType: inspectStyleNoop ,
-	errorMessage: inspectStyleNoop ,
-	errorStack: inspectStyleNoop ,
-	errorStackMethod: inspectStyleNoop ,
-	errorStackMethodAs: inspectStyleNoop ,
-	errorStackFile: inspectStyleNoop ,
-	errorStackLine: inspectStyleNoop ,
-	errorStackColumn: inspectStyleNoop
-} ;
-
-
-
-inspectStyle.inline = Object.assign( {} , inspectStyle.none , {
-	trim: true ,
-	tab: '' ,
-	newline: ' ' ,
-	comma: ', ' ,
-	length: () => '' ,
-	index: () => ''
-	//type: () => '' ,
-} ) ;
-
-
-
-inspectStyle.color = Object.assign( {} , inspectStyle.none , {
-	limit: str => ansi.bold + ansi.brightRed + str + ansi.reset ,
-	type: str => ansi.italic + ansi.brightBlack + str + ansi.reset ,
-	constant: str => ansi.cyan + str + ansi.reset ,
-	funcName: str => ansi.italic + ansi.magenta + str + ansi.reset ,
-	constructorName: str => ansi.magenta + str + ansi.reset ,
-	length: str => ansi.italic + ansi.brightBlack + str + ansi.reset ,
-	key: str => ansi.green + str + ansi.reset ,
-	index: str => ansi.blue + '[' + str + ']' + ansi.reset + ' ' ,
-	number: str => ansi.cyan + str + ansi.reset ,
-	inspect: str => ansi.cyan + str + ansi.reset ,
-	string: str => ansi.blue + str + ansi.reset ,
-	errorType: str => ansi.red + ansi.bold + str + ansi.reset ,
-	errorMessage: str => ansi.red + ansi.italic + str + ansi.reset ,
-	errorStack: str => ansi.brightBlack + str + ansi.reset ,
-	errorStackMethod: str => ansi.brightYellow + str + ansi.reset ,
-	errorStackMethodAs: str => ansi.yellow + str + ansi.reset ,
-	errorStackFile: str => ansi.brightCyan + str + ansi.reset ,
-	errorStackLine: str => ansi.blue + str + ansi.reset ,
-	errorStackColumn: str => ansi.magenta + str + ansi.reset
-} ) ;
-
-
-
-inspectStyle.html = Object.assign( {} , inspectStyle.none , {
-	tab: '&nbsp;&nbsp;&nbsp;&nbsp;' ,
-	newline: '<br />' ,
-	limit: str => '<span style="color:red">' + str + '</span>' ,
-	type: str => '<i style="color:gray">' + str + '</i>' ,
-	constant: str => '<span style="color:cyan">' + str + '</span>' ,
-	funcName: str => '<i style="color:magenta">' + str + '</i>' ,
-	constructorName: str => '<span style="color:magenta">' + str + '</span>' ,
-	length: str => '<i style="color:gray">' + str + '</i>' ,
-	key: str => '<span style="color:green">' + str + '</span>' ,
-	index: str => '<span style="color:blue">[' + str + ']</span> ' ,
-	number: str => '<span style="color:cyan">' + str + '</span>' ,
-	inspect: str => '<span style="color:cyan">' + str + '</span>' ,
-	string: str => '<span style="color:blue">' + str + '</span>' ,
-	errorType: str => '<span style="color:red">' + str + '</span>' ,
-	errorMessage: str => '<span style="color:red">' + str + '</span>' ,
-	errorStack: str => '<span style="color:gray">' + str + '</span>' ,
-	errorStackMethod: str => '<span style="color:yellow">' + str + '</span>' ,
-	errorStackMethodAs: str => '<span style="color:yellow">' + str + '</span>' ,
-	errorStackFile: str => '<span style="color:cyan">' + str + '</span>' ,
-	errorStackLine: str => '<span style="color:blue">' + str + '</span>' ,
-	errorStackColumn: str => '<span style="color:gray">' + str + '</span>'
-} ) ;
-
-
-
-}).call(this,{"isBuffer":require("../../../../is-buffer/index.js")},require('_process'))
-},{"../../../../is-buffer/index.js":54,"./ansi.js":42,"./escape.js":43,"_process":61}],45:[function(require,module,exports){
-module.exports={"߀":"0","́":""," ":" ","Ⓐ":"A","Ａ":"A","À":"A","Á":"A","Â":"A","Ầ":"A","Ấ":"A","Ẫ":"A","Ẩ":"A","Ã":"A","Ā":"A","Ă":"A","Ằ":"A","Ắ":"A","Ẵ":"A","Ẳ":"A","Ȧ":"A","Ǡ":"A","Ä":"A","Ǟ":"A","Ả":"A","Å":"A","Ǻ":"A","Ǎ":"A","Ȁ":"A","Ȃ":"A","Ạ":"A","Ậ":"A","Ặ":"A","Ḁ":"A","Ą":"A","Ⱥ":"A","Ɐ":"A","Ꜳ":"AA","Æ":"AE","Ǽ":"AE","Ǣ":"AE","Ꜵ":"AO","Ꜷ":"AU","Ꜹ":"AV","Ꜻ":"AV","Ꜽ":"AY","Ⓑ":"B","Ｂ":"B","Ḃ":"B","Ḅ":"B","Ḇ":"B","Ƀ":"B","Ɓ":"B","ｃ":"C","Ⓒ":"C","Ｃ":"C","Ꜿ":"C","Ḉ":"C","Ç":"C","Ⓓ":"D","Ｄ":"D","Ḋ":"D","Ď":"D","Ḍ":"D","Ḑ":"D","Ḓ":"D","Ḏ":"D","Đ":"D","Ɗ":"D","Ɖ":"D","ᴅ":"D","Ꝺ":"D","Ð":"Dh","Ǳ":"DZ","Ǆ":"DZ","ǲ":"Dz","ǅ":"Dz","ɛ":"E","Ⓔ":"E","Ｅ":"E","È":"E","É":"E","Ê":"E","Ề":"E","Ế":"E","Ễ":"E","Ể":"E","Ẽ":"E","Ē":"E","Ḕ":"E","Ḗ":"E","Ĕ":"E","Ė":"E","Ë":"E","Ẻ":"E","Ě":"E","Ȅ":"E","Ȇ":"E","Ẹ":"E","Ệ":"E","Ȩ":"E","Ḝ":"E","Ę":"E","Ḙ":"E","Ḛ":"E","Ɛ":"E","Ǝ":"E","ᴇ":"E","ꝼ":"F","Ⓕ":"F","Ｆ":"F","Ḟ":"F","Ƒ":"F","Ꝼ":"F","Ⓖ":"G","Ｇ":"G","Ǵ":"G","Ĝ":"G","Ḡ":"G","Ğ":"G","Ġ":"G","Ǧ":"G","Ģ":"G","Ǥ":"G","Ɠ":"G","Ꞡ":"G","Ᵹ":"G","Ꝿ":"G","ɢ":"G","Ⓗ":"H","Ｈ":"H","Ĥ":"H","Ḣ":"H","Ḧ":"H","Ȟ":"H","Ḥ":"H","Ḩ":"H","Ḫ":"H","Ħ":"H","Ⱨ":"H","Ⱶ":"H","Ɥ":"H","Ⓘ":"I","Ｉ":"I","Ì":"I","Í":"I","Î":"I","Ĩ":"I","Ī":"I","Ĭ":"I","İ":"I","Ï":"I","Ḯ":"I","Ỉ":"I","Ǐ":"I","Ȉ":"I","Ȋ":"I","Ị":"I","Į":"I","Ḭ":"I","Ɨ":"I","Ⓙ":"J","Ｊ":"J","Ĵ":"J","Ɉ":"J","ȷ":"J","Ⓚ":"K","Ｋ":"K","Ḱ":"K","Ǩ":"K","Ḳ":"K","Ķ":"K","Ḵ":"K","Ƙ":"K","Ⱪ":"K","Ꝁ":"K","Ꝃ":"K","Ꝅ":"K","Ꞣ":"K","Ⓛ":"L","Ｌ":"L","Ŀ":"L","Ĺ":"L","Ľ":"L","Ḷ":"L","Ḹ":"L","Ļ":"L","Ḽ":"L","Ḻ":"L","Ł":"L","Ƚ":"L","Ɫ":"L","Ⱡ":"L","Ꝉ":"L","Ꝇ":"L","Ꞁ":"L","Ǉ":"LJ","ǈ":"Lj","Ⓜ":"M","Ｍ":"M","Ḿ":"M","Ṁ":"M","Ṃ":"M","Ɱ":"M","Ɯ":"M","ϻ":"M","Ꞥ":"N","Ƞ":"N","Ⓝ":"N","Ｎ":"N","Ǹ":"N","Ń":"N","Ñ":"N","Ṅ":"N","Ň":"N","Ṇ":"N","Ņ":"N","Ṋ":"N","Ṉ":"N","Ɲ":"N","Ꞑ":"N","ᴎ":"N","Ǌ":"NJ","ǋ":"Nj","Ⓞ":"O","Ｏ":"O","Ò":"O","Ó":"O","Ô":"O","Ồ":"O","Ố":"O","Ỗ":"O","Ổ":"O","Õ":"O","Ṍ":"O","Ȭ":"O","Ṏ":"O","Ō":"O","Ṑ":"O","Ṓ":"O","Ŏ":"O","Ȯ":"O","Ȱ":"O","Ö":"O","Ȫ":"O","Ỏ":"O","Ő":"O","Ǒ":"O","Ȍ":"O","Ȏ":"O","Ơ":"O","Ờ":"O","Ớ":"O","Ỡ":"O","Ở":"O","Ợ":"O","Ọ":"O","Ộ":"O","Ǫ":"O","Ǭ":"O","Ø":"O","Ǿ":"O","Ɔ":"O","Ɵ":"O","Ꝋ":"O","Ꝍ":"O","Œ":"OE","Ƣ":"OI","Ꝏ":"OO","Ȣ":"OU","Ⓟ":"P","Ｐ":"P","Ṕ":"P","Ṗ":"P","Ƥ":"P","Ᵽ":"P","Ꝑ":"P","Ꝓ":"P","Ꝕ":"P","Ⓠ":"Q","Ｑ":"Q","Ꝗ":"Q","Ꝙ":"Q","Ɋ":"Q","Ⓡ":"R","Ｒ":"R","Ŕ":"R","Ṙ":"R","Ř":"R","Ȑ":"R","Ȓ":"R","Ṛ":"R","Ṝ":"R","Ŗ":"R","Ṟ":"R","Ɍ":"R","Ɽ":"R","Ꝛ":"R","Ꞧ":"R","Ꞃ":"R","Ⓢ":"S","Ｓ":"S","ẞ":"S","Ś":"S","Ṥ":"S","Ŝ":"S","Ṡ":"S","Š":"S","Ṧ":"S","Ṣ":"S","Ṩ":"S","Ș":"S","Ş":"S","Ȿ":"S","Ꞩ":"S","Ꞅ":"S","Ⓣ":"T","Ｔ":"T","Ṫ":"T","Ť":"T","Ṭ":"T","Ț":"T","Ţ":"T","Ṱ":"T","Ṯ":"T","Ŧ":"T","Ƭ":"T","Ʈ":"T","Ⱦ":"T","Ꞇ":"T","Þ":"Th","Ꜩ":"TZ","Ⓤ":"U","Ｕ":"U","Ù":"U","Ú":"U","Û":"U","Ũ":"U","Ṹ":"U","Ū":"U","Ṻ":"U","Ŭ":"U","Ü":"U","Ǜ":"U","Ǘ":"U","Ǖ":"U","Ǚ":"U","Ủ":"U","Ů":"U","Ű":"U","Ǔ":"U","Ȕ":"U","Ȗ":"U","Ư":"U","Ừ":"U","Ứ":"U","Ữ":"U","Ử":"U","Ự":"U","Ụ":"U","Ṳ":"U","Ų":"U","Ṷ":"U","Ṵ":"U","Ʉ":"U","Ⓥ":"V","Ｖ":"V","Ṽ":"V","Ṿ":"V","Ʋ":"V","Ꝟ":"V","Ʌ":"V","Ꝡ":"VY","Ⓦ":"W","Ｗ":"W","Ẁ":"W","Ẃ":"W","Ŵ":"W","Ẇ":"W","Ẅ":"W","Ẉ":"W","Ⱳ":"W","Ⓧ":"X","Ｘ":"X","Ẋ":"X","Ẍ":"X","Ⓨ":"Y","Ｙ":"Y","Ỳ":"Y","Ý":"Y","Ŷ":"Y","Ỹ":"Y","Ȳ":"Y","Ẏ":"Y","Ÿ":"Y","Ỷ":"Y","Ỵ":"Y","Ƴ":"Y","Ɏ":"Y","Ỿ":"Y","Ⓩ":"Z","Ｚ":"Z","Ź":"Z","Ẑ":"Z","Ż":"Z","Ž":"Z","Ẓ":"Z","Ẕ":"Z","Ƶ":"Z","Ȥ":"Z","Ɀ":"Z","Ⱬ":"Z","Ꝣ":"Z","ⓐ":"a","ａ":"a","ẚ":"a","à":"a","á":"a","â":"a","ầ":"a","ấ":"a","ẫ":"a","ẩ":"a","ã":"a","ā":"a","ă":"a","ằ":"a","ắ":"a","ẵ":"a","ẳ":"a","ȧ":"a","ǡ":"a","ä":"a","ǟ":"a","ả":"a","å":"a","ǻ":"a","ǎ":"a","ȁ":"a","ȃ":"a","ạ":"a","ậ":"a","ặ":"a","ḁ":"a","ą":"a","ⱥ":"a","ɐ":"a","ɑ":"a","ꜳ":"aa","æ":"ae","ǽ":"ae","ǣ":"ae","ꜵ":"ao","ꜷ":"au","ꜹ":"av","ꜻ":"av","ꜽ":"ay","ⓑ":"b","ｂ":"b","ḃ":"b","ḅ":"b","ḇ":"b","ƀ":"b","ƃ":"b","ɓ":"b","Ƃ":"b","ⓒ":"c","ć":"c","ĉ":"c","ċ":"c","č":"c","ç":"c","ḉ":"c","ƈ":"c","ȼ":"c","ꜿ":"c","ↄ":"c","C":"c","Ć":"c","Ĉ":"c","Ċ":"c","Č":"c","Ƈ":"c","Ȼ":"c","ⓓ":"d","ｄ":"d","ḋ":"d","ď":"d","ḍ":"d","ḑ":"d","ḓ":"d","ḏ":"d","đ":"d","ƌ":"d","ɖ":"d","ɗ":"d","Ƌ":"d","Ꮷ":"d","ԁ":"d","Ɦ":"d","ð":"dh","ǳ":"dz","ǆ":"dz","ⓔ":"e","ｅ":"e","è":"e","é":"e","ê":"e","ề":"e","ế":"e","ễ":"e","ể":"e","ẽ":"e","ē":"e","ḕ":"e","ḗ":"e","ĕ":"e","ė":"e","ë":"e","ẻ":"e","ě":"e","ȅ":"e","ȇ":"e","ẹ":"e","ệ":"e","ȩ":"e","ḝ":"e","ę":"e","ḙ":"e","ḛ":"e","ɇ":"e","ǝ":"e","ⓕ":"f","ｆ":"f","ḟ":"f","ƒ":"f","ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ⓖ":"g","ｇ":"g","ǵ":"g","ĝ":"g","ḡ":"g","ğ":"g","ġ":"g","ǧ":"g","ģ":"g","ǥ":"g","ɠ":"g","ꞡ":"g","ꝿ":"g","ᵹ":"g","ⓗ":"h","ｈ":"h","ĥ":"h","ḣ":"h","ḧ":"h","ȟ":"h","ḥ":"h","ḩ":"h","ḫ":"h","ẖ":"h","ħ":"h","ⱨ":"h","ⱶ":"h","ɥ":"h","ƕ":"hv","ⓘ":"i","ｉ":"i","ì":"i","í":"i","î":"i","ĩ":"i","ī":"i","ĭ":"i","ï":"i","ḯ":"i","ỉ":"i","ǐ":"i","ȉ":"i","ȋ":"i","ị":"i","į":"i","ḭ":"i","ɨ":"i","ı":"i","ⓙ":"j","ｊ":"j","ĵ":"j","ǰ":"j","ɉ":"j","ⓚ":"k","ｋ":"k","ḱ":"k","ǩ":"k","ḳ":"k","ķ":"k","ḵ":"k","ƙ":"k","ⱪ":"k","ꝁ":"k","ꝃ":"k","ꝅ":"k","ꞣ":"k","ⓛ":"l","ｌ":"l","ŀ":"l","ĺ":"l","ľ":"l","ḷ":"l","ḹ":"l","ļ":"l","ḽ":"l","ḻ":"l","ſ":"l","ł":"l","ƚ":"l","ɫ":"l","ⱡ":"l","ꝉ":"l","ꞁ":"l","ꝇ":"l","ɭ":"l","ǉ":"lj","ⓜ":"m","ｍ":"m","ḿ":"m","ṁ":"m","ṃ":"m","ɱ":"m","ɯ":"m","ⓝ":"n","ｎ":"n","ǹ":"n","ń":"n","ñ":"n","ṅ":"n","ň":"n","ṇ":"n","ņ":"n","ṋ":"n","ṉ":"n","ƞ":"n","ɲ":"n","ŉ":"n","ꞑ":"n","ꞥ":"n","ԉ":"n","ǌ":"nj","ⓞ":"o","ｏ":"o","ò":"o","ó":"o","ô":"o","ồ":"o","ố":"o","ỗ":"o","ổ":"o","õ":"o","ṍ":"o","ȭ":"o","ṏ":"o","ō":"o","ṑ":"o","ṓ":"o","ŏ":"o","ȯ":"o","ȱ":"o","ö":"o","ȫ":"o","ỏ":"o","ő":"o","ǒ":"o","ȍ":"o","ȏ":"o","ơ":"o","ờ":"o","ớ":"o","ỡ":"o","ở":"o","ợ":"o","ọ":"o","ộ":"o","ǫ":"o","ǭ":"o","ø":"o","ǿ":"o","ꝋ":"o","ꝍ":"o","ɵ":"o","ɔ":"o","ᴑ":"o","œ":"oe","ƣ":"oi","ꝏ":"oo","ȣ":"ou","ⓟ":"p","ｐ":"p","ṕ":"p","ṗ":"p","ƥ":"p","ᵽ":"p","ꝑ":"p","ꝓ":"p","ꝕ":"p","ρ":"p","ⓠ":"q","ｑ":"q","ɋ":"q","ꝗ":"q","ꝙ":"q","ⓡ":"r","ｒ":"r","ŕ":"r","ṙ":"r","ř":"r","ȑ":"r","ȓ":"r","ṛ":"r","ṝ":"r","ŗ":"r","ṟ":"r","ɍ":"r","ɽ":"r","ꝛ":"r","ꞧ":"r","ꞃ":"r","ⓢ":"s","ｓ":"s","ś":"s","ṥ":"s","ŝ":"s","ṡ":"s","š":"s","ṧ":"s","ṣ":"s","ṩ":"s","ș":"s","ş":"s","ȿ":"s","ꞩ":"s","ꞅ":"s","ẛ":"s","ʂ":"s","ß":"ss","ⓣ":"t","ｔ":"t","ṫ":"t","ẗ":"t","ť":"t","ṭ":"t","ț":"t","ţ":"t","ṱ":"t","ṯ":"t","ŧ":"t","ƭ":"t","ʈ":"t","ⱦ":"t","ꞇ":"t","þ":"th","ꜩ":"tz","ⓤ":"u","ｕ":"u","ù":"u","ú":"u","û":"u","ũ":"u","ṹ":"u","ū":"u","ṻ":"u","ŭ":"u","ü":"u","ǜ":"u","ǘ":"u","ǖ":"u","ǚ":"u","ủ":"u","ů":"u","ű":"u","ǔ":"u","ȕ":"u","ȗ":"u","ư":"u","ừ":"u","ứ":"u","ữ":"u","ử":"u","ự":"u","ụ":"u","ṳ":"u","ų":"u","ṷ":"u","ṵ":"u","ʉ":"u","ⓥ":"v","ｖ":"v","ṽ":"v","ṿ":"v","ʋ":"v","ꝟ":"v","ʌ":"v","ꝡ":"vy","ⓦ":"w","ｗ":"w","ẁ":"w","ẃ":"w","ŵ":"w","ẇ":"w","ẅ":"w","ẘ":"w","ẉ":"w","ⱳ":"w","ⓧ":"x","ｘ":"x","ẋ":"x","ẍ":"x","ⓨ":"y","ｙ":"y","ỳ":"y","ý":"y","ŷ":"y","ỹ":"y","ȳ":"y","ẏ":"y","ÿ":"y","ỷ":"y","ẙ":"y","ỵ":"y","ƴ":"y","ɏ":"y","ỿ":"y","ⓩ":"z","ｚ":"z","ź":"z","ẑ":"z","ż":"z","ž":"z","ẓ":"z","ẕ":"z","ƶ":"z","ȥ":"z","ɀ":"z","ⱬ":"z","ꝣ":"z"}
-},{}],46:[function(require,module,exports){
-/*
-	String Kit
-
-	Copyright (c) 2014 - 2018 Cédric Ronvel
-
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-var map = require( './latinize-map.json' ) ;
-
-module.exports = function( str ) {
-	return str.replace( /[^\u0000-\u007e]/g , ( c ) => { return map[ c ] || c ; } ) ;
-} ;
-
-
-
-},{"./latinize-map.json":45}],47:[function(require,module,exports){
-/*
-	String Kit
-
-	Copyright (c) 2014 - 2018 Cédric Ronvel
-
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-module.exports = function toTitleCase( str , options ) {
-	if ( ! str || typeof str !== 'string' ) { return '' ; }
-
-	options = options || {} ;
-
-	return str.replace( /[^\s_-]+/g , ( part ) => {
-		if ( options.zealous ) {
-			if ( options.preserveAllCaps && part === part.toUpperCase() ) {
-				// This is a ALLCAPS word
-				return part ;
-			}
-
-			return part[ 0 ].toUpperCase() + part.slice( 1 ).toLowerCase() ;
-
-		}
-
-		return part[ 0 ].toUpperCase() + part.slice( 1 ) ;
-
-	} ) ;
-} ;
-
-
-
-},{}],48:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -17987,8 +17441,16 @@ module.exports = function toTitleCase( str , options ) {
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var objectCreate = Object.create || objectCreatePolyfill
+var objectKeys = Object.keys || objectKeysPolyfill
+var bind = Function.prototype.bind || functionBindPolyfill
+
 function EventEmitter() {
-  this._events = this._events || {};
+  if (!this._events || !Object.prototype.hasOwnProperty.call(this, '_events')) {
+    this._events = objectCreate(null);
+    this._eventsCount = 0;
+  }
+
   this._maxListeners = this._maxListeners || undefined;
 }
 module.exports = EventEmitter;
@@ -18001,275 +17463,484 @@ EventEmitter.prototype._maxListeners = undefined;
 
 // By default EventEmitters will print a warning if more than 10 listeners are
 // added to it. This is a useful default which helps finding memory leaks.
-EventEmitter.defaultMaxListeners = 10;
+var defaultMaxListeners = 10;
+
+var hasDefineProperty;
+try {
+  var o = {};
+  if (Object.defineProperty) Object.defineProperty(o, 'x', { value: 0 });
+  hasDefineProperty = o.x === 0;
+} catch (err) { hasDefineProperty = false }
+if (hasDefineProperty) {
+  Object.defineProperty(EventEmitter, 'defaultMaxListeners', {
+    enumerable: true,
+    get: function() {
+      return defaultMaxListeners;
+    },
+    set: function(arg) {
+      // check whether the input is a positive number (whose value is zero or
+      // greater and not a NaN).
+      if (typeof arg !== 'number' || arg < 0 || arg !== arg)
+        throw new TypeError('"defaultMaxListeners" must be a positive number');
+      defaultMaxListeners = arg;
+    }
+  });
+} else {
+  EventEmitter.defaultMaxListeners = defaultMaxListeners;
+}
 
 // Obviously not all Emitters should be limited to 10. This function allows
 // that to be increased. Set to zero for unlimited.
-EventEmitter.prototype.setMaxListeners = function(n) {
-  if (!isNumber(n) || n < 0 || isNaN(n))
-    throw TypeError('n must be a positive number');
+EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
+  if (typeof n !== 'number' || n < 0 || isNaN(n))
+    throw new TypeError('"n" argument must be a positive number');
   this._maxListeners = n;
   return this;
 };
 
-EventEmitter.prototype.emit = function(type) {
-  var er, handler, len, args, i, listeners;
+function $getMaxListeners(that) {
+  if (that._maxListeners === undefined)
+    return EventEmitter.defaultMaxListeners;
+  return that._maxListeners;
+}
 
-  if (!this._events)
-    this._events = {};
+EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
+  return $getMaxListeners(this);
+};
 
-  // If there is no 'error' event listener then throw.
-  if (type === 'error') {
-    if (!this._events.error ||
-        (isObject(this._events.error) && !this._events.error.length)) {
-      er = arguments[1];
-      if (er instanceof Error) {
-        throw er; // Unhandled 'error' event
-      } else {
-        // At least give some kind of context to the user
-        var err = new Error('Uncaught, unspecified "error" event. (' + er + ')');
-        err.context = er;
-        throw err;
-      }
-    }
+// These standalone emit* functions are used to optimize calling of event
+// handlers for fast cases because emit() itself often has a variable number of
+// arguments and can be deoptimized because of that. These functions always have
+// the same number of arguments and thus do not get deoptimized, so the code
+// inside them can execute faster.
+function emitNone(handler, isFn, self) {
+  if (isFn)
+    handler.call(self);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self);
   }
+}
+function emitOne(handler, isFn, self, arg1) {
+  if (isFn)
+    handler.call(self, arg1);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1);
+  }
+}
+function emitTwo(handler, isFn, self, arg1, arg2) {
+  if (isFn)
+    handler.call(self, arg1, arg2);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1, arg2);
+  }
+}
+function emitThree(handler, isFn, self, arg1, arg2, arg3) {
+  if (isFn)
+    handler.call(self, arg1, arg2, arg3);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1, arg2, arg3);
+  }
+}
 
-  handler = this._events[type];
+function emitMany(handler, isFn, self, args) {
+  if (isFn)
+    handler.apply(self, args);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].apply(self, args);
+  }
+}
 
-  if (isUndefined(handler))
+EventEmitter.prototype.emit = function emit(type) {
+  var er, handler, len, args, i, events;
+  var doError = (type === 'error');
+
+  events = this._events;
+  if (events)
+    doError = (doError && events.error == null);
+  else if (!doError)
     return false;
 
-  if (isFunction(handler)) {
-    switch (arguments.length) {
-      // fast cases
-      case 1:
-        handler.call(this);
-        break;
-      case 2:
-        handler.call(this, arguments[1]);
-        break;
-      case 3:
-        handler.call(this, arguments[1], arguments[2]);
-        break;
-      // slower
-      default:
-        args = Array.prototype.slice.call(arguments, 1);
-        handler.apply(this, args);
+  // If there is no 'error' event listener then throw.
+  if (doError) {
+    if (arguments.length > 1)
+      er = arguments[1];
+    if (er instanceof Error) {
+      throw er; // Unhandled 'error' event
+    } else {
+      // At least give some kind of context to the user
+      var err = new Error('Unhandled "error" event. (' + er + ')');
+      err.context = er;
+      throw err;
     }
-  } else if (isObject(handler)) {
-    args = Array.prototype.slice.call(arguments, 1);
-    listeners = handler.slice();
-    len = listeners.length;
-    for (i = 0; i < len; i++)
-      listeners[i].apply(this, args);
+    return false;
+  }
+
+  handler = events[type];
+
+  if (!handler)
+    return false;
+
+  var isFn = typeof handler === 'function';
+  len = arguments.length;
+  switch (len) {
+      // fast cases
+    case 1:
+      emitNone(handler, isFn, this);
+      break;
+    case 2:
+      emitOne(handler, isFn, this, arguments[1]);
+      break;
+    case 3:
+      emitTwo(handler, isFn, this, arguments[1], arguments[2]);
+      break;
+    case 4:
+      emitThree(handler, isFn, this, arguments[1], arguments[2], arguments[3]);
+      break;
+      // slower
+    default:
+      args = new Array(len - 1);
+      for (i = 1; i < len; i++)
+        args[i - 1] = arguments[i];
+      emitMany(handler, isFn, this, args);
   }
 
   return true;
 };
 
-EventEmitter.prototype.addListener = function(type, listener) {
+function _addListener(target, type, listener, prepend) {
   var m;
+  var events;
+  var existing;
 
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
+  if (typeof listener !== 'function')
+    throw new TypeError('"listener" argument must be a function');
 
-  if (!this._events)
-    this._events = {};
+  events = target._events;
+  if (!events) {
+    events = target._events = objectCreate(null);
+    target._eventsCount = 0;
+  } else {
+    // To avoid recursion in the case that type === "newListener"! Before
+    // adding it to the listeners, first emit "newListener".
+    if (events.newListener) {
+      target.emit('newListener', type,
+          listener.listener ? listener.listener : listener);
 
-  // To avoid recursion in the case that type === "newListener"! Before
-  // adding it to the listeners, first emit "newListener".
-  if (this._events.newListener)
-    this.emit('newListener', type,
-              isFunction(listener.listener) ?
-              listener.listener : listener);
+      // Re-assign `events` because a newListener handler could have caused the
+      // this._events to be assigned to a new object
+      events = target._events;
+    }
+    existing = events[type];
+  }
 
-  if (!this._events[type])
+  if (!existing) {
     // Optimize the case of one listener. Don't need the extra array object.
-    this._events[type] = listener;
-  else if (isObject(this._events[type]))
-    // If we've already got an array, just append.
-    this._events[type].push(listener);
-  else
-    // Adding the second element, need to change to array.
-    this._events[type] = [this._events[type], listener];
-
-  // Check for listener leak
-  if (isObject(this._events[type]) && !this._events[type].warned) {
-    if (!isUndefined(this._maxListeners)) {
-      m = this._maxListeners;
+    existing = events[type] = listener;
+    ++target._eventsCount;
+  } else {
+    if (typeof existing === 'function') {
+      // Adding the second element, need to change to array.
+      existing = events[type] =
+          prepend ? [listener, existing] : [existing, listener];
     } else {
-      m = EventEmitter.defaultMaxListeners;
+      // If we've already got an array, just append.
+      if (prepend) {
+        existing.unshift(listener);
+      } else {
+        existing.push(listener);
+      }
     }
 
-    if (m && m > 0 && this._events[type].length > m) {
-      this._events[type].warned = true;
-      console.error('(node) warning: possible EventEmitter memory ' +
-                    'leak detected. %d listeners added. ' +
-                    'Use emitter.setMaxListeners() to increase limit.',
-                    this._events[type].length);
-      if (typeof console.trace === 'function') {
-        // not supported in IE 10
-        console.trace();
+    // Check for listener leak
+    if (!existing.warned) {
+      m = $getMaxListeners(target);
+      if (m && m > 0 && existing.length > m) {
+        existing.warned = true;
+        var w = new Error('Possible EventEmitter memory leak detected. ' +
+            existing.length + ' "' + String(type) + '" listeners ' +
+            'added. Use emitter.setMaxListeners() to ' +
+            'increase limit.');
+        w.name = 'MaxListenersExceededWarning';
+        w.emitter = target;
+        w.type = type;
+        w.count = existing.length;
+        if (typeof console === 'object' && console.warn) {
+          console.warn('%s: %s', w.name, w.message);
+        }
       }
     }
   }
 
-  return this;
+  return target;
+}
+
+EventEmitter.prototype.addListener = function addListener(type, listener) {
+  return _addListener(this, type, listener, false);
 };
 
 EventEmitter.prototype.on = EventEmitter.prototype.addListener;
 
-EventEmitter.prototype.once = function(type, listener) {
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
+EventEmitter.prototype.prependListener =
+    function prependListener(type, listener) {
+      return _addListener(this, type, listener, true);
+    };
 
-  var fired = false;
-
-  function g() {
-    this.removeListener(type, g);
-
-    if (!fired) {
-      fired = true;
-      listener.apply(this, arguments);
+function onceWrapper() {
+  if (!this.fired) {
+    this.target.removeListener(this.type, this.wrapFn);
+    this.fired = true;
+    switch (arguments.length) {
+      case 0:
+        return this.listener.call(this.target);
+      case 1:
+        return this.listener.call(this.target, arguments[0]);
+      case 2:
+        return this.listener.call(this.target, arguments[0], arguments[1]);
+      case 3:
+        return this.listener.call(this.target, arguments[0], arguments[1],
+            arguments[2]);
+      default:
+        var args = new Array(arguments.length);
+        for (var i = 0; i < args.length; ++i)
+          args[i] = arguments[i];
+        this.listener.apply(this.target, args);
     }
   }
+}
 
-  g.listener = listener;
-  this.on(type, g);
+function _onceWrap(target, type, listener) {
+  var state = { fired: false, wrapFn: undefined, target: target, type: type, listener: listener };
+  var wrapped = bind.call(onceWrapper, state);
+  wrapped.listener = listener;
+  state.wrapFn = wrapped;
+  return wrapped;
+}
 
+EventEmitter.prototype.once = function once(type, listener) {
+  if (typeof listener !== 'function')
+    throw new TypeError('"listener" argument must be a function');
+  this.on(type, _onceWrap(this, type, listener));
   return this;
 };
 
-// emits a 'removeListener' event iff the listener was removed
-EventEmitter.prototype.removeListener = function(type, listener) {
-  var list, position, length, i;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events || !this._events[type])
-    return this;
-
-  list = this._events[type];
-  length = list.length;
-  position = -1;
-
-  if (list === listener ||
-      (isFunction(list.listener) && list.listener === listener)) {
-    delete this._events[type];
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-
-  } else if (isObject(list)) {
-    for (i = length; i-- > 0;) {
-      if (list[i] === listener ||
-          (list[i].listener && list[i].listener === listener)) {
-        position = i;
-        break;
-      }
-    }
-
-    if (position < 0)
+EventEmitter.prototype.prependOnceListener =
+    function prependOnceListener(type, listener) {
+      if (typeof listener !== 'function')
+        throw new TypeError('"listener" argument must be a function');
+      this.prependListener(type, _onceWrap(this, type, listener));
       return this;
+    };
 
-    if (list.length === 1) {
-      list.length = 0;
-      delete this._events[type];
-    } else {
-      list.splice(position, 1);
-    }
+// Emits a 'removeListener' event if and only if the listener was removed.
+EventEmitter.prototype.removeListener =
+    function removeListener(type, listener) {
+      var list, events, position, i, originalListener;
 
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-  }
+      if (typeof listener !== 'function')
+        throw new TypeError('"listener" argument must be a function');
 
-  return this;
-};
+      events = this._events;
+      if (!events)
+        return this;
 
-EventEmitter.prototype.removeAllListeners = function(type) {
-  var key, listeners;
+      list = events[type];
+      if (!list)
+        return this;
 
-  if (!this._events)
-    return this;
+      if (list === listener || list.listener === listener) {
+        if (--this._eventsCount === 0)
+          this._events = objectCreate(null);
+        else {
+          delete events[type];
+          if (events.removeListener)
+            this.emit('removeListener', type, list.listener || listener);
+        }
+      } else if (typeof list !== 'function') {
+        position = -1;
 
-  // not listening for removeListener, no need to emit
-  if (!this._events.removeListener) {
-    if (arguments.length === 0)
-      this._events = {};
-    else if (this._events[type])
-      delete this._events[type];
-    return this;
-  }
+        for (i = list.length - 1; i >= 0; i--) {
+          if (list[i] === listener || list[i].listener === listener) {
+            originalListener = list[i].listener;
+            position = i;
+            break;
+          }
+        }
 
-  // emit removeListener for all listeners on all events
-  if (arguments.length === 0) {
-    for (key in this._events) {
-      if (key === 'removeListener') continue;
-      this.removeAllListeners(key);
-    }
-    this.removeAllListeners('removeListener');
-    this._events = {};
-    return this;
-  }
+        if (position < 0)
+          return this;
 
-  listeners = this._events[type];
+        if (position === 0)
+          list.shift();
+        else
+          spliceOne(list, position);
 
-  if (isFunction(listeners)) {
-    this.removeListener(type, listeners);
-  } else if (listeners) {
-    // LIFO order
-    while (listeners.length)
-      this.removeListener(type, listeners[listeners.length - 1]);
-  }
-  delete this._events[type];
+        if (list.length === 1)
+          events[type] = list[0];
 
-  return this;
-};
+        if (events.removeListener)
+          this.emit('removeListener', type, originalListener || listener);
+      }
 
-EventEmitter.prototype.listeners = function(type) {
+      return this;
+    };
+
+EventEmitter.prototype.removeAllListeners =
+    function removeAllListeners(type) {
+      var listeners, events, i;
+
+      events = this._events;
+      if (!events)
+        return this;
+
+      // not listening for removeListener, no need to emit
+      if (!events.removeListener) {
+        if (arguments.length === 0) {
+          this._events = objectCreate(null);
+          this._eventsCount = 0;
+        } else if (events[type]) {
+          if (--this._eventsCount === 0)
+            this._events = objectCreate(null);
+          else
+            delete events[type];
+        }
+        return this;
+      }
+
+      // emit removeListener for all listeners on all events
+      if (arguments.length === 0) {
+        var keys = objectKeys(events);
+        var key;
+        for (i = 0; i < keys.length; ++i) {
+          key = keys[i];
+          if (key === 'removeListener') continue;
+          this.removeAllListeners(key);
+        }
+        this.removeAllListeners('removeListener');
+        this._events = objectCreate(null);
+        this._eventsCount = 0;
+        return this;
+      }
+
+      listeners = events[type];
+
+      if (typeof listeners === 'function') {
+        this.removeListener(type, listeners);
+      } else if (listeners) {
+        // LIFO order
+        for (i = listeners.length - 1; i >= 0; i--) {
+          this.removeListener(type, listeners[i]);
+        }
+      }
+
+      return this;
+    };
+
+EventEmitter.prototype.listeners = function listeners(type) {
+  var evlistener;
   var ret;
-  if (!this._events || !this._events[type])
+  var events = this._events;
+
+  if (!events)
     ret = [];
-  else if (isFunction(this._events[type]))
-    ret = [this._events[type]];
-  else
-    ret = this._events[type].slice();
+  else {
+    evlistener = events[type];
+    if (!evlistener)
+      ret = [];
+    else if (typeof evlistener === 'function')
+      ret = [evlistener.listener || evlistener];
+    else
+      ret = unwrapListeners(evlistener);
+  }
+
   return ret;
 };
 
-EventEmitter.prototype.listenerCount = function(type) {
-  if (this._events) {
-    var evlistener = this._events[type];
-
-    if (isFunction(evlistener))
-      return 1;
-    else if (evlistener)
-      return evlistener.length;
-  }
-  return 0;
-};
-
 EventEmitter.listenerCount = function(emitter, type) {
-  return emitter.listenerCount(type);
+  if (typeof emitter.listenerCount === 'function') {
+    return emitter.listenerCount(type);
+  } else {
+    return listenerCount.call(emitter, type);
+  }
 };
 
-function isFunction(arg) {
-  return typeof arg === 'function';
+EventEmitter.prototype.listenerCount = listenerCount;
+function listenerCount(type) {
+  var events = this._events;
+
+  if (events) {
+    var evlistener = events[type];
+
+    if (typeof evlistener === 'function') {
+      return 1;
+    } else if (evlistener) {
+      return evlistener.length;
+    }
+  }
+
+  return 0;
 }
 
-function isNumber(arg) {
-  return typeof arg === 'number';
+EventEmitter.prototype.eventNames = function eventNames() {
+  return this._eventsCount > 0 ? Reflect.ownKeys(this._events) : [];
+};
+
+// About 1.5x faster than the two-arg version of Array#splice().
+function spliceOne(list, index) {
+  for (var i = index, k = i + 1, n = list.length; k < n; i += 1, k += 1)
+    list[i] = list[k];
+  list.pop();
 }
 
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
+function arrayClone(arr, n) {
+  var copy = new Array(n);
+  for (var i = 0; i < n; ++i)
+    copy[i] = arr[i];
+  return copy;
 }
 
-function isUndefined(arg) {
-  return arg === void 0;
+function unwrapListeners(arr) {
+  var ret = new Array(arr.length);
+  for (var i = 0; i < ret.length; ++i) {
+    ret[i] = arr[i].listener || arr[i];
+  }
+  return ret;
 }
 
-},{}],49:[function(require,module,exports){
+function objectCreatePolyfill(proto) {
+  var F = function() {};
+  F.prototype = proto;
+  return new F;
+}
+function objectKeysPolyfill(obj) {
+  var keys = [];
+  for (var k in obj) if (Object.prototype.hasOwnProperty.call(obj, k)) {
+    keys.push(k);
+  }
+  return k;
+}
+function functionBindPolyfill(context) {
+  var fn = this;
+  return function () {
+    return fn.apply(context, arguments);
+  };
+}
+
+},{}],43:[function(require,module,exports){
 var parse = require('acorn').parse;
 var isArray = require('isarray');
 var objectKeys = require('object-keys');
@@ -18350,7 +18021,7 @@ function insertHelpers (node, parent, chunks) {
     }
 }
 
-},{"acorn":50,"foreach":52,"isarray":51,"object-keys":59}],50:[function(require,module,exports){
+},{"acorn":44,"foreach":46,"isarray":45,"object-keys":53}],44:[function(require,module,exports){
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
   typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -21957,12 +21628,12 @@ exports.nonASCIIwhitespace = nonASCIIwhitespace;
 Object.defineProperty(exports, '__esModule', { value: true });
 
 })));
-},{}],51:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],52:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 
 var hasOwn = Object.prototype.hasOwnProperty;
 var toString = Object.prototype.toString;
@@ -21986,10 +21657,10 @@ module.exports = function forEach (obj, fn, ctx) {
 };
 
 
-},{}],53:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
-  var eLen = nBytes * 8 - mLen - 1
+  var eLen = (nBytes * 8) - mLen - 1
   var eMax = (1 << eLen) - 1
   var eBias = eMax >> 1
   var nBits = -7
@@ -22002,12 +21673,12 @@ exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   e = s & ((1 << (-nBits)) - 1)
   s >>= (-nBits)
   nBits += eLen
-  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+  for (; nBits > 0; e = (e * 256) + buffer[offset + i], i += d, nBits -= 8) {}
 
   m = e & ((1 << (-nBits)) - 1)
   e >>= (-nBits)
   nBits += mLen
-  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+  for (; nBits > 0; m = (m * 256) + buffer[offset + i], i += d, nBits -= 8) {}
 
   if (e === 0) {
     e = 1 - eBias
@@ -22022,7 +21693,7 @@ exports.read = function (buffer, offset, isLE, mLen, nBytes) {
 
 exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   var e, m, c
-  var eLen = nBytes * 8 - mLen - 1
+  var eLen = (nBytes * 8) - mLen - 1
   var eMax = (1 << eLen) - 1
   var eBias = eMax >> 1
   var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0)
@@ -22055,7 +21726,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
       m = 0
       e = eMax
     } else if (e + eBias >= 1) {
-      m = (value * c - 1) * Math.pow(2, mLen)
+      m = ((value * c) - 1) * Math.pow(2, mLen)
       e = e + eBias
     } else {
       m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen)
@@ -22072,7 +21743,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],54:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -22095,7 +21766,7 @@ function isSlowBuffer (obj) {
   return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
 }
 
-},{}],55:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 (function (process,global){
 /*
 	Next-Gen Events
@@ -23267,7 +22938,7 @@ NextGenEvents.Proxy = require( './Proxy.js' ) ;
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":57,"./Proxy.js":56,"_process":61}],56:[function(require,module,exports){
+},{"../package.json":51,"./Proxy.js":50,"_process":55}],50:[function(require,module,exports){
 /*
 	Next-Gen Events
 
@@ -23815,8 +23486,14 @@ RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message ) {
 
 
 
-},{"./NextGenEvents.js":55}],57:[function(require,module,exports){
+},{"./NextGenEvents.js":49}],51:[function(require,module,exports){
 module.exports={
+  "_args": [
+    [
+      "nextgen-events@0.14.4",
+      "/home/cedric/inside/github/tea-time"
+    ]
+  ],
   "_from": "nextgen-events@0.14.4",
   "_id": "nextgen-events@0.14.4",
   "_inBundle": false,
@@ -23834,12 +23511,11 @@ module.exports={
     "fetchSpec": "0.14.4"
   },
   "_requiredBy": [
-    "#USER",
-    "/"
+    "/",
+    "/terminal-kit"
   ],
   "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.14.4.tgz",
-  "_shasum": "f71c2fd96d1d23b32fcbf7333910bed8dc55ac82",
-  "_spec": "nextgen-events@0.14.4",
+  "_spec": "0.14.4",
   "_where": "/home/cedric/inside/github/tea-time",
   "author": {
     "name": "Cédric Ronvel"
@@ -23847,7 +23523,6 @@ module.exports={
   "bugs": {
     "url": "https://github.com/cronvel/nextgen-events/issues"
   },
-  "bundleDependencies": false,
   "config": {
     "tea-time": {
       "coverDir": [
@@ -23864,7 +23539,6 @@ module.exports={
     "owner": "Cédric Ronvel"
   },
   "dependencies": {},
-  "deprecated": false,
   "description": "The next generation of events handling for javascript! New: abstract away the network!",
   "devDependencies": {
     "browserify": "^14.4.0",
@@ -23904,7 +23578,7 @@ module.exports={
   "version": "0.14.4"
 }
 
-},{}],58:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 /*
  * Copyright (C) 2007-2018 Diego Perini
  * All rights reserved.
@@ -25682,7 +25356,7 @@ module.exports={
   return Dom;
 });
 
-},{}],59:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 'use strict';
 
 // modified from https://github.com/es-shims/es5-shim
@@ -25824,7 +25498,7 @@ keysShim.shim = function shimObjectKeys() {
 
 module.exports = keysShim;
 
-},{"./isArguments":60}],60:[function(require,module,exports){
+},{"./isArguments":54}],54:[function(require,module,exports){
 'use strict';
 
 var toStr = Object.prototype.toString;
@@ -25843,7 +25517,7 @@ module.exports = function isArguments(value) {
 	return isArgs;
 };
 
-},{}],61:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -26029,7 +25703,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],62:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -26566,7 +26240,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],63:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -26652,7 +26326,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],64:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -26739,15 +26413,92 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],65:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":63,"./encode":64}],66:[function(require,module,exports){
-arguments[4][42][0].apply(exports,arguments)
-},{"dup":42}],67:[function(require,module,exports){
+},{"./decode":57,"./encode":58}],60:[function(require,module,exports){
+/*
+	String Kit
+
+	Copyright (c) 2014 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+// To solve dependency hell, we do not rely on terminal-kit anymore.
+module.exports = {
+	reset: '\x1b[0m' ,
+	bold: '\x1b[1m' ,
+	dim: '\x1b[2m' ,
+	italic: '\x1b[3m' ,
+	underline: '\x1b[4m' ,
+	inverse: '\x1b[7m' ,
+
+	defaultColor: '\x1b[39m' ,
+	black: '\x1b[30m' ,
+	red: '\x1b[31m' ,
+	green: '\x1b[32m' ,
+	yellow: '\x1b[33m' ,
+	blue: '\x1b[34m' ,
+	magenta: '\x1b[35m' ,
+	cyan: '\x1b[36m' ,
+	white: '\x1b[37m' ,
+	brightBlack: '\x1b[90m' ,
+	brightRed: '\x1b[91m' ,
+	brightGreen: '\x1b[92m' ,
+	brightYellow: '\x1b[93m' ,
+	brightBlue: '\x1b[94m' ,
+	brightMagenta: '\x1b[95m' ,
+	brightCyan: '\x1b[96m' ,
+	brightWhite: '\x1b[97m' ,
+
+	defaultBgColor: '\x1b[49m' ,
+	bgBlack: '\x1b[40m' ,
+	bgRed: '\x1b[41m' ,
+	bgGreen: '\x1b[42m' ,
+	bgYellow: '\x1b[43m' ,
+	bgBlue: '\x1b[44m' ,
+	bgMagenta: '\x1b[45m' ,
+	bgCyan: '\x1b[46m' ,
+	bgWhite: '\x1b[47m' ,
+	bgBrightBlack: '\x1b[100m' ,
+	bgBrightRed: '\x1b[101m' ,
+	bgBrightGreen: '\x1b[102m' ,
+	bgBrightYellow: '\x1b[103m' ,
+	bgBrightBlue: '\x1b[104m' ,
+	bgBrightMagenta: '\x1b[105m' ,
+	bgBrightCyan: '\x1b[106m' ,
+	bgBrightWhite: '\x1b[107m'
+} ;
+
+
+
+},{}],61:[function(require,module,exports){
 /*
 	String Kit
 
@@ -26811,9 +26562,115 @@ camel.camelCaseToDashed = function camelCaseToDash( str ) {
 
 
 
-},{}],68:[function(require,module,exports){
-arguments[4][43][0].apply(exports,arguments)
-},{"dup":43}],69:[function(require,module,exports){
+},{}],62:[function(require,module,exports){
+/*
+	String Kit
+
+	Copyright (c) 2014 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+/*
+	Escape collection.
+*/
+
+
+
+"use strict" ;
+
+
+
+// From Mozilla Developper Network
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
+exports.regExp = exports.regExpPattern = function escapeRegExpPattern( str ) {
+	return str.replace( /([.*+?^${}()|[\]/\\])/g , '\\$1' ) ;
+} ;
+
+exports.regExpReplacement = function escapeRegExpReplacement( str ) {
+	return str.replace( /\$/g , '$$$$' ) ;	// This replace any single $ by a double $$
+} ;
+
+
+
+exports.format = function escapeFormat( str ) {
+	return str.replace( /%/g , '%%' ) ;	// This replace any single % by a double %%
+} ;
+
+
+
+exports.jsSingleQuote = function escapeJsSingleQuote( str ) {
+	return exports.control( str ).replace( /'/g , "\\'" ) ;
+} ;
+
+exports.jsDoubleQuote = function escapeJsDoubleQuote( str ) {
+	return exports.control( str ).replace( /"/g , '\\"' ) ;
+} ;
+
+
+
+exports.shellArg = function escapeShellArg( str ) {
+	return '\'' + str.replace( /'/g , "'\\''" ) + '\'' ;
+} ;
+
+
+
+var escapeControlMap = {
+	'\r': '\\r' , '\n': '\\n' , '\t': '\\t' , '\x7f': '\\x7f'
+} ;
+
+// Escape \r \n \t so they become readable again, escape all ASCII control character as well, using \x syntaxe
+exports.control = function escapeControl( str ) {
+	return str.replace( /[\x00-\x1f\x7f]/g , ( match ) => {
+		if ( escapeControlMap[ match ] !== undefined ) { return escapeControlMap[ match ] ; }
+		var hex = match.charCodeAt( 0 ).toString( 16 ) ;
+		if ( hex.length % 2 ) { hex = '0' + hex ; }
+		return '\\x' + hex ;
+	} ) ;
+} ;
+
+
+
+var escapeHtmlMap = {
+	'&': '&amp;' , '<': '&lt;' , '>': '&gt;' , '"': '&quot;' , "'": '&#039;'
+} ;
+
+// Only escape & < > so this is suited for content outside tags
+exports.html = function escapeHtml( str ) {
+	return str.replace( /[&<>]/g , ( match ) => { return escapeHtmlMap[ match ] ; } ) ;
+} ;
+
+// Escape & < > " so this is suited for content inside a double-quoted attribute
+exports.htmlAttr = function escapeHtmlAttr( str ) {
+	return str.replace( /[&<>"]/g , ( match ) => { return escapeHtmlMap[ match ] ; } ) ;
+} ;
+
+// Escape all html special characters & < > " '
+exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
+	return str.replace( /[&<>"']/g , ( match ) => { return escapeHtmlMap[ match ] ; } ) ;
+} ;
+
+
+
+},{}],63:[function(require,module,exports){
 (function (Buffer){
 /*
 	String Kit
@@ -27314,7 +27171,7 @@ exports.format.hasFormatting = function hasFormatting( str ) {
 
 
 }).call(this,require("buffer").Buffer)
-},{"./ansi.js":66,"./inspect.js":70,"buffer":25}],70:[function(require,module,exports){
+},{"./ansi.js":60,"./inspect.js":64,"buffer":25}],64:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -27680,9 +27537,20 @@ function keyNeedingQuotes( key ) {
 
 // Some special object are better written down when substituted by something else
 function specialObjectSubstitution( variable ) {
+	if ( typeof variable.constructor !== 'function' ) {
+		// Some objects have no constructor, e.g.: Object.create(null)
+		//console.error( variable ) ;
+		return ;
+	}
+
 	switch ( variable.constructor.name ) {
 		case 'String' :
 			if ( variable instanceof String ) {
+				return variable.toString() ;
+			}
+			break ;
+		case 'RegExp' :
+			if ( variable instanceof RegExp ) {
 				return variable.toString() ;
 			}
 			break ;
@@ -27898,11 +27766,48 @@ inspectStyle.html = Object.assign( {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")},require('_process'))
-},{"../../is-buffer/index.js":54,"./ansi.js":66,"./escape.js":68,"_process":61}],71:[function(require,module,exports){
-arguments[4][45][0].apply(exports,arguments)
-},{"dup":45}],72:[function(require,module,exports){
-arguments[4][46][0].apply(exports,arguments)
-},{"./latinize-map.json":71,"dup":46}],73:[function(require,module,exports){
+},{"../../is-buffer/index.js":48,"./ansi.js":60,"./escape.js":62,"_process":55}],65:[function(require,module,exports){
+module.exports={"߀":"0","́":""," ":" ","Ⓐ":"A","Ａ":"A","À":"A","Á":"A","Â":"A","Ầ":"A","Ấ":"A","Ẫ":"A","Ẩ":"A","Ã":"A","Ā":"A","Ă":"A","Ằ":"A","Ắ":"A","Ẵ":"A","Ẳ":"A","Ȧ":"A","Ǡ":"A","Ä":"A","Ǟ":"A","Ả":"A","Å":"A","Ǻ":"A","Ǎ":"A","Ȁ":"A","Ȃ":"A","Ạ":"A","Ậ":"A","Ặ":"A","Ḁ":"A","Ą":"A","Ⱥ":"A","Ɐ":"A","Ꜳ":"AA","Æ":"AE","Ǽ":"AE","Ǣ":"AE","Ꜵ":"AO","Ꜷ":"AU","Ꜹ":"AV","Ꜻ":"AV","Ꜽ":"AY","Ⓑ":"B","Ｂ":"B","Ḃ":"B","Ḅ":"B","Ḇ":"B","Ƀ":"B","Ɓ":"B","ｃ":"C","Ⓒ":"C","Ｃ":"C","Ꜿ":"C","Ḉ":"C","Ç":"C","Ⓓ":"D","Ｄ":"D","Ḋ":"D","Ď":"D","Ḍ":"D","Ḑ":"D","Ḓ":"D","Ḏ":"D","Đ":"D","Ɗ":"D","Ɖ":"D","ᴅ":"D","Ꝺ":"D","Ð":"Dh","Ǳ":"DZ","Ǆ":"DZ","ǲ":"Dz","ǅ":"Dz","ɛ":"E","Ⓔ":"E","Ｅ":"E","È":"E","É":"E","Ê":"E","Ề":"E","Ế":"E","Ễ":"E","Ể":"E","Ẽ":"E","Ē":"E","Ḕ":"E","Ḗ":"E","Ĕ":"E","Ė":"E","Ë":"E","Ẻ":"E","Ě":"E","Ȅ":"E","Ȇ":"E","Ẹ":"E","Ệ":"E","Ȩ":"E","Ḝ":"E","Ę":"E","Ḙ":"E","Ḛ":"E","Ɛ":"E","Ǝ":"E","ᴇ":"E","ꝼ":"F","Ⓕ":"F","Ｆ":"F","Ḟ":"F","Ƒ":"F","Ꝼ":"F","Ⓖ":"G","Ｇ":"G","Ǵ":"G","Ĝ":"G","Ḡ":"G","Ğ":"G","Ġ":"G","Ǧ":"G","Ģ":"G","Ǥ":"G","Ɠ":"G","Ꞡ":"G","Ᵹ":"G","Ꝿ":"G","ɢ":"G","Ⓗ":"H","Ｈ":"H","Ĥ":"H","Ḣ":"H","Ḧ":"H","Ȟ":"H","Ḥ":"H","Ḩ":"H","Ḫ":"H","Ħ":"H","Ⱨ":"H","Ⱶ":"H","Ɥ":"H","Ⓘ":"I","Ｉ":"I","Ì":"I","Í":"I","Î":"I","Ĩ":"I","Ī":"I","Ĭ":"I","İ":"I","Ï":"I","Ḯ":"I","Ỉ":"I","Ǐ":"I","Ȉ":"I","Ȋ":"I","Ị":"I","Į":"I","Ḭ":"I","Ɨ":"I","Ⓙ":"J","Ｊ":"J","Ĵ":"J","Ɉ":"J","ȷ":"J","Ⓚ":"K","Ｋ":"K","Ḱ":"K","Ǩ":"K","Ḳ":"K","Ķ":"K","Ḵ":"K","Ƙ":"K","Ⱪ":"K","Ꝁ":"K","Ꝃ":"K","Ꝅ":"K","Ꞣ":"K","Ⓛ":"L","Ｌ":"L","Ŀ":"L","Ĺ":"L","Ľ":"L","Ḷ":"L","Ḹ":"L","Ļ":"L","Ḽ":"L","Ḻ":"L","Ł":"L","Ƚ":"L","Ɫ":"L","Ⱡ":"L","Ꝉ":"L","Ꝇ":"L","Ꞁ":"L","Ǉ":"LJ","ǈ":"Lj","Ⓜ":"M","Ｍ":"M","Ḿ":"M","Ṁ":"M","Ṃ":"M","Ɱ":"M","Ɯ":"M","ϻ":"M","Ꞥ":"N","Ƞ":"N","Ⓝ":"N","Ｎ":"N","Ǹ":"N","Ń":"N","Ñ":"N","Ṅ":"N","Ň":"N","Ṇ":"N","Ņ":"N","Ṋ":"N","Ṉ":"N","Ɲ":"N","Ꞑ":"N","ᴎ":"N","Ǌ":"NJ","ǋ":"Nj","Ⓞ":"O","Ｏ":"O","Ò":"O","Ó":"O","Ô":"O","Ồ":"O","Ố":"O","Ỗ":"O","Ổ":"O","Õ":"O","Ṍ":"O","Ȭ":"O","Ṏ":"O","Ō":"O","Ṑ":"O","Ṓ":"O","Ŏ":"O","Ȯ":"O","Ȱ":"O","Ö":"O","Ȫ":"O","Ỏ":"O","Ő":"O","Ǒ":"O","Ȍ":"O","Ȏ":"O","Ơ":"O","Ờ":"O","Ớ":"O","Ỡ":"O","Ở":"O","Ợ":"O","Ọ":"O","Ộ":"O","Ǫ":"O","Ǭ":"O","Ø":"O","Ǿ":"O","Ɔ":"O","Ɵ":"O","Ꝋ":"O","Ꝍ":"O","Œ":"OE","Ƣ":"OI","Ꝏ":"OO","Ȣ":"OU","Ⓟ":"P","Ｐ":"P","Ṕ":"P","Ṗ":"P","Ƥ":"P","Ᵽ":"P","Ꝑ":"P","Ꝓ":"P","Ꝕ":"P","Ⓠ":"Q","Ｑ":"Q","Ꝗ":"Q","Ꝙ":"Q","Ɋ":"Q","Ⓡ":"R","Ｒ":"R","Ŕ":"R","Ṙ":"R","Ř":"R","Ȑ":"R","Ȓ":"R","Ṛ":"R","Ṝ":"R","Ŗ":"R","Ṟ":"R","Ɍ":"R","Ɽ":"R","Ꝛ":"R","Ꞧ":"R","Ꞃ":"R","Ⓢ":"S","Ｓ":"S","ẞ":"S","Ś":"S","Ṥ":"S","Ŝ":"S","Ṡ":"S","Š":"S","Ṧ":"S","Ṣ":"S","Ṩ":"S","Ș":"S","Ş":"S","Ȿ":"S","Ꞩ":"S","Ꞅ":"S","Ⓣ":"T","Ｔ":"T","Ṫ":"T","Ť":"T","Ṭ":"T","Ț":"T","Ţ":"T","Ṱ":"T","Ṯ":"T","Ŧ":"T","Ƭ":"T","Ʈ":"T","Ⱦ":"T","Ꞇ":"T","Þ":"Th","Ꜩ":"TZ","Ⓤ":"U","Ｕ":"U","Ù":"U","Ú":"U","Û":"U","Ũ":"U","Ṹ":"U","Ū":"U","Ṻ":"U","Ŭ":"U","Ü":"U","Ǜ":"U","Ǘ":"U","Ǖ":"U","Ǚ":"U","Ủ":"U","Ů":"U","Ű":"U","Ǔ":"U","Ȕ":"U","Ȗ":"U","Ư":"U","Ừ":"U","Ứ":"U","Ữ":"U","Ử":"U","Ự":"U","Ụ":"U","Ṳ":"U","Ų":"U","Ṷ":"U","Ṵ":"U","Ʉ":"U","Ⓥ":"V","Ｖ":"V","Ṽ":"V","Ṿ":"V","Ʋ":"V","Ꝟ":"V","Ʌ":"V","Ꝡ":"VY","Ⓦ":"W","Ｗ":"W","Ẁ":"W","Ẃ":"W","Ŵ":"W","Ẇ":"W","Ẅ":"W","Ẉ":"W","Ⱳ":"W","Ⓧ":"X","Ｘ":"X","Ẋ":"X","Ẍ":"X","Ⓨ":"Y","Ｙ":"Y","Ỳ":"Y","Ý":"Y","Ŷ":"Y","Ỹ":"Y","Ȳ":"Y","Ẏ":"Y","Ÿ":"Y","Ỷ":"Y","Ỵ":"Y","Ƴ":"Y","Ɏ":"Y","Ỿ":"Y","Ⓩ":"Z","Ｚ":"Z","Ź":"Z","Ẑ":"Z","Ż":"Z","Ž":"Z","Ẓ":"Z","Ẕ":"Z","Ƶ":"Z","Ȥ":"Z","Ɀ":"Z","Ⱬ":"Z","Ꝣ":"Z","ⓐ":"a","ａ":"a","ẚ":"a","à":"a","á":"a","â":"a","ầ":"a","ấ":"a","ẫ":"a","ẩ":"a","ã":"a","ā":"a","ă":"a","ằ":"a","ắ":"a","ẵ":"a","ẳ":"a","ȧ":"a","ǡ":"a","ä":"a","ǟ":"a","ả":"a","å":"a","ǻ":"a","ǎ":"a","ȁ":"a","ȃ":"a","ạ":"a","ậ":"a","ặ":"a","ḁ":"a","ą":"a","ⱥ":"a","ɐ":"a","ɑ":"a","ꜳ":"aa","æ":"ae","ǽ":"ae","ǣ":"ae","ꜵ":"ao","ꜷ":"au","ꜹ":"av","ꜻ":"av","ꜽ":"ay","ⓑ":"b","ｂ":"b","ḃ":"b","ḅ":"b","ḇ":"b","ƀ":"b","ƃ":"b","ɓ":"b","Ƃ":"b","ⓒ":"c","ć":"c","ĉ":"c","ċ":"c","č":"c","ç":"c","ḉ":"c","ƈ":"c","ȼ":"c","ꜿ":"c","ↄ":"c","C":"c","Ć":"c","Ĉ":"c","Ċ":"c","Č":"c","Ƈ":"c","Ȼ":"c","ⓓ":"d","ｄ":"d","ḋ":"d","ď":"d","ḍ":"d","ḑ":"d","ḓ":"d","ḏ":"d","đ":"d","ƌ":"d","ɖ":"d","ɗ":"d","Ƌ":"d","Ꮷ":"d","ԁ":"d","Ɦ":"d","ð":"dh","ǳ":"dz","ǆ":"dz","ⓔ":"e","ｅ":"e","è":"e","é":"e","ê":"e","ề":"e","ế":"e","ễ":"e","ể":"e","ẽ":"e","ē":"e","ḕ":"e","ḗ":"e","ĕ":"e","ė":"e","ë":"e","ẻ":"e","ě":"e","ȅ":"e","ȇ":"e","ẹ":"e","ệ":"e","ȩ":"e","ḝ":"e","ę":"e","ḙ":"e","ḛ":"e","ɇ":"e","ǝ":"e","ⓕ":"f","ｆ":"f","ḟ":"f","ƒ":"f","ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ⓖ":"g","ｇ":"g","ǵ":"g","ĝ":"g","ḡ":"g","ğ":"g","ġ":"g","ǧ":"g","ģ":"g","ǥ":"g","ɠ":"g","ꞡ":"g","ꝿ":"g","ᵹ":"g","ⓗ":"h","ｈ":"h","ĥ":"h","ḣ":"h","ḧ":"h","ȟ":"h","ḥ":"h","ḩ":"h","ḫ":"h","ẖ":"h","ħ":"h","ⱨ":"h","ⱶ":"h","ɥ":"h","ƕ":"hv","ⓘ":"i","ｉ":"i","ì":"i","í":"i","î":"i","ĩ":"i","ī":"i","ĭ":"i","ï":"i","ḯ":"i","ỉ":"i","ǐ":"i","ȉ":"i","ȋ":"i","ị":"i","į":"i","ḭ":"i","ɨ":"i","ı":"i","ⓙ":"j","ｊ":"j","ĵ":"j","ǰ":"j","ɉ":"j","ⓚ":"k","ｋ":"k","ḱ":"k","ǩ":"k","ḳ":"k","ķ":"k","ḵ":"k","ƙ":"k","ⱪ":"k","ꝁ":"k","ꝃ":"k","ꝅ":"k","ꞣ":"k","ⓛ":"l","ｌ":"l","ŀ":"l","ĺ":"l","ľ":"l","ḷ":"l","ḹ":"l","ļ":"l","ḽ":"l","ḻ":"l","ſ":"l","ł":"l","ƚ":"l","ɫ":"l","ⱡ":"l","ꝉ":"l","ꞁ":"l","ꝇ":"l","ɭ":"l","ǉ":"lj","ⓜ":"m","ｍ":"m","ḿ":"m","ṁ":"m","ṃ":"m","ɱ":"m","ɯ":"m","ⓝ":"n","ｎ":"n","ǹ":"n","ń":"n","ñ":"n","ṅ":"n","ň":"n","ṇ":"n","ņ":"n","ṋ":"n","ṉ":"n","ƞ":"n","ɲ":"n","ŉ":"n","ꞑ":"n","ꞥ":"n","ԉ":"n","ǌ":"nj","ⓞ":"o","ｏ":"o","ò":"o","ó":"o","ô":"o","ồ":"o","ố":"o","ỗ":"o","ổ":"o","õ":"o","ṍ":"o","ȭ":"o","ṏ":"o","ō":"o","ṑ":"o","ṓ":"o","ŏ":"o","ȯ":"o","ȱ":"o","ö":"o","ȫ":"o","ỏ":"o","ő":"o","ǒ":"o","ȍ":"o","ȏ":"o","ơ":"o","ờ":"o","ớ":"o","ỡ":"o","ở":"o","ợ":"o","ọ":"o","ộ":"o","ǫ":"o","ǭ":"o","ø":"o","ǿ":"o","ꝋ":"o","ꝍ":"o","ɵ":"o","ɔ":"o","ᴑ":"o","œ":"oe","ƣ":"oi","ꝏ":"oo","ȣ":"ou","ⓟ":"p","ｐ":"p","ṕ":"p","ṗ":"p","ƥ":"p","ᵽ":"p","ꝑ":"p","ꝓ":"p","ꝕ":"p","ρ":"p","ⓠ":"q","ｑ":"q","ɋ":"q","ꝗ":"q","ꝙ":"q","ⓡ":"r","ｒ":"r","ŕ":"r","ṙ":"r","ř":"r","ȑ":"r","ȓ":"r","ṛ":"r","ṝ":"r","ŗ":"r","ṟ":"r","ɍ":"r","ɽ":"r","ꝛ":"r","ꞧ":"r","ꞃ":"r","ⓢ":"s","ｓ":"s","ś":"s","ṥ":"s","ŝ":"s","ṡ":"s","š":"s","ṧ":"s","ṣ":"s","ṩ":"s","ș":"s","ş":"s","ȿ":"s","ꞩ":"s","ꞅ":"s","ẛ":"s","ʂ":"s","ß":"ss","ⓣ":"t","ｔ":"t","ṫ":"t","ẗ":"t","ť":"t","ṭ":"t","ț":"t","ţ":"t","ṱ":"t","ṯ":"t","ŧ":"t","ƭ":"t","ʈ":"t","ⱦ":"t","ꞇ":"t","þ":"th","ꜩ":"tz","ⓤ":"u","ｕ":"u","ù":"u","ú":"u","û":"u","ũ":"u","ṹ":"u","ū":"u","ṻ":"u","ŭ":"u","ü":"u","ǜ":"u","ǘ":"u","ǖ":"u","ǚ":"u","ủ":"u","ů":"u","ű":"u","ǔ":"u","ȕ":"u","ȗ":"u","ư":"u","ừ":"u","ứ":"u","ữ":"u","ử":"u","ự":"u","ụ":"u","ṳ":"u","ų":"u","ṷ":"u","ṵ":"u","ʉ":"u","ⓥ":"v","ｖ":"v","ṽ":"v","ṿ":"v","ʋ":"v","ꝟ":"v","ʌ":"v","ꝡ":"vy","ⓦ":"w","ｗ":"w","ẁ":"w","ẃ":"w","ŵ":"w","ẇ":"w","ẅ":"w","ẘ":"w","ẉ":"w","ⱳ":"w","ⓧ":"x","ｘ":"x","ẋ":"x","ẍ":"x","ⓨ":"y","ｙ":"y","ỳ":"y","ý":"y","ŷ":"y","ỹ":"y","ȳ":"y","ẏ":"y","ÿ":"y","ỷ":"y","ẙ":"y","ỵ":"y","ƴ":"y","ɏ":"y","ỿ":"y","ⓩ":"z","ｚ":"z","ź":"z","ẑ":"z","ż":"z","ž":"z","ẓ":"z","ẕ":"z","ƶ":"z","ȥ":"z","ɀ":"z","ⱬ":"z","ꝣ":"z"}
+},{}],66:[function(require,module,exports){
+/*
+	String Kit
+
+	Copyright (c) 2014 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var map = require( './latinize-map.json' ) ;
+
+module.exports = function( str ) {
+	return str.replace( /[^\u0000-\u007e]/g , ( c ) => { return map[ c ] || c ; } ) ;
+} ;
+
+
+
+},{"./latinize-map.json":65}],67:[function(require,module,exports){
 /*
 	String Kit
 
@@ -27962,7 +27867,7 @@ exports.occurenceCount = function occurenceCount( str , subStr ) {
 
 
 
-},{}],74:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28044,7 +27949,7 @@ polyfill.repeat = function( count ) {
 
 
 
-},{}],75:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28101,7 +28006,7 @@ exports.regexp.array2alternatives = function array2alternatives( array ) {
 
 
 
-},{"./escape.js":68}],76:[function(require,module,exports){
+},{"./escape.js":62}],70:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28192,9 +28097,61 @@ stringKit.installPolyfills = function installPolyfills() {
 
 
 
-},{"./ansi.js":66,"./camel.js":67,"./escape.js":68,"./format.js":69,"./inspect.js":70,"./latinize.js":72,"./misc.js":73,"./polyfill.js":74,"./regexp.js":75,"./toTitleCase.js":77,"./unicode.js":78,"./wordwrap.js":79,"xregexp":24}],77:[function(require,module,exports){
-arguments[4][47][0].apply(exports,arguments)
-},{"dup":47}],78:[function(require,module,exports){
+},{"./ansi.js":60,"./camel.js":61,"./escape.js":62,"./format.js":63,"./inspect.js":64,"./latinize.js":66,"./misc.js":67,"./polyfill.js":68,"./regexp.js":69,"./toTitleCase.js":71,"./unicode.js":72,"./wordwrap.js":73,"xregexp":24}],71:[function(require,module,exports){
+/*
+	String Kit
+
+	Copyright (c) 2014 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+module.exports = function toTitleCase( str , options ) {
+	if ( ! str || typeof str !== 'string' ) { return '' ; }
+
+	options = options || {} ;
+
+	return str.replace( /[^\s_-]+/g , ( part ) => {
+		if ( options.zealous ) {
+			if ( options.preserveAllCaps && part === part.toUpperCase() ) {
+				// This is a ALLCAPS word
+				return part ;
+			}
+
+			return part[ 0 ].toUpperCase() + part.slice( 1 ).toLowerCase() ;
+
+		}
+
+		return part[ 0 ].toUpperCase() + part.slice( 1 ) ;
+
+	} ) ;
+} ;
+
+
+
+},{}],72:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28432,7 +28389,7 @@ unicode.toFullWidth = function toFullWidth( str ) {
 
 
 
-},{}],79:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28554,7 +28511,7 @@ module.exports = function wordwrap( str , width , join ) {
 
 
 
-},{"./unicode.js":78}],80:[function(require,module,exports){
+},{"./unicode.js":72}],74:[function(require,module,exports){
 /*
 	Tree Kit
 	
@@ -28647,7 +28604,7 @@ module.exports = function clone( originalObject , circular )
 	return cloneObject ;
 } ;
 
-},{}],81:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 /*
 	Tree Kit
 	
@@ -28988,7 +28945,7 @@ function extendOne( runtime , options , target , source )
 }
 
 
-},{}],82:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -29722,7 +29679,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":83,"punycode":62,"querystring":65}],83:[function(require,module,exports){
+},{"./util":77,"punycode":56,"querystring":59}],77:[function(require,module,exports){
 'use strict';
 
 module.exports = {
