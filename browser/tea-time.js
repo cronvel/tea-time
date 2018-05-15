@@ -40,7 +40,7 @@ var fs = require( 'fs' ) ;
 
 
 function Cover( options ) {
-	Object.defineProperties( this.prototype , {
+	Object.defineProperties( this , {
 		whiteList: { value: null , writable: true , enumerable: true } ,
 		blackList: { value: null , writable: true , enumerable: true } ,
 		ecmaVersion: { value: 6 , writable: true , enumerable: true } ,
@@ -499,7 +499,7 @@ Cover.prototype.getCoverage = function getCoverage() {
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":55,"falafel":43,"fs":24}],2:[function(require,module,exports){
+},{"_process":52,"falafel":40,"fs":21}],2:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -1397,7 +1397,7 @@ TeaTime.prototype.patchError = function patchError( error ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./Cover.js":1,"async-kit":13,"async-try-catch":21,"doormen/lib/expect.js":33,"nextgen-events":49}],3:[function(require,module,exports){
+},{"./Cover.js":1,"async-kit":13,"async-try-catch":18,"doormen/lib/expect.js":30,"nextgen-events":46}],3:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -2007,7 +2007,7 @@ dom.ready( () => {
 
 
 
-},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":27,"string-kit/lib/inspect.js":64,"url":76}],7:[function(require,module,exports){
+},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":24,"string-kit/lib/inspect.js":61,"url":73}],7:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -2095,7 +2095,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode ) {
 
 
 
-},{"diff":26,"string-kit/lib/inspect.js":64}],8:[function(require,module,exports){
+},{"diff":23,"string-kit/lib/inspect.js":61}],8:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -3830,7 +3830,7 @@ try{
 	exports.XMLSerializer = XMLSerializer;
 //}
 
-},{"nwmatcher":52,"string-kit":70}],11:[function(require,module,exports){
+},{"nwmatcher":49,"string-kit":67}],11:[function(require,module,exports){
 exports.entityMap = {
        lt: '<',
        gt: '>',
@@ -6732,7 +6732,7 @@ function execLogicFinal( execContext , result )
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":55,"nextgen-events":18,"tree-kit/lib/extend.js":75}],15:[function(require,module,exports){
+},{"_process":52,"nextgen-events":46,"tree-kit/lib/extend.js":72}],15:[function(require,module,exports){
 (function (process){
 /*
 	Async Kit
@@ -6822,7 +6822,7 @@ module.exports = exit ;
 
 
 }).call(this,require('_process'))
-},{"./async.js":13,"_process":55}],16:[function(require,module,exports){
+},{"./async.js":13,"_process":52}],16:[function(require,module,exports){
 /*
 	Async Kit
 	
@@ -6958,1764 +6958,6 @@ wrapper.timeout = function timeout( fn , timeout_ , fnThis )
 
 
 },{}],18:[function(require,module,exports){
-(function (global){
-/*
-	Next Gen Events
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-function NextGenEvents() { return Object.create( NextGenEvents.prototype ) ; }
-module.exports = NextGenEvents ;
-NextGenEvents.prototype.__prototypeUID__ = 'nextgen-events/NextGenEvents' ;
-NextGenEvents.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
-
-			/* Basic features, more or less compatible with Node.js */
-
-
-
-NextGenEvents.SYNC = -Infinity ;
-
-// Not part of the prototype, because it should not pollute userland's prototype.
-// It has an eventEmitter as 'this' anyway (always called using call()).
-NextGenEvents.init = function init()
-{
-	Object.defineProperty( this , '__ngev' , {
-		configurable: true ,
-		value: {
-			nice: NextGenEvents.SYNC ,
-			interruptible: false ,
-			recursion: 0 ,
-			contexts: {} ,
-			
-			// States by events
-			states: {} ,
-			
-			// State groups by events
-			stateGroups: {} ,
-			
-			// Listeners by events
-			listeners: {
-				// Special events
-				error: [] ,
-				interrupt: [] ,
-				newListener: [] ,
-				removeListener: []
-			}
-		}
-	} ) ;
-} ;
-
-
-
-// Use it with .bind()
-NextGenEvents.filterOutCallback = function( what , currentElement ) { return what !== currentElement ; } ;
-
-
-
-// .addListener( eventName , [fn] , [options] )
-NextGenEvents.prototype.addListener = function addListener( eventName , fn , options )
-{
-	var listener = {} , newListenerListeners ;
-	
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-	
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".addListener(): argument #0 should be a non-empty string" ) ; }
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
-	listener.fn = fn || options.fn ;
-	listener.id = options.id !== undefined ? options.id : listener.fn ;
-	listener.once = !! options.once ;
-	listener.async = !! options.async ;
-	listener.eventObject = !! options.eventObject ;
-	listener.nice = options.nice !== undefined ? Math.floor( options.nice ) : NextGenEvents.SYNC ;
-	listener.context = typeof options.context === 'string' ? options.context : null ;
-	
-	if ( typeof listener.fn !== 'function' )
-	{
-		throw new TypeError( ".addListener(): a function or an object with a 'fn' property which value is a function should be provided" ) ;
-	}
-	
-	// Implicit context creation
-	if ( listener.context && typeof listener.context === 'string' && ! this.__ngev.contexts[ listener.context ] )
-	{
-		this.addListenerContext( listener.context ) ;
-	}
-	
-	// Note: 'newListener' and 'removeListener' event return an array of listener, but not the event name.
-	// So the event's name can be retrieved in the listener itself.
-	listener.event = eventName ;
-	
-	if ( this.__ngev.listeners.newListener.length )
-	{
-		// Extra care should be taken with the 'newListener' event, we should avoid recursion
-		// in the case that eventName === 'newListener', but inside a 'newListener' listener,
-		// .listenerCount() should report correctly
-		newListenerListeners = this.__ngev.listeners.newListener.slice() ;
-		
-		this.__ngev.listeners[ eventName ].push( listener ) ;
-		
-		// Return an array, because one day, .addListener() may support multiple event addition at once,
-		// e.g.: .addListener( { request: onRequest, close: onClose, error: onError } ) ;
-		NextGenEvents.emitEvent( {
-			emitter: this ,
-			name: 'newListener' ,
-			args: [ [ listener ] ] ,
-			listeners: newListenerListeners
-		} ) ;
-		
-		if ( this.__ngev.states[ eventName ] ) { NextGenEvents.emitToOneListener( this.__ngev.states[ eventName ] , listener ) ; }
-		
-		return this ;
-	}
-	
-	this.__ngev.listeners[ eventName ].push( listener ) ;
-	
-	if ( this.__ngev.states[ eventName ] ) { NextGenEvents.emitToOneListener( this.__ngev.states[ eventName ] , listener ) ; }
-	
-	return this ;
-} ;
-
-NextGenEvents.prototype.on = NextGenEvents.prototype.addListener ;
-
-
-
-// Shortcut
-// .once( eventName , [fn] , [options] )
-NextGenEvents.prototype.once = function once( eventName , fn , options )
-{
-	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
-	else if ( options && typeof options === 'object' ) { options.once = true ; }
-	else { options = { once: true } ; }
-	
-	return this.addListener( eventName , fn , options ) ;
-} ;
-
-
-
-NextGenEvents.prototype.removeListener = function removeListener( eventName , id )
-{
-	var i , length , newListeners = [] , removedListeners = [] ;
-	
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeListener(): argument #0 should be a non-empty string" ) ; }
-	
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-	
-	length = this.__ngev.listeners[ eventName ].length ;
-	
-	// It's probably faster to create a new array of listeners
-	for ( i = 0 ; i < length ; i ++ )
-	{
-		if ( this.__ngev.listeners[ eventName ][ i ].id === id )
-		{
-			removedListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
-		}
-		else
-		{
-			newListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
-		}
-	}
-	
-	this.__ngev.listeners[ eventName ] = newListeners ;
-	
-	if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
-	{
-		this.emit( 'removeListener' , removedListeners ) ;
-	}
-	
-	return this ;
-} ;
-
-NextGenEvents.prototype.off = NextGenEvents.prototype.removeListener ;
-
-
-
-NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventName )
-{
-	var removedListeners ;
-	
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
-	if ( eventName )
-	{
-		// Remove all listeners for a particular event
-		
-		if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeAllListeners(): argument #0 should be undefined or a non-empty string" ) ; }
-		
-		if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-		
-		removedListeners = this.__ngev.listeners[ eventName ] ;
-		this.__ngev.listeners[ eventName ] = [] ;
-		
-		if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
-		{
-			this.emit( 'removeListener' , removedListeners ) ;
-		}
-	}
-	else
-	{
-		// Remove all listeners for any events
-		// 'removeListener' listeners cannot be triggered: they are already deleted
-		this.__ngev.listeners = {} ;
-	}
-	
-	return this ;
-} ;
-
-
-
-NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , context )
-{
-	var returnValue , serial , listenerCallback ;
-	
-	if ( event.interrupt ) { return ; }
-	
-	if ( listener.async )
-	{
-		//serial = context && context.serial ;
-		if ( context )
-		{
-			serial = context.serial ;
-			context.ready = ! serial ;
-		}
-		
-		listenerCallback = function( arg ) {
-			
-			event.listenersDone ++ ;
-			
-			// Async interrupt
-			if ( arg && event.emitter.__ngev.interruptible && ! event.interrupt && event.name !== 'interrupt' )
-			{
-				event.interrupt = arg ;
-				
-				if ( event.callback )
-				{
-					event.callback( event.interrupt , event ) ;
-					delete event.callback ;
-				}
-				
-				event.emitter.emit( 'interrupt' , event.interrupt ) ;
-			}
-			else if ( event.listenersDone >= event.listeners.length && event.callback )
-			{
-				event.callback( undefined , event ) ;
-				delete event.callback ;
-			}
-			
-			// Process the queue if serialized
-			if ( serial ) { NextGenEvents.processQueue.call( event.emitter , listener.context , true ) ; }
-			
-		} ;
-		
-		if ( listener.eventObject ) { listener.fn( event , listenerCallback ) ; }
-		else { returnValue = listener.fn.apply( undefined , event.args.concat( listenerCallback ) ) ; }
-	}
-	else
-	{
-		if ( listener.eventObject ) { listener.fn( event ) ; }
-		else { returnValue = listener.fn.apply( undefined , event.args ) ; }
-		
-		event.listenersDone ++ ;
-	}
-	
-	// Interrupt if non-falsy return value, if the emitter is interruptible, not already interrupted (emit once),
-	// and not within an 'interrupt' event.
-	if ( returnValue && event.emitter.__ngev.interruptible && ! event.interrupt && event.name !== 'interrupt' )
-	{
-		event.interrupt = returnValue ;
-		
-		if ( event.callback )
-		{
-			event.callback( event.interrupt , event ) ;
-			delete event.callback ;
-		}
-		
-		event.emitter.emit( 'interrupt' , event.interrupt ) ;
-	}
-	else if ( event.listenersDone >= event.listeners.length && event.callback )
-	{
-		event.callback( undefined , event ) ;
-		delete event.callback ;
-	}
-} ;
-
-
-
-// A unique event ID
-var nextEventId = 0 ;
-
-
-
-/*
-	emit( [nice] , eventName , [arg1] , [arg2] , [...] , [emitCallback] )
-*/
-NextGenEvents.prototype.emit = function emit()
-{
-	var event ;
-	
-	event = { emitter: this } ;
-	
-	// Arguments handling
-	if ( typeof arguments[ 0 ] === 'number' )
-	{
-		event.nice = Math.floor( arguments[ 0 ] ) ;
-		event.name = arguments[ 1 ] ;
-		if ( ! event.name || typeof event.name !== 'string' ) { throw new TypeError( ".emit(): when argument #0 is a number, argument #1 should be a non-empty string" ) ; }
-		
-		if ( typeof arguments[ arguments.length - 1 ] === 'function' )
-		{
-			event.callback = arguments[ arguments.length - 1 ] ;
-			event.args = Array.prototype.slice.call( arguments , 2 , -1 ) ;
-		}
-		else
-		{
-			event.args = Array.prototype.slice.call( arguments , 2 ) ;
-		}
-	}
-	else
-	{
-		//event.nice = this.__ngev.nice ;
-		event.name = arguments[ 0 ] ;
-		if ( ! event.name || typeof event.name !== 'string' ) { throw new TypeError( ".emit(): argument #0 should be an number or a non-empty string" ) ; }
-		event.args = Array.prototype.slice.call( arguments , 1 ) ;
-		
-		if ( typeof arguments[ arguments.length - 1 ] === 'function' )
-		{
-			event.callback = arguments[ arguments.length - 1 ] ;
-			event.args = Array.prototype.slice.call( arguments , 1 , -1 ) ;
-		}
-		else
-		{
-			event.args = Array.prototype.slice.call( arguments , 1 ) ;
-		}
-	}
-	
-	return NextGenEvents.emitEvent( event ) ;
-} ;
-
-
-
-/*
-	At this stage, 'event' should be an object having those properties:
-		* emitter: the event emitter
-		* name: the event name
-		* args: array, the arguments of the event
-		* nice: (optional) nice value
-		* callback: (optional) a callback for emit
-		* listeners: (optional) override the listeners array stored in __ngev
-*/
-NextGenEvents.emitEvent = function emitEvent( event )
-{
-	var self = event.emitter ,
-		i , iMax , count = 0 , state , removedListeners ;
-	
-	if ( ! self.__ngev ) { NextGenEvents.init.call( self ) ; }
-	
-	state = self.__ngev.states[ event.name ] ;
-	
-	// This is a state event, register it now!
-	if ( state !== undefined )
-	{
-		
-		if ( state && event.args.length === state.args.length &&
-			event.args.every( function( arg , index ) { return arg === state.args[ index ] ; } ) )
-		{
-			// The emitter is already in this exact state, skip it now!
-			return ;
-		}
-		
-		// Unset all states of that group
-		self.__ngev.stateGroups[ event.name ].forEach( function( eventName ) {
-			self.__ngev.states[ eventName ] = null ;
-		} ) ;
-		
-		self.__ngev.states[ event.name ] = event ;
-	}
-	
-	if ( ! self.__ngev.listeners[ event.name ] ) { self.__ngev.listeners[ event.name ] = [] ; }
-	
-	event.id = nextEventId ++ ;
-	event.listenersDone = 0 ;
-	event.once = !! event.once ;
-	
-	if ( event.nice === undefined || event.nice === null ) { event.nice = self.__ngev.nice ; }
-	
-	// Trouble arise when a listener is removed from another listener, while we are still in the loop.
-	// So we have to COPY the listener array right now!
-	if ( ! event.listeners ) { event.listeners = self.__ngev.listeners[ event.name ].slice() ; }
-	
-	// Increment self.__ngev.recursion
-	self.__ngev.recursion ++ ;
-	removedListeners = [] ;
-	
-	// Emit the event to all listeners!
-	for ( i = 0 , iMax = event.listeners.length ; i < iMax ; i ++ )
-	{
-		count ++ ;
-		NextGenEvents.emitToOneListener( event , event.listeners[ i ] , removedListeners ) ;
-	}
-	
-	// Decrement recursion
-	self.__ngev.recursion -- ;
-	
-	// Emit 'removeListener' after calling listeners
-	if ( removedListeners.length && self.__ngev.listeners.removeListener.length )
-	{
-		self.emit( 'removeListener' , removedListeners ) ;
-	}
-	
-	
-	// 'error' event is a special case: it should be listened for, or it will throw an error
-	if ( ! count )
-	{
-		if ( event.name === 'error' )
-		{
-			if ( event.args[ 0 ] ) { throw event.args[ 0 ] ; }
-			else { throw Error( "Uncaught, unspecified 'error' event." ) ; }
-		}
-		
-		if ( event.callback )
-		{
-			event.callback( undefined , event ) ;
-			delete event.callback ;
-		}
-	}
-	
-	return event ;
-} ;
-
-
-
-// If removedListeners is not given, then one-time listener emit the 'removeListener' event,
-// if given: that's the caller business to do it
-NextGenEvents.emitToOneListener = function emitToOneListener( event , listener , removedListeners )
-{	
-	var self = event.emitter ,
-		context , currentNice , emitRemoveListener = false ;
-	
-	context = listener.context && self.__ngev.contexts[ listener.context ] ;
-	
-	// If the listener context is disabled...
-	if ( context && context.status === NextGenEvents.CONTEXT_DISABLED ) { return ; }
-	
-	// The nice value for this listener...
-	if ( context ) { currentNice = Math.max( event.nice , listener.nice , context.nice ) ; }
-	else { currentNice = Math.max( event.nice , listener.nice ) ; }
-	
-	
-	if ( listener.once )
-	{
-		// We should remove the current listener RIGHT NOW because of recursive .emit() issues:
-		// one listener may eventually fire this very same event synchronously during the current loop.
-		self.__ngev.listeners[ event.name ] = self.__ngev.listeners[ event.name ].filter(
-			NextGenEvents.filterOutCallback.bind( undefined , listener )
-		) ;
-		
-		if ( removedListeners ) { removedListeners.push( listener ) ; }
-		else { emitRemoveListener = true ; }
-	}
-	
-	if ( context && ( context.status === NextGenEvents.CONTEXT_QUEUED || ! context.ready ) )
-	{
-		// Almost all works should be done by .emit(), and little few should be done by .processQueue()
-		context.queue.push( { event: event , listener: listener , nice: currentNice } ) ;
-	}
-	else
-	{
-		try {
-			if ( currentNice < 0 )
-			{
-				if ( self.__ngev.recursion >= - currentNice )
-				{
-					setImmediate( NextGenEvents.listenerWrapper.bind( self , listener , event , context ) ) ;
-				}
-				else
-				{
-					NextGenEvents.listenerWrapper.call( self , listener , event , context ) ;
-				}
-			}
-			else
-			{
-				setTimeout( NextGenEvents.listenerWrapper.bind( self , listener , event , context ) , currentNice ) ;
-			}
-		}
-		catch ( error ) {
-			// Catch error, just to decrement self.__ngev.recursion, re-throw after that...
-			self.__ngev.recursion -- ;
-			throw error ;
-		}
-	}
-	
-	// Emit 'removeListener' after calling the listener
-	if ( emitRemoveListener && self.__ngev.listeners.removeListener.length )
-	{
-		self.emit( 'removeListener' , [ listener ] ) ;
-	}
-} ;
-
-
-
-NextGenEvents.prototype.listeners = function listeners( eventName )
-{
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listeners(): argument #0 should be a non-empty string" ) ; }
-	
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-	
-	// Do not return the array, shallow copy it
-	return this.__ngev.listeners[ eventName ].slice() ;
-} ;
-
-
-
-NextGenEvents.listenerCount = function( emitter , eventName )
-{
-	if ( ! emitter || ! ( emitter instanceof NextGenEvents ) ) { throw new TypeError( ".listenerCount(): argument #0 should be an instance of NextGenEvents" ) ; }
-	return emitter.listenerCount( eventName ) ;
-} ;
-
-
-
-NextGenEvents.prototype.listenerCount = function( eventName )
-{
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listenerCount(): argument #1 should be a non-empty string" ) ; }
-	
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-	
-	return this.__ngev.listeners[ eventName ].length ;
-} ;
-
-
-
-NextGenEvents.prototype.setNice = function setNice( nice )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
-	
-	this.__ngev.nice = Math.floor( +nice || 0 ) ;
-} ;
-
-
-
-NextGenEvents.prototype.setInterruptible = function setInterruptible( value )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
-	
-	this.__ngev.interruptible = !! value ;
-} ;
-
-
-
-// Make two objects sharing the same event bus
-NextGenEvents.share = function( source , target )
-{
-	if ( ! ( source instanceof NextGenEvents ) || ! ( target instanceof NextGenEvents ) )
-	{
-		throw new TypeError( 'NextGenEvents.share() arguments should be instances of NextGenEvents' ) ;
-	}
-	
-	if ( ! source.__ngev ) { NextGenEvents.init.call( source ) ; }
-	
-	Object.defineProperty( target , '__ngev' , {
-		configurable: true ,
-		value: source.__ngev
-	} ) ;
-} ;
-
-
-
-NextGenEvents.reset = function reset( emitter )
-{
-	Object.defineProperty( emitter , '__ngev' , {
-        configurable: true ,
-        value: null
-	} ) ;
-} ;
-
-
-
-// There is no such thing in NextGenEvents, however, we need to be compatible with node.js events at best
-NextGenEvents.prototype.setMaxListeners = function() {} ;
-
-// Sometime useful as a no-op callback...
-NextGenEvents.noop = function() {} ;
-
-
-
-
-
-			/* Next Gen feature: states! */
-
-
-
-// .defineStates( exclusiveState1 , [exclusiveState2] , [exclusiveState3] , ... )
-NextGenEvents.prototype.defineStates = function defineStates()
-{
-	var self = this ,
-		states = Array.prototype.slice.call( arguments ) ;
-	
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
-	states.forEach( function( state ) {
-		self.__ngev.states[ state ] = null ;
-		self.__ngev.stateGroups[ state ] = states ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.prototype.hasState = function hasState( state )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	return !! this.__ngev.states[ state ] ;
-} ;
-
-
-
-NextGenEvents.prototype.getAllStates = function getAllStates()
-{
-	var self = this ;
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	return Object.keys( this.__ngev.states ).filter( function( e ) { return self.__ngev.states[ e ] ; } ) ;
-} ;
-
-
-
-
-
-			/* Next Gen feature: groups! */
-
-
-
-NextGenEvents.groupAddListener = function groupAddListener( emitters , eventName , fn , options )
-{
-	// Manage arguments
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
-	fn = fn || options.fn ;
-	delete options.fn ;
-	
-	// Preserve the listener ID, so groupRemoveListener() will work as expected
-	options.id = options.id || fn ;
-	
-	emitters.forEach( function( emitter ) {
-		emitter.addListener( eventName , fn.bind( undefined , emitter ) , options ) ;
-	} ) ;
-} ;
-
-NextGenEvents.groupOn = NextGenEvents.groupAddListener ;
-
-
-
-// Once per emitter
-NextGenEvents.groupOnce = function groupOnce( emitters , eventName , fn , options )
-{
-	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
-	else if ( options && typeof options === 'object' ) { options.once = true ; }
-	else { options = { once: true } ; }
-	
-	return this.groupAddListener( emitters , eventName , fn , options ) ;
-} ;
-
-
-
-// Globally once, only one event could be emitted, by the first emitter to emit
-NextGenEvents.groupGlobalOnce = function groupGlobalOnce( emitters , eventName , fn , options )
-{
-	var fnWrapper , triggered = false ;
-	
-	// Manage arguments
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
-	fn = fn || options.fn ;
-	delete options.fn ;
-	
-	// Preserve the listener ID, so groupRemoveListener() will work as expected
-	options.id = options.id || fn ;
-	
-	fnWrapper = function() {
-		if ( triggered ) { return ; }
-		triggered = true ;
-		NextGenEvents.groupRemoveListener( emitters , eventName , options.id ) ;
-		fn.apply( undefined , arguments ) ;
-	} ;
-	
-	emitters.forEach( function( emitter ) {
-		emitter.once( eventName , fnWrapper.bind( undefined , emitter ) , options ) ;
-	} ) ;
-} ;
-
-
-
-// Globally once, only one event could be emitted, by the last emitter to emit
-NextGenEvents.groupGlobalOnceAll = function groupGlobalOnceAll( emitters , eventName , fn , options )
-{
-	var fnWrapper , triggered = false , count = emitters.length ;
-	
-	// Manage arguments
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
-	fn = fn || options.fn ;
-	delete options.fn ;
-	
-	// Preserve the listener ID, so groupRemoveListener() will work as expected
-	options.id = options.id || fn ;
-	
-	fnWrapper = function() {
-		if ( triggered ) { return ; }
-		if ( -- count ) { return ; }
-		
-		// So this is the last emitter...
-		
-		triggered = true ;
-		// No need to remove listeners: there are already removed anyway
-		//NextGenEvents.groupRemoveListener( emitters , eventName , options.id ) ;
-		fn.apply( undefined , arguments ) ;
-	} ;
-	
-	emitters.forEach( function( emitter ) {
-		emitter.once( eventName , fnWrapper.bind( undefined , emitter ) , options ) ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.groupRemoveListener = function groupRemoveListener( emitters , eventName , id )
-{
-	emitters.forEach( function( emitter ) {
-		emitter.removeListener( eventName , id ) ;
-	} ) ;
-} ;
-
-NextGenEvents.groupOff = NextGenEvents.groupRemoveListener ;
-
-
-
-NextGenEvents.groupRemoveAllListeners = function groupRemoveAllListeners( emitters , eventName )
-{
-	emitters.forEach( function( emitter ) {
-		emitter.removeAllListeners( eventName ) ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.groupEmit = function groupEmit( emitters )
-{
-	var eventName , nice , argStart = 2 , argEnd , args , count = emitters.length ,
-		callback , callbackWrapper , callbackTriggered = false ;
-	
-	if ( typeof arguments[ arguments.length - 1 ] === 'function' )
-	{
-		argEnd = -1 ;
-		callback = arguments[ arguments.length - 1 ] ;
-		
-		callbackWrapper = function( interruption ) {
-			if ( callbackTriggered ) { return ; }
-			
-			if ( interruption )
-			{
-				callbackTriggered = true ;
-				callback( interruption ) ;
-			}
-			else if ( ! -- count )
-			{
-				callbackTriggered = true ;
-				callback() ;
-			}
-		} ;
-	}
-	
-	if ( typeof arguments[ 1 ] === 'number' )
-	{
-		argStart = 3 ;
-		nice = typeof arguments[ 1 ] ;
-	}
-	
-	eventName = arguments[ argStart - 1 ] ;
-	args = Array.prototype.slice.call( arguments , argStart , argEnd ) ;
-	
-	emitters.forEach( function( emitter ) {
-		NextGenEvents.emitEvent( {
-			emitter: emitter ,
-			name: eventName ,
-			args: args ,
-			nice: nice ,
-			callback: callbackWrapper
-		} ) ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.groupDefineStates = function groupDefineStates( emitters )
-{
-	var args = Array.prototype.slice.call( arguments , 1 ) ;
-	
-	emitters.forEach( function( emitter ) {
-		emitter.defineStates.apply( emitter , args ) ;
-	} ) ;
-} ;
-
-
-
-
-
-			/* Next Gen feature: contexts! */
-
-
-
-NextGenEvents.CONTEXT_ENABLED = 0 ;
-NextGenEvents.CONTEXT_DISABLED = 1 ;
-NextGenEvents.CONTEXT_QUEUED = 2 ;
-
-
-
-NextGenEvents.prototype.addListenerContext = function addListenerContext( contextName , options )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".addListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
-	if ( ! this.__ngev.contexts[ contextName ] )
-	{
-		// A context IS an event emitter too!
-		this.__ngev.contexts[ contextName ] = Object.create( NextGenEvents.prototype ) ;
-		this.__ngev.contexts[ contextName ].nice = NextGenEvents.SYNC ;
-		this.__ngev.contexts[ contextName ].ready = true ;
-		this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_ENABLED ;
-		this.__ngev.contexts[ contextName ].serial = false ;
-		this.__ngev.contexts[ contextName ].queue = [] ;
-	}
-	
-	if ( options.nice !== undefined ) { this.__ngev.contexts[ contextName ].nice = Math.floor( options.nice ) ; }
-	if ( options.status !== undefined ) { this.__ngev.contexts[ contextName ].status = options.status ; }
-	if ( options.serial !== undefined ) { this.__ngev.contexts[ contextName ].serial = !! options.serial ; }
-	
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.disableListenerContext = function disableListenerContext( contextName )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".disableListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
-	this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_DISABLED ;
-	
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.enableListenerContext = function enableListenerContext( contextName )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".enableListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
-	this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_ENABLED ;
-	
-	if ( this.__ngev.contexts[ contextName ].queue.length > 0 ) { NextGenEvents.processQueue.call( this , contextName ) ; }
-	
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.queueListenerContext = function queueListenerContext( contextName )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".queueListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
-	this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_QUEUED ;
-	
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.serializeListenerContext = function serializeListenerContext( contextName , value )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".serializeListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
-	this.__ngev.contexts[ contextName ].serial = value === undefined ? true : !! value ;
-	
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.setListenerContextNice = function setListenerContextNice( contextName , nice )
-{
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".setListenerContextNice(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-	
-	this.__ngev.contexts[ contextName ].nice = Math.floor( nice ) ;
-	
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.destroyListenerContext = function destroyListenerContext( contextName )
-{
-	var i , length , eventName , newListeners , removedListeners = [] ;
-	
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".disableListenerContext(): argument #0 should be a non-empty string" ) ; }
-	
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	
-	// We don't care if a context actually exists, all listeners tied to that contextName will be removed
-	
-	for ( eventName in this.__ngev.listeners )
-	{
-		newListeners = null ;
-		length = this.__ngev.listeners[ eventName ].length ;
-		
-		for ( i = 0 ; i < length ; i ++ )
-		{
-			if ( this.__ngev.listeners[ eventName ][ i ].context === contextName )
-			{
-				newListeners = [] ;
-				removedListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
-			}
-			else if ( newListeners )
-			{
-				newListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
-			}
-		}
-		
-		if ( newListeners ) { this.__ngev.listeners[ eventName ] = newListeners ; }
-	}
-	
-	if ( this.__ngev.contexts[ contextName ] ) { delete this.__ngev.contexts[ contextName ] ; }
-	
-	if ( removedListeners.length && this.__ngev.listeners.removeListener.length )
-	{
-		this.emit( 'removeListener' , removedListeners ) ;
-	}
-	
-	return this ;
-} ;
-
-
-
-// To be used with .call(), it should not pollute the prototype
-NextGenEvents.processQueue = function processQueue( contextName , isCompletionCallback )
-{
-	var context , job ;
-	
-	// The context doesn't exist anymore, so just abort now
-	if ( ! this.__ngev.contexts[ contextName ] ) { return ; }
-	
-	context = this.__ngev.contexts[ contextName ] ;
-	
-	if ( isCompletionCallback ) { context.ready = true ; }
-	
-	// Should work on serialization here
-	
-	//console.log( ">>> " , context ) ;
-	
-	// Increment recursion
-	this.__ngev.recursion ++ ;
-	
-	while ( context.ready && context.queue.length )
-	{
-		job = context.queue.shift() ;
-		
-		// This event has been interrupted, drop it now!
-		if ( job.event.interrupt ) { continue ; }
-		
-		try {
-			if ( job.nice < 0 )
-			{
-				if ( this.__ngev.recursion >= - job.nice )
-				{
-					setImmediate( NextGenEvents.listenerWrapper.bind( this , job.listener , job.event , context ) ) ;
-				}
-				else
-				{
-					NextGenEvents.listenerWrapper.call( this , job.listener , job.event , context ) ;
-				}
-			}
-			else
-			{
-				setTimeout( NextGenEvents.listenerWrapper.bind( this , job.listener , job.event , context ) , job.nice ) ;
-			}
-		}
-		catch ( error ) {
-			// Catch error, just to decrement this.__ngev.recursion, re-throw after that...
-			this.__ngev.recursion -- ;
-			throw error ;
-		}
-	}
-	
-	// Decrement recursion
-	this.__ngev.recursion -- ;
-} ;
-
-
-
-// Backup for the AsyncTryCatch
-NextGenEvents.on = NextGenEvents.prototype.on ;
-NextGenEvents.once = NextGenEvents.prototype.once ;
-NextGenEvents.off = NextGenEvents.prototype.off ;
-
-
-
-if ( global.AsyncTryCatch )
-{
-	NextGenEvents.prototype.asyncTryCatchId = global.AsyncTryCatch.NextGenEvents.length ;
-	global.AsyncTryCatch.NextGenEvents.push( NextGenEvents ) ;
-	
-	if ( global.AsyncTryCatch.substituted )
-	{
-		//console.log( 'live subsitute' ) ;
-		global.AsyncTryCatch.substitute() ;
-	}
-}
-
-
-
-// Load Proxy AT THE END (circular require)
-NextGenEvents.Proxy = require( './Proxy.js' ) ;
-
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":20,"./Proxy.js":19}],19:[function(require,module,exports){
-/*
-	Next Gen Events
-	
-	Copyright (c) 2015 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-// Create the object && export it
-function Proxy() { return Proxy.create() ; }
-module.exports = Proxy ;
-
-var NextGenEvents = require( './NextGenEvents.js' ) ;
-var MESSAGE_TYPE = 'NextGenEvents/message' ;
-
-function noop() {}
-
-
-
-Proxy.create = function create()
-{
-	var self = Object.create( Proxy.prototype , {
-		localServices: { value: {} , enumerable: true } ,
-		remoteServices: { value: {} , enumerable: true } ,
-		nextAckId: { value: 1 , writable: true , enumerable: true } ,
-	} ) ;
-	
-	return self ;
-} ;
-
-
-
-// Add a local service accessible remotely
-Proxy.prototype.addLocalService = function addLocalService( id , emitter , options )
-{
-	this.localServices[ id ] = LocalService.create( this , id , emitter , options ) ;
-	return this.localServices[ id ] ;
-} ;
-
-
-
-// Add a remote service accessible locally
-Proxy.prototype.addRemoteService = function addRemoteService( id )
-{
-	this.remoteServices[ id ] = RemoteService.create( this , id ) ;
-	return this.remoteServices[ id ] ;
-} ;
-
-
-
-// Destroy the proxy
-Proxy.prototype.destroy = function destroy()
-{
-	var self = this ;
-	
-	Object.keys( this.localServices ).forEach( function( id ) {
-		self.localServices[ id ].destroy() ;
-		delete self.localServices[ id ] ;
-	} ) ;
-	
-	Object.keys( this.remoteServices ).forEach( function( id ) {
-		self.remoteServices[ id ].destroy() ;
-		delete self.remoteServices[ id ] ;
-	} ) ;
-	
-	this.receive = this.send = noop ;
-} ;
-
-
-
-// Push an event message.
-Proxy.prototype.push = function push( message )
-{
-	if (
-		message.__type !== MESSAGE_TYPE ||
-		! message.service || typeof message.service !== 'string' ||
-		! message.event || typeof message.event !== 'string' ||
-		! message.method
-	)
-	{
-		return ;
-	}
-	
-	switch ( message.method )
-	{
-		// Those methods target a remote service
-		case 'event' :
-			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveEvent( message ) ;
-		case 'ackEmit' :
-			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveAckEmit( message ) ;
-			
-		// Those methods target a local service
-		case 'emit' :
-			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveEmit( message ) ;
-		case 'listen' :
-			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveListen( message ) ;
-		case 'ignore' :
-			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveIgnore( message ) ;
-		case 'ackEvent' :
-			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveAckEvent( message ) ;
-			
-		default:
-		 	return ;
-	}
-} ;
-
-
-
-// This is the method to receive and decode data from the other side of the communication channel, most of time another proxy.
-// In most case, this should be overwritten.
-Proxy.prototype.receive = function receive( raw )
-{
-	this.push( raw ) ;
-} ;
-
-
-
-// This is the method used to send data to the other side of the communication channel, most of time another proxy.
-// This MUST be overwritten in any case.
-Proxy.prototype.send = function send()
-{
-	throw new Error( 'The send() method of the Proxy MUST be extended/overwritten' ) ;
-} ;
-
-
-
-			/* Local Service */
-
-
-
-function LocalService( proxy , id , emitter , options ) { return LocalService.create( proxy , id , emitter , options ) ; }
-Proxy.LocalService = LocalService ;
-
-
-
-LocalService.create = function create( proxy , id , emitter , options )
-{
-	var self = Object.create( LocalService.prototype , {
-		proxy: { value: proxy , enumerable: true } ,
-		id: { value: id , enumerable: true } ,
-		emitter: { value: emitter , writable: true , enumerable: true } ,
-		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
-		events: { value: {} , enumerable: true } ,
-		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
-		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
-		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
-		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
-		destroyed: { value: false , writable: true , enumerable: true } ,
-	} ) ;
-	
-	return self ;
-} ;
-
-
-
-// Destroy a service
-LocalService.prototype.destroy = function destroy()
-{
-	var self = this ;
-	
-	Object.keys( this.events ).forEach( function( eventName ) {
-		self.emitter.off( eventName , self.events[ eventName ] ) ;
-		delete self.events[ eventName ] ;
-	} ) ;
-	
-	this.emitter = null ;
-	this.destroyed = true ;
-} ;
-
-
-
-// Remote want to emit on the local service
-LocalService.prototype.receiveEmit = function receiveEmit( message )
-{
-	if ( this.destroyed || ! this.canEmit || ( message.ack && ! this.canAck ) ) { return ; }
-	
-	var self = this ;
-	
-	var event = {
-		emitter: this.emitter ,
-		name: message.event ,
-		args: message.args || [] 
-	} ;
-	
-	if ( message.ack )
-	{
-		event.callback = function ack( interruption ) {
-			
-			self.proxy.send( {
-				__type: MESSAGE_TYPE ,
-				service: self.id ,
-				method: 'ackEmit' ,
-				ack: message.ack ,
-				event: message.event ,
-				interruption: interruption
-			} ) ;
-		} ;
-	}
-	
-	NextGenEvents.emitEvent( event ) ;
-} ;
-
-
-
-// Remote want to listen to an event of the local service
-LocalService.prototype.receiveListen = function receiveListen( message )
-{
-	if ( this.destroyed || ! this.canListen || ( message.ack && ! this.canAck ) ) { return ; }
-	
-	if ( message.ack )
-	{
-		if ( this.events[ message.event ] )
-		{
-			if ( this.events[ message.event ].ack ) { return ; }
-			
-			// There is already an event, but not featuring ack, remove that listener now
-			this.emitter.off( message.event , this.events[ message.event ] ) ;
-		}
-		
-		this.events[ message.event ] = LocalService.forwardWithAck.bind( this ) ;
-		this.events[ message.event ].ack = true ;
-		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true , async: true } ) ;
-	}
-	else
-	{
-		if ( this.events[ message.event ] )
-		{
-			if ( ! this.events[ message.event ].ack ) { return ; }
-			
-			// Remote want to downgrade:
-			// there is already an event, but featuring ack so we remove that listener now
-			this.emitter.off( message.event , this.events[ message.event ] ) ;
-		}
-		
-		this.events[ message.event ] = LocalService.forward.bind( this ) ;
-		this.events[ message.event ].ack = false ;
-		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true } ) ;
-	}
-} ;
-
-
-
-// Remote do not want to listen to that event of the local service anymore
-LocalService.prototype.receiveIgnore = function receiveIgnore( message )
-{
-	if ( this.destroyed || ! this.canListen ) { return ; }
-	
-	if ( ! this.events[ message.event ] ) { return ; }
-	
-	this.emitter.off( message.event , this.events[ message.event ] ) ;
-	this.events[ message.event ] = null ;
-} ;
-
-
-
-// 
-LocalService.prototype.receiveAckEvent = function receiveAckEvent( message )
-{
-	if (
-		this.destroyed || ! this.canListen || ! this.canAck || ! message.ack ||
-		! this.events[ message.event ] || ! this.events[ message.event ].ack
-	)
-	{
-		return ;
-	}
-	
-	this.internalEvents.emit( 'ack' , message ) ;
-} ;
-
-
-
-// Send an event from the local service to remote
-LocalService.forward = function forward( event )
-{
-	if ( this.destroyed ) { return ; }
-	
-	this.proxy.send( {
-		__type: MESSAGE_TYPE ,
-		service: this.id ,
-		method: 'event' ,
-		event: event.name ,
-		args: event.args
-	} ) ;
-} ;
-
-LocalService.forward.ack = false ;
-
-
-
-// Send an event from the local service to remote, with ACK
-LocalService.forwardWithAck = function forwardWithAck( event , callback )
-{
-	if ( this.destroyed ) { return ; }
-	
-	var self = this ;
-	
-	if ( ! event.callback )
-	{
-		// There is no emit callback, no need to ack this one
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'event' ,
-			event: event.name ,
-			args: event.args
-		} ) ;
-		
-		callback() ;
-		return ;
-	}
-	
-	var triggered = false ;
-	var ackId = this.proxy.nextAckId ++ ;
-	
-	var onAck = function onAck( message ) {
-		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
-		//if ( message.event !== event ) { return ; }	// Do we care?
-		triggered = true ;
-		self.internalEvents.off( 'ack' , onAck ) ;
-		callback() ;
-	} ;
-	
-	this.internalEvents.on( 'ack' , onAck ) ;
-	
-	this.proxy.send( {
-		__type: MESSAGE_TYPE ,
-		service: this.id ,
-		method: 'event' ,
-		event: event.name ,
-		ack: ackId ,
-		args: event.args
-	} ) ;
-} ;
-
-LocalService.forwardWithAck.ack = true ;
-
-
-
-			/* Remote Service */
-
-
-
-function RemoteService( proxy , id ) { return RemoteService.create( proxy , id ) ; }
-//RemoteService.prototype = Object.create( NextGenEvents.prototype ) ;
-//RemoteService.prototype.constructor = RemoteService ;
-Proxy.RemoteService = RemoteService ;
-
-
-
-var EVENT_NO_ACK = 1 ;
-var EVENT_ACK = 2 ;
-
-
-
-RemoteService.create = function create( proxy , id )
-{
-	var self = Object.create( RemoteService.prototype , {
-		proxy: { value: proxy , enumerable: true } ,
-		id: { value: id , enumerable: true } ,
-		// This is the emitter where everything is routed to
-		emitter: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
-		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
-		events: { value: {} , enumerable: true } ,
-		destroyed: { value: false , writable: true , enumerable: true } ,
-		
-		/*	Useless for instance, unless some kind of service capabilities discovery mechanism exists
-		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
-		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
-		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
-		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
-		*/
-	} ) ;
-	
-	return self ;
-} ;
-
-
-
-// Destroy a service
-RemoteService.prototype.destroy = function destroy()
-{
-	var self = this ;
-	this.emitter.removeAllListeners() ;
-	this.emitter = null ;
-	Object.keys( this.events ).forEach( function( eventName ) { delete self.events[ eventName ] ; } ) ;
-	this.destroyed = true ;
-} ;
-
-
-
-// Local code want to emit to remote service
-RemoteService.prototype.emit = function emit( eventName )
-{
-	if ( this.destroyed ) { return ; }
-	
-	var self = this , args , callback , ackId , triggered ;
-	
-	if ( typeof eventName === 'number' ) { throw new TypeError( 'Cannot emit with a nice value on a remote service' ) ; }
-	
-	if ( typeof arguments[ arguments.length - 1 ] !== 'function' )
-	{
-		args = Array.prototype.slice.call( arguments , 1 ) ;
-		
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'emit' ,
-			event: eventName ,
-			args: args
-		} ) ;
-		
-		return ;
-	}
-	
-	args = Array.prototype.slice.call( arguments , 1 , -1 ) ;
-	callback = arguments[ arguments.length - 1 ] ;
-	ackId = this.proxy.nextAckId ++ ;
-	triggered = false ;
-	
-	var onAck = function onAck( message ) {
-		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
-		//if ( message.event !== event ) { return ; }	// Do we care?
-		triggered = true ;
-		self.internalEvents.off( 'ack' , onAck ) ;
-		callback( message.interruption ) ;
-	} ;
-	
-	this.internalEvents.on( 'ack' , onAck ) ;
-	
-	this.proxy.send( {
-		__type: MESSAGE_TYPE ,
-		service: this.id ,
-		method: 'emit' ,
-		ack: ackId ,
-		event: eventName ,
-		args: args
-	} ) ;
-} ;
-
-
-
-// Local code want to listen to an event of remote service
-RemoteService.prototype.addListener = function addListener( eventName , fn , options )
-{
-	if ( this.destroyed ) { return ; }
-	
-	// Manage arguments the same way NextGenEvents#addListener() does
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	options.fn = fn || options.fn ;
-	
-	this.emitter.addListener( eventName , options ) ;
-	
-	// No event was added...
-	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) { return ; }
-	
-	// If the event is successfully listened to and was not remotely listened...
-	if ( options.async && this.events[ eventName ] !== EVENT_ACK )
-	{
-		// We need to listen to or upgrade this event
-		this.events[ eventName ] = EVENT_ACK ;
-		
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'listen' ,
-			ack: true ,
-			event: eventName
-		} ) ;
-	}
-	else if ( ! options.async && ! this.events[ eventName ] )
-	{
-		// We need to listen to this event
-		this.events[ eventName ] = EVENT_NO_ACK ;
-		
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'listen' ,
-			event: eventName
-		} ) ;
-	}
-} ;
-
-RemoteService.prototype.on = RemoteService.prototype.addListener ;
-
-// This is a shortcut to this.addListener()
-RemoteService.prototype.once = NextGenEvents.prototype.once ;
-
-
-
-// Local code want to ignore an event of remote service
-RemoteService.prototype.removeListener = function removeListener( eventName , id )
-{
-	if ( this.destroyed ) { return ; }
-	
-	this.emitter.removeListener( eventName , id ) ;
-	
-	// If no more listener are locally tied to with event and the event was remotely listened...
-	if (
-		( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) &&
-		this.events[ eventName ]
-	)
-	{
-		this.events[ eventName ] = 0 ;
-		
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'ignore' ,
-			event: eventName
-		} ) ;
-	}
-} ;
-
-RemoteService.prototype.off = RemoteService.prototype.removeListener ;
-
-
-
-// A remote service sent an event we are listening to, emit on the service representing the remote
-RemoteService.prototype.receiveEvent = function receiveEvent( message )
-{
-	var self = this ;
-	
-	if ( this.destroyed || ! this.events[ message.event ] ) { return ; }
-	
-	var event = {
-		emitter: this.emitter ,
-		name: message.event ,
-		args: message.args || [] 
-	} ;
-	
-	if ( message.ack )
-	{
-		event.callback = function ack() {
-			
-			self.proxy.send( {
-				__type: MESSAGE_TYPE ,
-				service: self.id ,
-				method: 'ackEvent' ,
-				ack: message.ack ,
-				event: message.event
-			} ) ;
-		} ;
-	}
-	
-	NextGenEvents.emitEvent( event ) ;
-	
-	var eventName = event.name ;
-	
-	// Here we should catch if the event is still listened to ('once' type listeners)
-	//if ( this.events[ eventName ]	) // not needed, already checked at the begining of the function
-	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length )
-	{
-		this.events[ eventName ] = 0 ;
-		
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'ignore' ,
-			event: eventName
-		} ) ;
-	}
-} ;
-
-
-
-// 
-RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message )
-{
-	if ( this.destroyed || ! message.ack || this.events[ message.event ] !== EVENT_ACK )
-	{
-		return ;
-	}
-	
-	this.internalEvents.emit( 'ack' , message ) ;
-} ;
-
-
-
-},{"./NextGenEvents.js":18}],20:[function(require,module,exports){
-module.exports={
-  "_args": [
-    [
-      "nextgen-events@0.9.9",
-      "/home/cedric/inside/github/tea-time"
-    ]
-  ],
-  "_from": "nextgen-events@0.9.9",
-  "_id": "nextgen-events@0.9.9",
-  "_inBundle": false,
-  "_integrity": "sha1-OaivxKK4RTiMV+LGu5cWcRmGo6A=",
-  "_location": "/async-kit/nextgen-events",
-  "_phantomChildren": {},
-  "_requested": {
-    "type": "version",
-    "registry": true,
-    "raw": "nextgen-events@0.9.9",
-    "name": "nextgen-events",
-    "escapedName": "nextgen-events",
-    "rawSpec": "0.9.9",
-    "saveSpec": null,
-    "fetchSpec": "0.9.9"
-  },
-  "_requiredBy": [
-    "/async-kit"
-  ],
-  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.9.9.tgz",
-  "_spec": "0.9.9",
-  "_where": "/home/cedric/inside/github/tea-time",
-  "author": {
-    "name": "Cédric Ronvel"
-  },
-  "bugs": {
-    "url": "https://github.com/cronvel/nextgen-events/issues"
-  },
-  "config": {
-    "tea-time": {
-      "coverDir": [
-        "lib"
-      ]
-    }
-  },
-  "copyright": {
-    "title": "Next-Gen Events",
-    "years": [
-      2015,
-      2016
-    ],
-    "owner": "Cédric Ronvel"
-  },
-  "dependencies": {},
-  "description": "The next generation of events handling for javascript! New: abstract away the network!",
-  "devDependencies": {
-    "browserify": "^14.3.0",
-    "expect.js": "^0.3.1",
-    "jshint": "^2.9.2",
-    "mocha": "^2.5.3",
-    "uglify-js": "^2.8.22",
-    "ws": "^2.2.3"
-  },
-  "directories": {
-    "test": "test"
-  },
-  "homepage": "https://github.com/cronvel/nextgen-events#readme",
-  "keywords": [
-    "events",
-    "async",
-    "emit",
-    "listener",
-    "context",
-    "series",
-    "serialize",
-    "namespace",
-    "proxy",
-    "network"
-  ],
-  "license": "MIT",
-  "main": "lib/NextGenEvents.js",
-  "name": "nextgen-events",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/cronvel/nextgen-events.git"
-  },
-  "scripts": {
-    "test": "mocha -R dot"
-  },
-  "version": "0.9.9"
-}
-
-},{}],21:[function(require,module,exports){
 (function (process,global){
 /*
 	Async Try-Catch
@@ -9087,7 +7329,7 @@ AsyncTryCatch.restore = function restore() {
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":22,"_process":55,"events":42}],22:[function(require,module,exports){
+},{"../package.json":19,"_process":52,"events":39}],19:[function(require,module,exports){
 module.exports={
   "_args": [
     [
@@ -9163,7 +7405,7 @@ module.exports={
   "version": "0.3.6"
 }
 
-},{}],23:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -9316,9 +7558,9 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],24:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 
-},{}],25:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -11056,7 +9298,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":23,"ieee754":47}],26:[function(require,module,exports){
+},{"base64-js":20,"ieee754":44}],23:[function(require,module,exports){
 /*!
 
  diff v3.5.0
@@ -12900,7 +11142,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ ])
 });
 ;
-},{}],27:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 (function (process){
 /*
 	Dom Kit
@@ -13461,7 +11703,7 @@ domKit.html = function html_( $element , html ) { $element.innerHTML = html ; } 
 
 
 }).call(this,require('_process'))
-},{"@cronvel/xmldom":9,"_process":55}],28:[function(require,module,exports){
+},{"@cronvel/xmldom":9,"_process":52}],25:[function(require,module,exports){
 /*
 	Doormen
 
@@ -13514,7 +11756,7 @@ AssertionError.prototype.constructor = AssertionError ;
 AssertionError.prototype.name = 'AssertionError' ;
 
 
-},{}],29:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /*
 	Doormen
 
@@ -13559,7 +11801,7 @@ SchemaError.prototype.constructor = SchemaError ;
 SchemaError.prototype.name = 'SchemaError' ;
 
 
-},{}],30:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /*
 	Doormen
 
@@ -13606,7 +11848,7 @@ ValidatorError.prototype.constructor = ValidatorError ;
 ValidatorError.prototype.name = 'ValidatorError' ;
 
 
-},{}],31:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /*
 	Doormen
 
@@ -14878,7 +13120,7 @@ assert.fail.inspect = true ;
 assert.fail.none = true ;
 
 
-},{"./AssertionError.js":28,"./isEqual.js":35,"./typeChecker.js":41,"string-kit/lib/inspect.js":64}],32:[function(require,module,exports){
+},{"./AssertionError.js":25,"./isEqual.js":32,"./typeChecker.js":38,"string-kit/lib/inspect.js":61}],29:[function(require,module,exports){
 (function (global){
 /*
 	Doormen
@@ -15699,7 +13941,7 @@ doormen.not.alike = function notAlike( left , right ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./AssertionError.js":28,"./SchemaError.js":29,"./ValidatorError.js":30,"./assert.js":31,"./expect.js":33,"./filter.js":34,"./isEqual.js":35,"./keywords.js":36,"./mask.js":37,"./sanitizer.js":38,"./schemaSchema.js":39,"./sentence.js":40,"./typeChecker.js":41,"tree-kit/lib/clone.js":74}],33:[function(require,module,exports){
+},{"./AssertionError.js":25,"./SchemaError.js":26,"./ValidatorError.js":27,"./assert.js":28,"./expect.js":30,"./filter.js":31,"./isEqual.js":32,"./keywords.js":33,"./mask.js":34,"./sanitizer.js":35,"./schemaSchema.js":36,"./sentence.js":37,"./typeChecker.js":38,"tree-kit/lib/clone.js":71}],30:[function(require,module,exports){
 /*
 	Doormen
 
@@ -15860,7 +14102,7 @@ var handler = {
 } ;
 
 
-},{"./assert.js":31}],34:[function(require,module,exports){
+},{"./assert.js":28}],31:[function(require,module,exports){
 (function (global){
 /*
 	Doormen
@@ -16083,7 +14325,7 @@ filter.notIn = function notIn( data , params , element ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./doormen.js":32}],35:[function(require,module,exports){
+},{"./doormen.js":29}],32:[function(require,module,exports){
 (function (Buffer){
 /*
 	Doormen
@@ -16243,7 +14485,7 @@ module.exports = isEqual ;
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")})
-},{"../../is-buffer/index.js":48}],36:[function(require,module,exports){
+},{"../../is-buffer/index.js":45}],33:[function(require,module,exports){
 /*
 	Doormen
 
@@ -16336,7 +14578,7 @@ module.exports = {
 	of: { expected: 'typeOrClass' , toChild: 'of' }
 } ;
 
-},{}],37:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 /*
 	Doormen
 
@@ -16510,7 +14752,7 @@ mask.check = function maskCheck( schema ) {
 
 
 
-},{}],38:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 (function (global){
 /*
 	Doormen
@@ -16781,7 +15023,7 @@ sanitizer.mongoId = function mongoId( data ) {
 } ;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./doormen.js":32,"mongodb":24,"string-kit/lib/latinize.js":66,"string-kit/lib/toTitleCase.js":71}],39:[function(require,module,exports){
+},{"./doormen.js":29,"mongodb":21,"string-kit/lib/latinize.js":63,"string-kit/lib/toTitleCase.js":68}],36:[function(require,module,exports){
 /*
 	Doormen
 
@@ -16922,7 +15164,7 @@ module.exports = schemaSchema ;
 
 
 
-},{}],40:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 /*
 	Doormen
 
@@ -17125,7 +15367,7 @@ module.exports = sentence ;
 
 
 
-},{"./doormen.js":32}],41:[function(require,module,exports){
+},{"./doormen.js":29}],38:[function(require,module,exports){
 (function (global,Buffer){
 /*
 	Doormen
@@ -17419,7 +15661,7 @@ typeChecker.mongoId = data => {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./doormen":32,"buffer":25}],42:[function(require,module,exports){
+},{"./doormen":29,"buffer":22}],39:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -17940,7 +16182,7 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],43:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 var parse = require('acorn').parse;
 var isArray = require('isarray');
 var objectKeys = require('object-keys');
@@ -18021,7 +16263,7 @@ function insertHelpers (node, parent, chunks) {
     }
 }
 
-},{"acorn":44,"foreach":46,"isarray":45,"object-keys":53}],44:[function(require,module,exports){
+},{"acorn":41,"foreach":43,"isarray":42,"object-keys":50}],41:[function(require,module,exports){
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
   typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -21628,12 +19870,12 @@ exports.nonASCIIwhitespace = nonASCIIwhitespace;
 Object.defineProperty(exports, '__esModule', { value: true });
 
 })));
-},{}],45:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],46:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 
 var hasOwn = Object.prototype.hasOwnProperty;
 var toString = Object.prototype.toString;
@@ -21657,7 +19899,7 @@ module.exports = function forEach (obj, fn, ctx) {
 };
 
 
-},{}],47:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -21743,7 +19985,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],48:[function(require,module,exports){
+},{}],45:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -21766,7 +20008,7 @@ function isSlowBuffer (obj) {
   return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
 }
 
-},{}],49:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 (function (process,global){
 /*
 	Next-Gen Events
@@ -22938,7 +21180,7 @@ NextGenEvents.Proxy = require( './Proxy.js' ) ;
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":51,"./Proxy.js":50,"_process":55}],50:[function(require,module,exports){
+},{"../package.json":48,"./Proxy.js":47,"_process":52}],47:[function(require,module,exports){
 /*
 	Next-Gen Events
 
@@ -23486,36 +21728,32 @@ RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message ) {
 
 
 
-},{"./NextGenEvents.js":49}],51:[function(require,module,exports){
+},{"./NextGenEvents.js":46}],48:[function(require,module,exports){
 module.exports={
-  "_args": [
-    [
-      "nextgen-events@0.14.4",
-      "/home/cedric/inside/github/tea-time"
-    ]
-  ],
-  "_from": "nextgen-events@0.14.4",
-  "_id": "nextgen-events@0.14.4",
+  "_from": "nextgen-events@^0.14.4",
+  "_id": "nextgen-events@0.14.5",
   "_inBundle": false,
-  "_integrity": "sha512-64eExSlaFwJ7A7sMcZ2SkSUbUKTxlKqoJ+7Ju4qGW6fMVBDDy3efGUgbbrd/+q5cI85fnCAyZOwNiMK5z0uXgQ==",
+  "_integrity": "sha512-NV7BBka95RVt0A43LTx8vCbBzJbrzZkCKPgQH42nhKk41NmMbt1VXUR9K9BzXjuVWDG2Qigt0X9tM7OWACRFDQ==",
   "_location": "/nextgen-events",
   "_phantomChildren": {},
   "_requested": {
-    "type": "version",
+    "type": "range",
     "registry": true,
-    "raw": "nextgen-events@0.14.4",
+    "raw": "nextgen-events@^0.14.4",
     "name": "nextgen-events",
     "escapedName": "nextgen-events",
-    "rawSpec": "0.14.4",
+    "rawSpec": "^0.14.4",
     "saveSpec": null,
-    "fetchSpec": "0.14.4"
+    "fetchSpec": "^0.14.4"
   },
   "_requiredBy": [
+    "#USER",
     "/",
-    "/terminal-kit"
+    "/async-kit"
   ],
-  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.14.4.tgz",
-  "_spec": "0.14.4",
+  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.14.5.tgz",
+  "_shasum": "25f8634463f0530b1e4a48e88f7930ecb70a8158",
+  "_spec": "nextgen-events@^0.14.4",
   "_where": "/home/cedric/inside/github/tea-time",
   "author": {
     "name": "Cédric Ronvel"
@@ -23523,6 +21761,7 @@ module.exports={
   "bugs": {
     "url": "https://github.com/cronvel/nextgen-events/issues"
   },
+  "bundleDependencies": false,
   "config": {
     "tea-time": {
       "coverDir": [
@@ -23539,12 +21778,12 @@ module.exports={
     "owner": "Cédric Ronvel"
   },
   "dependencies": {},
+  "deprecated": false,
   "description": "The next generation of events handling for javascript! New: abstract away the network!",
   "devDependencies": {
-    "browserify": "^14.4.0",
-    "expect.js": "^0.3.1",
+    "browserify": "^16.2.2",
     "uglify-js-es6": "^2.8.9",
-    "ws": "^3.2.0"
+    "ws": "^5.1.1"
   },
   "directories": {
     "test": "test"
@@ -23575,10 +21814,10 @@ module.exports={
   "scripts": {
     "test": "tea-time -R dot"
   },
-  "version": "0.14.4"
+  "version": "0.14.5"
 }
 
-},{}],52:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 /*
  * Copyright (C) 2007-2018 Diego Perini
  * All rights reserved.
@@ -25356,7 +23595,7 @@ module.exports={
   return Dom;
 });
 
-},{}],53:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 'use strict';
 
 // modified from https://github.com/es-shims/es5-shim
@@ -25498,7 +23737,7 @@ keysShim.shim = function shimObjectKeys() {
 
 module.exports = keysShim;
 
-},{"./isArguments":54}],54:[function(require,module,exports){
+},{"./isArguments":51}],51:[function(require,module,exports){
 'use strict';
 
 var toStr = Object.prototype.toString;
@@ -25517,7 +23756,7 @@ module.exports = function isArguments(value) {
 	return isArgs;
 };
 
-},{}],55:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -25703,7 +23942,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],56:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -26240,7 +24479,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],57:[function(require,module,exports){
+},{}],54:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -26326,7 +24565,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],58:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -26413,13 +24652,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],59:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":57,"./encode":58}],60:[function(require,module,exports){
+},{"./decode":54,"./encode":55}],57:[function(require,module,exports){
 /*
 	String Kit
 
@@ -26498,7 +24737,7 @@ module.exports = {
 
 
 
-},{}],61:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 /*
 	String Kit
 
@@ -26562,7 +24801,7 @@ camel.camelCaseToDashed = function camelCaseToDash( str ) {
 
 
 
-},{}],62:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 /*
 	String Kit
 
@@ -26670,7 +24909,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-},{}],63:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 (function (Buffer){
 /*
 	String Kit
@@ -27171,7 +25410,7 @@ exports.format.hasFormatting = function hasFormatting( str ) {
 
 
 }).call(this,require("buffer").Buffer)
-},{"./ansi.js":60,"./inspect.js":64,"buffer":25}],64:[function(require,module,exports){
+},{"./ansi.js":57,"./inspect.js":61,"buffer":22}],61:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -27766,9 +26005,9 @@ inspectStyle.html = Object.assign( {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")},require('_process'))
-},{"../../is-buffer/index.js":48,"./ansi.js":60,"./escape.js":62,"_process":55}],65:[function(require,module,exports){
+},{"../../is-buffer/index.js":45,"./ansi.js":57,"./escape.js":59,"_process":52}],62:[function(require,module,exports){
 module.exports={"߀":"0","́":""," ":" ","Ⓐ":"A","Ａ":"A","À":"A","Á":"A","Â":"A","Ầ":"A","Ấ":"A","Ẫ":"A","Ẩ":"A","Ã":"A","Ā":"A","Ă":"A","Ằ":"A","Ắ":"A","Ẵ":"A","Ẳ":"A","Ȧ":"A","Ǡ":"A","Ä":"A","Ǟ":"A","Ả":"A","Å":"A","Ǻ":"A","Ǎ":"A","Ȁ":"A","Ȃ":"A","Ạ":"A","Ậ":"A","Ặ":"A","Ḁ":"A","Ą":"A","Ⱥ":"A","Ɐ":"A","Ꜳ":"AA","Æ":"AE","Ǽ":"AE","Ǣ":"AE","Ꜵ":"AO","Ꜷ":"AU","Ꜹ":"AV","Ꜻ":"AV","Ꜽ":"AY","Ⓑ":"B","Ｂ":"B","Ḃ":"B","Ḅ":"B","Ḇ":"B","Ƀ":"B","Ɓ":"B","ｃ":"C","Ⓒ":"C","Ｃ":"C","Ꜿ":"C","Ḉ":"C","Ç":"C","Ⓓ":"D","Ｄ":"D","Ḋ":"D","Ď":"D","Ḍ":"D","Ḑ":"D","Ḓ":"D","Ḏ":"D","Đ":"D","Ɗ":"D","Ɖ":"D","ᴅ":"D","Ꝺ":"D","Ð":"Dh","Ǳ":"DZ","Ǆ":"DZ","ǲ":"Dz","ǅ":"Dz","ɛ":"E","Ⓔ":"E","Ｅ":"E","È":"E","É":"E","Ê":"E","Ề":"E","Ế":"E","Ễ":"E","Ể":"E","Ẽ":"E","Ē":"E","Ḕ":"E","Ḗ":"E","Ĕ":"E","Ė":"E","Ë":"E","Ẻ":"E","Ě":"E","Ȅ":"E","Ȇ":"E","Ẹ":"E","Ệ":"E","Ȩ":"E","Ḝ":"E","Ę":"E","Ḙ":"E","Ḛ":"E","Ɛ":"E","Ǝ":"E","ᴇ":"E","ꝼ":"F","Ⓕ":"F","Ｆ":"F","Ḟ":"F","Ƒ":"F","Ꝼ":"F","Ⓖ":"G","Ｇ":"G","Ǵ":"G","Ĝ":"G","Ḡ":"G","Ğ":"G","Ġ":"G","Ǧ":"G","Ģ":"G","Ǥ":"G","Ɠ":"G","Ꞡ":"G","Ᵹ":"G","Ꝿ":"G","ɢ":"G","Ⓗ":"H","Ｈ":"H","Ĥ":"H","Ḣ":"H","Ḧ":"H","Ȟ":"H","Ḥ":"H","Ḩ":"H","Ḫ":"H","Ħ":"H","Ⱨ":"H","Ⱶ":"H","Ɥ":"H","Ⓘ":"I","Ｉ":"I","Ì":"I","Í":"I","Î":"I","Ĩ":"I","Ī":"I","Ĭ":"I","İ":"I","Ï":"I","Ḯ":"I","Ỉ":"I","Ǐ":"I","Ȉ":"I","Ȋ":"I","Ị":"I","Į":"I","Ḭ":"I","Ɨ":"I","Ⓙ":"J","Ｊ":"J","Ĵ":"J","Ɉ":"J","ȷ":"J","Ⓚ":"K","Ｋ":"K","Ḱ":"K","Ǩ":"K","Ḳ":"K","Ķ":"K","Ḵ":"K","Ƙ":"K","Ⱪ":"K","Ꝁ":"K","Ꝃ":"K","Ꝅ":"K","Ꞣ":"K","Ⓛ":"L","Ｌ":"L","Ŀ":"L","Ĺ":"L","Ľ":"L","Ḷ":"L","Ḹ":"L","Ļ":"L","Ḽ":"L","Ḻ":"L","Ł":"L","Ƚ":"L","Ɫ":"L","Ⱡ":"L","Ꝉ":"L","Ꝇ":"L","Ꞁ":"L","Ǉ":"LJ","ǈ":"Lj","Ⓜ":"M","Ｍ":"M","Ḿ":"M","Ṁ":"M","Ṃ":"M","Ɱ":"M","Ɯ":"M","ϻ":"M","Ꞥ":"N","Ƞ":"N","Ⓝ":"N","Ｎ":"N","Ǹ":"N","Ń":"N","Ñ":"N","Ṅ":"N","Ň":"N","Ṇ":"N","Ņ":"N","Ṋ":"N","Ṉ":"N","Ɲ":"N","Ꞑ":"N","ᴎ":"N","Ǌ":"NJ","ǋ":"Nj","Ⓞ":"O","Ｏ":"O","Ò":"O","Ó":"O","Ô":"O","Ồ":"O","Ố":"O","Ỗ":"O","Ổ":"O","Õ":"O","Ṍ":"O","Ȭ":"O","Ṏ":"O","Ō":"O","Ṑ":"O","Ṓ":"O","Ŏ":"O","Ȯ":"O","Ȱ":"O","Ö":"O","Ȫ":"O","Ỏ":"O","Ő":"O","Ǒ":"O","Ȍ":"O","Ȏ":"O","Ơ":"O","Ờ":"O","Ớ":"O","Ỡ":"O","Ở":"O","Ợ":"O","Ọ":"O","Ộ":"O","Ǫ":"O","Ǭ":"O","Ø":"O","Ǿ":"O","Ɔ":"O","Ɵ":"O","Ꝋ":"O","Ꝍ":"O","Œ":"OE","Ƣ":"OI","Ꝏ":"OO","Ȣ":"OU","Ⓟ":"P","Ｐ":"P","Ṕ":"P","Ṗ":"P","Ƥ":"P","Ᵽ":"P","Ꝑ":"P","Ꝓ":"P","Ꝕ":"P","Ⓠ":"Q","Ｑ":"Q","Ꝗ":"Q","Ꝙ":"Q","Ɋ":"Q","Ⓡ":"R","Ｒ":"R","Ŕ":"R","Ṙ":"R","Ř":"R","Ȑ":"R","Ȓ":"R","Ṛ":"R","Ṝ":"R","Ŗ":"R","Ṟ":"R","Ɍ":"R","Ɽ":"R","Ꝛ":"R","Ꞧ":"R","Ꞃ":"R","Ⓢ":"S","Ｓ":"S","ẞ":"S","Ś":"S","Ṥ":"S","Ŝ":"S","Ṡ":"S","Š":"S","Ṧ":"S","Ṣ":"S","Ṩ":"S","Ș":"S","Ş":"S","Ȿ":"S","Ꞩ":"S","Ꞅ":"S","Ⓣ":"T","Ｔ":"T","Ṫ":"T","Ť":"T","Ṭ":"T","Ț":"T","Ţ":"T","Ṱ":"T","Ṯ":"T","Ŧ":"T","Ƭ":"T","Ʈ":"T","Ⱦ":"T","Ꞇ":"T","Þ":"Th","Ꜩ":"TZ","Ⓤ":"U","Ｕ":"U","Ù":"U","Ú":"U","Û":"U","Ũ":"U","Ṹ":"U","Ū":"U","Ṻ":"U","Ŭ":"U","Ü":"U","Ǜ":"U","Ǘ":"U","Ǖ":"U","Ǚ":"U","Ủ":"U","Ů":"U","Ű":"U","Ǔ":"U","Ȕ":"U","Ȗ":"U","Ư":"U","Ừ":"U","Ứ":"U","Ữ":"U","Ử":"U","Ự":"U","Ụ":"U","Ṳ":"U","Ų":"U","Ṷ":"U","Ṵ":"U","Ʉ":"U","Ⓥ":"V","Ｖ":"V","Ṽ":"V","Ṿ":"V","Ʋ":"V","Ꝟ":"V","Ʌ":"V","Ꝡ":"VY","Ⓦ":"W","Ｗ":"W","Ẁ":"W","Ẃ":"W","Ŵ":"W","Ẇ":"W","Ẅ":"W","Ẉ":"W","Ⱳ":"W","Ⓧ":"X","Ｘ":"X","Ẋ":"X","Ẍ":"X","Ⓨ":"Y","Ｙ":"Y","Ỳ":"Y","Ý":"Y","Ŷ":"Y","Ỹ":"Y","Ȳ":"Y","Ẏ":"Y","Ÿ":"Y","Ỷ":"Y","Ỵ":"Y","Ƴ":"Y","Ɏ":"Y","Ỿ":"Y","Ⓩ":"Z","Ｚ":"Z","Ź":"Z","Ẑ":"Z","Ż":"Z","Ž":"Z","Ẓ":"Z","Ẕ":"Z","Ƶ":"Z","Ȥ":"Z","Ɀ":"Z","Ⱬ":"Z","Ꝣ":"Z","ⓐ":"a","ａ":"a","ẚ":"a","à":"a","á":"a","â":"a","ầ":"a","ấ":"a","ẫ":"a","ẩ":"a","ã":"a","ā":"a","ă":"a","ằ":"a","ắ":"a","ẵ":"a","ẳ":"a","ȧ":"a","ǡ":"a","ä":"a","ǟ":"a","ả":"a","å":"a","ǻ":"a","ǎ":"a","ȁ":"a","ȃ":"a","ạ":"a","ậ":"a","ặ":"a","ḁ":"a","ą":"a","ⱥ":"a","ɐ":"a","ɑ":"a","ꜳ":"aa","æ":"ae","ǽ":"ae","ǣ":"ae","ꜵ":"ao","ꜷ":"au","ꜹ":"av","ꜻ":"av","ꜽ":"ay","ⓑ":"b","ｂ":"b","ḃ":"b","ḅ":"b","ḇ":"b","ƀ":"b","ƃ":"b","ɓ":"b","Ƃ":"b","ⓒ":"c","ć":"c","ĉ":"c","ċ":"c","č":"c","ç":"c","ḉ":"c","ƈ":"c","ȼ":"c","ꜿ":"c","ↄ":"c","C":"c","Ć":"c","Ĉ":"c","Ċ":"c","Č":"c","Ƈ":"c","Ȼ":"c","ⓓ":"d","ｄ":"d","ḋ":"d","ď":"d","ḍ":"d","ḑ":"d","ḓ":"d","ḏ":"d","đ":"d","ƌ":"d","ɖ":"d","ɗ":"d","Ƌ":"d","Ꮷ":"d","ԁ":"d","Ɦ":"d","ð":"dh","ǳ":"dz","ǆ":"dz","ⓔ":"e","ｅ":"e","è":"e","é":"e","ê":"e","ề":"e","ế":"e","ễ":"e","ể":"e","ẽ":"e","ē":"e","ḕ":"e","ḗ":"e","ĕ":"e","ė":"e","ë":"e","ẻ":"e","ě":"e","ȅ":"e","ȇ":"e","ẹ":"e","ệ":"e","ȩ":"e","ḝ":"e","ę":"e","ḙ":"e","ḛ":"e","ɇ":"e","ǝ":"e","ⓕ":"f","ｆ":"f","ḟ":"f","ƒ":"f","ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ⓖ":"g","ｇ":"g","ǵ":"g","ĝ":"g","ḡ":"g","ğ":"g","ġ":"g","ǧ":"g","ģ":"g","ǥ":"g","ɠ":"g","ꞡ":"g","ꝿ":"g","ᵹ":"g","ⓗ":"h","ｈ":"h","ĥ":"h","ḣ":"h","ḧ":"h","ȟ":"h","ḥ":"h","ḩ":"h","ḫ":"h","ẖ":"h","ħ":"h","ⱨ":"h","ⱶ":"h","ɥ":"h","ƕ":"hv","ⓘ":"i","ｉ":"i","ì":"i","í":"i","î":"i","ĩ":"i","ī":"i","ĭ":"i","ï":"i","ḯ":"i","ỉ":"i","ǐ":"i","ȉ":"i","ȋ":"i","ị":"i","į":"i","ḭ":"i","ɨ":"i","ı":"i","ⓙ":"j","ｊ":"j","ĵ":"j","ǰ":"j","ɉ":"j","ⓚ":"k","ｋ":"k","ḱ":"k","ǩ":"k","ḳ":"k","ķ":"k","ḵ":"k","ƙ":"k","ⱪ":"k","ꝁ":"k","ꝃ":"k","ꝅ":"k","ꞣ":"k","ⓛ":"l","ｌ":"l","ŀ":"l","ĺ":"l","ľ":"l","ḷ":"l","ḹ":"l","ļ":"l","ḽ":"l","ḻ":"l","ſ":"l","ł":"l","ƚ":"l","ɫ":"l","ⱡ":"l","ꝉ":"l","ꞁ":"l","ꝇ":"l","ɭ":"l","ǉ":"lj","ⓜ":"m","ｍ":"m","ḿ":"m","ṁ":"m","ṃ":"m","ɱ":"m","ɯ":"m","ⓝ":"n","ｎ":"n","ǹ":"n","ń":"n","ñ":"n","ṅ":"n","ň":"n","ṇ":"n","ņ":"n","ṋ":"n","ṉ":"n","ƞ":"n","ɲ":"n","ŉ":"n","ꞑ":"n","ꞥ":"n","ԉ":"n","ǌ":"nj","ⓞ":"o","ｏ":"o","ò":"o","ó":"o","ô":"o","ồ":"o","ố":"o","ỗ":"o","ổ":"o","õ":"o","ṍ":"o","ȭ":"o","ṏ":"o","ō":"o","ṑ":"o","ṓ":"o","ŏ":"o","ȯ":"o","ȱ":"o","ö":"o","ȫ":"o","ỏ":"o","ő":"o","ǒ":"o","ȍ":"o","ȏ":"o","ơ":"o","ờ":"o","ớ":"o","ỡ":"o","ở":"o","ợ":"o","ọ":"o","ộ":"o","ǫ":"o","ǭ":"o","ø":"o","ǿ":"o","ꝋ":"o","ꝍ":"o","ɵ":"o","ɔ":"o","ᴑ":"o","œ":"oe","ƣ":"oi","ꝏ":"oo","ȣ":"ou","ⓟ":"p","ｐ":"p","ṕ":"p","ṗ":"p","ƥ":"p","ᵽ":"p","ꝑ":"p","ꝓ":"p","ꝕ":"p","ρ":"p","ⓠ":"q","ｑ":"q","ɋ":"q","ꝗ":"q","ꝙ":"q","ⓡ":"r","ｒ":"r","ŕ":"r","ṙ":"r","ř":"r","ȑ":"r","ȓ":"r","ṛ":"r","ṝ":"r","ŗ":"r","ṟ":"r","ɍ":"r","ɽ":"r","ꝛ":"r","ꞧ":"r","ꞃ":"r","ⓢ":"s","ｓ":"s","ś":"s","ṥ":"s","ŝ":"s","ṡ":"s","š":"s","ṧ":"s","ṣ":"s","ṩ":"s","ș":"s","ş":"s","ȿ":"s","ꞩ":"s","ꞅ":"s","ẛ":"s","ʂ":"s","ß":"ss","ⓣ":"t","ｔ":"t","ṫ":"t","ẗ":"t","ť":"t","ṭ":"t","ț":"t","ţ":"t","ṱ":"t","ṯ":"t","ŧ":"t","ƭ":"t","ʈ":"t","ⱦ":"t","ꞇ":"t","þ":"th","ꜩ":"tz","ⓤ":"u","ｕ":"u","ù":"u","ú":"u","û":"u","ũ":"u","ṹ":"u","ū":"u","ṻ":"u","ŭ":"u","ü":"u","ǜ":"u","ǘ":"u","ǖ":"u","ǚ":"u","ủ":"u","ů":"u","ű":"u","ǔ":"u","ȕ":"u","ȗ":"u","ư":"u","ừ":"u","ứ":"u","ữ":"u","ử":"u","ự":"u","ụ":"u","ṳ":"u","ų":"u","ṷ":"u","ṵ":"u","ʉ":"u","ⓥ":"v","ｖ":"v","ṽ":"v","ṿ":"v","ʋ":"v","ꝟ":"v","ʌ":"v","ꝡ":"vy","ⓦ":"w","ｗ":"w","ẁ":"w","ẃ":"w","ŵ":"w","ẇ":"w","ẅ":"w","ẘ":"w","ẉ":"w","ⱳ":"w","ⓧ":"x","ｘ":"x","ẋ":"x","ẍ":"x","ⓨ":"y","ｙ":"y","ỳ":"y","ý":"y","ŷ":"y","ỹ":"y","ȳ":"y","ẏ":"y","ÿ":"y","ỷ":"y","ẙ":"y","ỵ":"y","ƴ":"y","ɏ":"y","ỿ":"y","ⓩ":"z","ｚ":"z","ź":"z","ẑ":"z","ż":"z","ž":"z","ẓ":"z","ẕ":"z","ƶ":"z","ȥ":"z","ɀ":"z","ⱬ":"z","ꝣ":"z"}
-},{}],66:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 /*
 	String Kit
 
@@ -27807,7 +26046,7 @@ module.exports = function( str ) {
 
 
 
-},{"./latinize-map.json":65}],67:[function(require,module,exports){
+},{"./latinize-map.json":62}],64:[function(require,module,exports){
 /*
 	String Kit
 
@@ -27867,7 +26106,7 @@ exports.occurenceCount = function occurenceCount( str , subStr ) {
 
 
 
-},{}],68:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 /*
 	String Kit
 
@@ -27949,7 +26188,7 @@ polyfill.repeat = function( count ) {
 
 
 
-},{}],69:[function(require,module,exports){
+},{}],66:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28006,7 +26245,7 @@ exports.regexp.array2alternatives = function array2alternatives( array ) {
 
 
 
-},{"./escape.js":62}],70:[function(require,module,exports){
+},{"./escape.js":59}],67:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28097,7 +26336,7 @@ stringKit.installPolyfills = function installPolyfills() {
 
 
 
-},{"./ansi.js":60,"./camel.js":61,"./escape.js":62,"./format.js":63,"./inspect.js":64,"./latinize.js":66,"./misc.js":67,"./polyfill.js":68,"./regexp.js":69,"./toTitleCase.js":71,"./unicode.js":72,"./wordwrap.js":73,"xregexp":24}],71:[function(require,module,exports){
+},{"./ansi.js":57,"./camel.js":58,"./escape.js":59,"./format.js":60,"./inspect.js":61,"./latinize.js":63,"./misc.js":64,"./polyfill.js":65,"./regexp.js":66,"./toTitleCase.js":68,"./unicode.js":69,"./wordwrap.js":70,"xregexp":21}],68:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28151,7 +26390,7 @@ module.exports = function toTitleCase( str , options ) {
 
 
 
-},{}],72:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28389,7 +26628,7 @@ unicode.toFullWidth = function toFullWidth( str ) {
 
 
 
-},{}],73:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28511,24 +26750,24 @@ module.exports = function wordwrap( str , width , join ) {
 
 
 
-},{"./unicode.js":72}],74:[function(require,module,exports){
+},{"./unicode.js":69}],71:[function(require,module,exports){
 /*
 	Tree Kit
-	
-	Copyright (c) 2014 - 2016 Cédric Ronvel
-	
+
+	Copyright (c) 2014 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -28546,11 +26785,10 @@ module.exports = function wordwrap( str , width , join ) {
 	Stand-alone fork of extend.js, without options.
 */
 
-module.exports = function clone( originalObject , circular )
-{
+module.exports = function clone( originalObject , circular ) {
 	// First create an empty object with
 	// same prototype of our original source
-	
+
 	var propertyIndex , descriptor , keys , current , nextSource , indexOf ,
 		copies = [ {
 			source: originalObject ,
@@ -28559,69 +26797,64 @@ module.exports = function clone( originalObject , circular )
 		cloneObject = copies[ 0 ].target ,
 		sourceReferences = [ originalObject ] ,
 		targetReferences = [ cloneObject ] ;
-	
+
 	// First in, first out
-	while ( current = copies.shift() )	// jshint ignore:line
-	{
+	while ( ( current = copies.shift() ) ) {
 		keys = Object.getOwnPropertyNames( current.source ) ;
 
-		for ( propertyIndex = 0 ; propertyIndex < keys.length ; propertyIndex ++ )
-		{
+		for ( propertyIndex = 0 ; propertyIndex < keys.length ; propertyIndex ++ ) {
 			// Save the source's descriptor
 			descriptor = Object.getOwnPropertyDescriptor( current.source , keys[ propertyIndex ] ) ;
-			
-			if ( ! descriptor.value || typeof descriptor.value !== 'object' )
-			{
+
+			if ( ! descriptor.value || typeof descriptor.value !== 'object' ) {
 				Object.defineProperty( current.target , keys[ propertyIndex ] , descriptor ) ;
 				continue ;
 			}
-			
+
 			nextSource = descriptor.value ;
 			descriptor.value = Array.isArray( nextSource ) ? [] : Object.create( Object.getPrototypeOf( nextSource ) ) ;
-			
-			if ( circular )
-			{
+
+			if ( circular ) {
 				indexOf = sourceReferences.indexOf( nextSource ) ;
-				
-				if ( indexOf !== -1 )
-				{
+
+				if ( indexOf !== -1 ) {
 					// The source is already referenced, just assign reference
 					descriptor.value = targetReferences[ indexOf ] ;
 					Object.defineProperty( current.target , keys[ propertyIndex ] , descriptor ) ;
 					continue ;
 				}
-				
+
 				sourceReferences.push( nextSource ) ;
 				targetReferences.push( descriptor.value ) ;
 			}
-			
+
 			Object.defineProperty( current.target , keys[ propertyIndex ] , descriptor ) ;
-			
+
 			copies.push( { source: nextSource , target: descriptor.value } ) ;
 		}
 	}
-	
+
 	return cloneObject ;
 } ;
 
-},{}],75:[function(require,module,exports){
+},{}],72:[function(require,module,exports){
 /*
 	Tree Kit
-	
-	Copyright (c) 2014 - 2016 Cédric Ronvel
-	
+
+	Copyright (c) 2014 - 2018 Cédric Ronvel
+
 	The MIT License (MIT)
-	
+
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
 	in the Software without restriction, including without limitation the rights
 	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 	copies of the Software, and to permit persons to whom the Software is
 	furnished to do so, subject to the following conditions:
-	
+
 	The above copyright notice and this permission notice shall be included in all
 	copies or substantial portions of the Software.
-	
+
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -28666,95 +26899,80 @@ module.exports = function clone( originalObject , circular )
 				for object whose prototype is listed
 			* whitelist: the opposite of blacklist
 */
-function extend( options , target )
-{
+function extend( options , target , ... sources ) {
 	//console.log( "\nextend():\n" , arguments ) ;
-	var i , source , newTarget = false , length = arguments.length ;
-	
-	if ( length < 3 ) { return target ; }
-	
-	var sources = Array.prototype.slice.call( arguments , 2 ) ;
-	length = sources.length ;
-	
+	var i , source , newTarget = false , length = sources.length ;
+
+	if ( ! length ) { return target ; }
+
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	
+
 	var runtime = { depth: 0 , prefix: '' } ;
-	
+
 	if ( ! options.maxDepth && options.deep && ! options.circular ) { options.maxDepth = 100 ; }
-	
+
 	if ( options.deepFunc ) { options.deep = true ; }
-	
-	if ( options.deepFilter && typeof options.deepFilter === 'object' )
-	{
+
+	if ( options.deepFilter && typeof options.deepFilter === 'object' ) {
 		if ( options.deepFilter.whitelist && ( ! Array.isArray( options.deepFilter.whitelist ) || ! options.deepFilter.whitelist.length ) ) { delete options.deepFilter.whitelist ; }
 		if ( options.deepFilter.blacklist && ( ! Array.isArray( options.deepFilter.blacklist ) || ! options.deepFilter.blacklist.length ) ) { delete options.deepFilter.blacklist ; }
 		if ( ! options.deepFilter.whitelist && ! options.deepFilter.blacklist ) { delete options.deepFilter ; }
 	}
-	
+
 	// 'flat' option force 'deep'
-	if ( options.flat )
-	{
+	if ( options.flat ) {
 		options.deep = true ;
 		options.proto = false ;
 		options.inherit = false ;
 		options.unflat = false ;
 		if ( typeof options.flat !== 'string' ) { options.flat = '.' ; }
 	}
-	
-	if ( options.unflat )
-	{
+
+	if ( options.unflat ) {
 		options.deep = false ;
 		options.proto = false ;
 		options.inherit = false ;
 		options.flat = false ;
 		if ( typeof options.unflat !== 'string' ) { options.unflat = '.' ; }
 	}
-	
+
 	// If the prototype is applied, only owned properties should be copied
 	if ( options.inherit ) { options.own = true ; options.proto = false ; }
 	else if ( options.proto ) { options.own = true ; }
-	
-	if ( ! target || ( typeof target !== 'object' && typeof target !== 'function' ) )
-	{
+
+	if ( ! target || ( typeof target !== 'object' && typeof target !== 'function' ) ) {
 		newTarget = true ;
 	}
-	
-	if ( ! options.skipRoot && ( options.inherit || options.proto ) )
-	{
-		for ( i = length - 1 ; i >= 0 ; i -- )
-		{
+
+	if ( ! options.skipRoot && ( options.inherit || options.proto ) ) {
+		for ( i = length - 1 ; i >= 0 ; i -- ) {
 			source = sources[ i ] ;
-			if ( source && ( typeof source === 'object' || typeof source === 'function' ) )
-			{
-				if ( options.inherit )
-				{
+			if ( source && ( typeof source === 'object' || typeof source === 'function' ) ) {
+				if ( options.inherit ) {
 					if ( newTarget ) { target = Object.create( source ) ; }
 					else { Object.setPrototypeOf( target , source ) ; }
 				}
-				else if ( options.proto )
-				{
+				else if ( options.proto ) {
 					if ( newTarget ) { target = Object.create( Object.getPrototypeOf( source ) ) ; }
 					else { Object.setPrototypeOf( target , Object.getPrototypeOf( source ) ) ; }
 				}
-				
+
 				break ;
 			}
 		}
 	}
-	else if ( newTarget )
-	{
+	else if ( newTarget ) {
 		target = {} ;
 	}
-	
+
 	runtime.references = { sources: [] , targets: [] } ;
-	
-	for ( i = 0 ; i < length ; i ++ )
-	{
+
+	for ( i = 0 ; i < length ; i ++ ) {
 		source = sources[ i ] ;
 		if ( ! source || ( typeof source !== 'object' && typeof source !== 'function' ) ) { continue ; }
 		extendOne( runtime , options , target , source ) ;
 	}
-	
+
 	return target ;
 }
 
@@ -28762,114 +26980,100 @@ module.exports = extend ;
 
 
 
-function extendOne( runtime , options , target , source )
-{
+function extendOne( runtime , options , target , source ) {
 	//console.log( "\nextendOne():\n" , arguments ) ;
 	//process.exit() ;
-	
+
 	var j , jmax , sourceKeys , sourceKey , sourceValue , sourceValueProto ,
 		value , sourceDescriptor , targetKey , targetPointer , path ,
 		indexOfSource = -1 ;
-	
+
 	// Max depth check
-	if ( options.maxDepth && runtime.depth > options.maxDepth )
-	{
+	if ( options.maxDepth && runtime.depth > options.maxDepth ) {
 		throw new Error( '[tree] extend(): max depth reached(' + options.maxDepth + ')' ) ;
 	}
-	
-		
-	if ( options.circular )
-	{
+
+
+	if ( options.circular ) {
 		runtime.references.sources.push( source ) ;
 		runtime.references.targets.push( target ) ;
 	}
-	
-	if ( options.own )
-	{
+
+	if ( options.own ) {
 		if ( options.nonEnum ) { sourceKeys = Object.getOwnPropertyNames( source ) ; }
 		else { sourceKeys = Object.keys( source ) ; }
 	}
 	else { sourceKeys = source ; }
-	
-	for ( sourceKey in sourceKeys )
-	{
+
+	for ( sourceKey in sourceKeys ) {
 		if ( options.own ) { sourceKey = sourceKeys[ sourceKey ] ; }
-		
+
+		// OMG, this DEPRECATED __proto__ shit is still alive and can be used to hack anything ><
+		if ( sourceKey === '__proto__' ) { continue ; }
+
 		// If descriptor is on, get it now
-		if ( options.descriptor )
-		{
+		if ( options.descriptor ) {
 			sourceDescriptor = Object.getOwnPropertyDescriptor( source , sourceKey ) ;
 			sourceValue = sourceDescriptor.value ;
 		}
-		else
-		{
+		else {
 			// We have to trigger an eventual getter only once
 			sourceValue = source[ sourceKey ] ;
 		}
-		
+
 		targetPointer = target ;
 		targetKey = runtime.prefix + sourceKey ;
-		
+
 		// Do not copy if property is a function and we don't want them
-		if ( options.nofunc && typeof sourceValue === 'function' ) { continue; }
-		
+		if ( options.nofunc && typeof sourceValue === 'function' ) { continue ; }
+
 		// 'unflat' mode computing
-		if ( options.unflat && runtime.depth === 0 )
-		{
+		if ( options.unflat && runtime.depth === 0 ) {
 			path = sourceKey.split( options.unflat ) ;
 			jmax = path.length - 1 ;
-			
-			if ( jmax )
-			{
-				for ( j = 0 ; j < jmax ; j ++ )
-				{
+
+			if ( jmax ) {
+				for ( j = 0 ; j < jmax ; j ++ ) {
 					if ( ! targetPointer[ path[ j ] ] ||
 						( typeof targetPointer[ path[ j ] ] !== 'object' &&
-							typeof targetPointer[ path[ j ] ] !== 'function' ) )
-					{
+							typeof targetPointer[ path[ j ] ] !== 'function' ) ) {
 						targetPointer[ path[ j ] ] = {} ;
 					}
-					
+
 					targetPointer = targetPointer[ path[ j ] ] ;
 				}
-				
+
 				targetKey = runtime.prefix + path[ jmax ] ;
 			}
 		}
-		
-		
-		if ( options.deep &&
+
+
+		if ( options.deep &&	// eslint-disable-line no-constant-condition
 			sourceValue &&
 			( typeof sourceValue === 'object' || ( options.deepFunc && typeof sourceValue === 'function' ) ) &&
 			( ! options.descriptor || ! sourceDescriptor.get ) &&
-			// not a condition we just cache sourceValueProto now
+			// not a condition we just cache sourceValueProto now... ok it's trashy ><
 			( ( sourceValueProto = Object.getPrototypeOf( sourceValue ) ) || true ) &&
 			( ! options.deepFilter ||
 				( ( ! options.deepFilter.whitelist || options.deepFilter.whitelist.indexOf( sourceValueProto ) !== -1 ) &&
-					( ! options.deepFilter.blacklist || options.deepFilter.blacklist.indexOf( sourceValueProto ) === -1 ) ) ) )
-		{
-			if ( options.circular )
-			{
+					( ! options.deepFilter.blacklist || options.deepFilter.blacklist.indexOf( sourceValueProto ) === -1 ) ) ) ) {
+			if ( options.circular ) {
 				indexOfSource = runtime.references.sources.indexOf( sourceValue ) ;
 			}
-			
-			if ( options.flat )
-			{
+
+			if ( options.flat ) {
 				// No circular references reconnection when in 'flat' mode
 				if ( indexOfSource >= 0 ) { continue ; }
-				
+
 				extendOne(
 					{ depth: runtime.depth + 1 , prefix: runtime.prefix + sourceKey + options.flat , references: runtime.references } ,
 					options , targetPointer , sourceValue
 				) ;
 			}
-			else
-			{
-				if ( indexOfSource >= 0 )
-				{
+			else {
+				if ( indexOfSource >= 0 ) {
 					// Circular references reconnection...
-					if ( options.descriptor )
-					{
+					if ( options.descriptor ) {
 						Object.defineProperty( targetPointer , targetKey , {
 							value: runtime.references.targets[ indexOfSource ] ,
 							enumerable: sourceDescriptor.enumerable ,
@@ -28877,23 +27081,20 @@ function extendOne( runtime , options , target , source )
 							configurable: sourceDescriptor.configurable
 						} ) ;
 					}
-					else
-					{
+					else {
 						targetPointer[ targetKey ] = runtime.references.targets[ indexOfSource ] ;
 					}
-					
+
 					continue ;
 				}
-				
-				if ( ! targetPointer[ targetKey ] || ! targetPointer.hasOwnProperty( targetKey ) || ( typeof targetPointer[ targetKey ] !== 'object' && typeof targetPointer[ targetKey ] !== 'function' ) )
-				{
+
+				if ( ! targetPointer[ targetKey ] || ! targetPointer.hasOwnProperty( targetKey ) || ( typeof targetPointer[ targetKey ] !== 'object' && typeof targetPointer[ targetKey ] !== 'function' ) ) {
 					if ( Array.isArray( sourceValue ) ) { value = [] ; }
 					else if ( options.proto ) { value = Object.create( sourceValueProto ) ; }	// jshint ignore:line
 					else if ( options.inherit ) { value = Object.create( sourceValue ) ; }
 					else { value = {} ; }
-					
-					if ( options.descriptor )
-					{
+
+					if ( options.descriptor ) {
 						Object.defineProperty( targetPointer , targetKey , {
 							value: value ,
 							enumerable: sourceDescriptor.enumerable ,
@@ -28901,26 +27102,22 @@ function extendOne( runtime , options , target , source )
 							configurable: sourceDescriptor.configurable
 						} ) ;
 					}
-					else
-					{
+					else {
 						targetPointer[ targetKey ] = value ;
 					}
 				}
-				else if ( options.proto && Object.getPrototypeOf( targetPointer[ targetKey ] ) !== sourceValueProto )
-				{
+				else if ( options.proto && Object.getPrototypeOf( targetPointer[ targetKey ] ) !== sourceValueProto ) {
 					Object.setPrototypeOf( targetPointer[ targetKey ] , sourceValueProto ) ;
 				}
-				else if ( options.inherit && Object.getPrototypeOf( targetPointer[ targetKey ] ) !== sourceValue )
-				{
+				else if ( options.inherit && Object.getPrototypeOf( targetPointer[ targetKey ] ) !== sourceValue ) {
 					Object.setPrototypeOf( targetPointer[ targetKey ] , sourceValue ) ;
 				}
-				
-				if ( options.circular )
-				{
+
+				if ( options.circular ) {
 					runtime.references.sources.push( sourceValue ) ;
 					runtime.references.targets.push( targetPointer[ targetKey ] ) ;
 				}
-				
+
 				// Recursively extends sub-object
 				extendOne(
 					{ depth: runtime.depth + 1 , prefix: '' , references: runtime.references } ,
@@ -28928,24 +27125,22 @@ function extendOne( runtime , options , target , source )
 				) ;
 			}
 		}
-		else if ( options.preserve && targetPointer[ targetKey ] !== undefined )
-		{
+		else if ( options.preserve && targetPointer[ targetKey ] !== undefined ) {
 			// Do not overwrite, and so do not delete source's properties that were not moved
 			continue ;
 		}
-		else if ( ! options.inherit )
-		{
+		else if ( ! options.inherit ) {
 			if ( options.descriptor ) { Object.defineProperty( targetPointer , targetKey , sourceDescriptor ) ; }
 			else { targetPointer[ targetKey ] = sourceValue ; }
 		}
-		
+
 		// Delete owned property of the source object
 		if ( options.move ) { delete source[ sourceKey ] ; }
 	}
 }
 
 
-},{}],76:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -29679,7 +27874,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":77,"punycode":56,"querystring":59}],77:[function(require,module,exports){
+},{"./util":74,"punycode":53,"querystring":56}],74:[function(require,module,exports){
 'use strict';
 
 module.exports = {
