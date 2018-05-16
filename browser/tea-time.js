@@ -549,6 +549,7 @@ function TeaTime( options ) {
 		slowTime: { value: options.slowTime || 75 , writable: true , enumerable: true } ,
 		suite: { value: TeaTime.createSuite() , enumerable: true } ,
 		grep: { value: Array.isArray( options.grep ) ? options.grep : [] , writable: true , enumerable: true } ,
+		igrep: { value: Array.isArray( options.igrep ) ? options.igrep : [] , writable: true , enumerable: true } ,
 		allowConsole: { value: !! options.allowConsole , writable: true , enumerable: true } ,
 		bail: { value: !! options.bail , writable: true , enumerable: true } ,
 		skipOptional: { value: !! options.skipOptional , writable: true , enumerable: true } ,
@@ -670,6 +671,21 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	for ( i = 0 , iMax = args.grep.length ; i < iMax ; i ++ ) {
 		options.grep.push( new RegExp( args.grep[ i ] , 'i' ) ) ;
 		options.sourceGrep.push( args.grep[ i ] ) ;
+	}
+
+
+	// Turn string into regexp for the "igrep" feature
+	options.igrep = [] ;
+	options.sourceIGrep = [] ;
+
+	if ( ! args.igrep ) { args.igrep = [] ; }
+	else if ( args.igrep && ! Array.isArray( args.igrep ) ) { args.igrep = [ args.igrep ] ; }
+
+	if ( args.G ) { args.igrep = args.igrep.concat( args.G ) ; }
+
+	for ( i = 0 , iMax = args.igrep.length ; i < iMax ; i ++ ) {
+		options.igrep.push( new RegExp( args.igrep[ i ] , 'i' ) ) ;
+		options.sourceIGrep.push( args.igrep[ i ] ) ;
 	}
 
 
@@ -892,7 +908,7 @@ TeaTime.prototype.runSuiteTests = function runSuiteTests( suite , depth , callba
 
 
 TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , errorFn , error ) {
-	var i , iMax ;
+	var i , iMax , testFn , data ;
 
 	for ( i = 0 , iMax = suite.length ; i < iMax ; i ++ ) {
 		if ( Array.isArray( suite[ i ] ) ) {
@@ -901,7 +917,21 @@ TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , er
 
 		this.done ++ ;
 		this.fail ++ ;
-		this.emit( 'fail' , suite[ i ].title , depth , undefined , undefined , error ) ;
+
+		testFn = suite[ i ] ;
+
+		data = {
+			title: testFn.title ,
+			type: testFn.name ,
+			optional: testFn.optional ,
+			depth: depth ,
+			fn: testFn ,
+			errorType: errorType ,
+			error: error ,
+			errorFn: errorFn
+		} ;
+
+		this.emit( 'fail' , data ) ;
 	}
 } ;
 
@@ -918,7 +948,7 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 		depth: depth ,
 		fn: testFn
 	} ;
-	
+
 	// Early exit, if the functions should be skipped
 	if ( typeof testFn !== 'function' ) {
 		this.done ++ ;
@@ -981,12 +1011,16 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 
 
 	// Async flow
-	this.runHooks( setup , depth , ( setupError ) => {
+	this.runHooks( setup , depth , ( setupError , setupResults ) => {
 
 		if ( setupError ) {
+			data.errorType = 'setup' ;
+			data.error = setupError ;
+			data.errorFn = setupResults[ setupResults.length - 1 ][ 2 ] ;
+
 			// Run teardown anyway?
 			this.runHooks( teardown , depth , ( teardownError ) => {
-				triggerCallback( setupError , undefined , undefined , 'setup' ) ;
+				triggerCallback( setupError , data ) ;
 			} ) ;
 			return ;
 		}
@@ -994,18 +1028,18 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 		this.orphanError = null ;
 
 		this.emit( 'enterTest' , data ) ;
-		
+
 		testWrapper( testFn , ( testError , time , slow ) => {
-			
+
 			data.error = testError ;
 			data.duration = time ;
 			data.slow = slow ;
-			
+
 			this.emit( 'exitTest' , data ) ;
 
 			this.runHooks( teardown , depth , ( teardownError , teardownResults ) => {
 
-				
+
 				if ( testError ) {
 					data.errorType = 'test' ;
 					data.errorFn = testFn ;
@@ -1146,6 +1180,8 @@ TeaTime.asyncTest = function asyncTest( testFn , callback ) {
 		triggerCallback( timeoutError ) ;
 	} , this.timeout ) ;
 
+	this.onceUncaughtException( uncaughtExceptionHandler ) ;
+
 	asyncTry( () => {
 		// Start coverage tracking NOW!
 		if ( this.cover ) { this.cover.start() ; }
@@ -1162,8 +1198,6 @@ TeaTime.asyncTest = function asyncTest( testFn , callback ) {
 		if ( callbackTriggered && ! badTest ) { this.orphanError = error ; }
 		triggerCallback( error ) ;
 	} ) ;
-
-	this.onceUncaughtException( uncaughtExceptionHandler ) ;
 } ;
 
 
@@ -1173,14 +1207,14 @@ TeaTime.prototype.runHooks = function runHooks( hookList , depth , callback ) {
 
 		// Sync or async?
 		var hookWrapper = hookFn.length ? TeaTime.asyncHook.bind( this ) : TeaTime.syncHook.bind( this ) ;
-		
+
 		var data = {
 			hookType: hookFn.hookType ,
 			title: hookFn.title ,
 			depth: depth ,
 			fn: hookFn
 		} ;
-		
+
 		this.emit( 'enterHook' , data ) ;
 
 		hookWrapper( hookFn , ( error ) => {
@@ -1243,6 +1277,8 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback ) {
 		callback( error ) ;
 	} ;
 
+	this.onceUncaughtException( uncaughtExceptionHandler ) ;
+
 	asyncTry( () => {
 		returnValue = hookFn( triggerCallback ) ;
 
@@ -1255,8 +1291,6 @@ TeaTime.asyncHook = function asyncHook( hookFn , callback ) {
 		if ( callbackTriggered && ! badHook ) { this.orphanError = error ; }
 		triggerCallback( error ) ;
 	} ) ;
-
-	this.onceUncaughtException( uncaughtExceptionHandler ) ;
 } ;
 
 
@@ -1322,7 +1356,7 @@ TeaTime.registerTest = function registerTest( title , fn , optional ) {
 	parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
 
 	// Filter out tests that are not relevant,
-	// each grep should either match the test title or one of the ancestor parent suite.
+	// each grep should either match the test title or anyone of the ancestor parent suite.
 	for ( i = 0 , iMax = this.grep.length ; i < iMax ; i ++ ) {
 		found = false ;
 
@@ -1333,6 +1367,16 @@ TeaTime.registerTest = function registerTest( title , fn , optional ) {
 		}
 
 		if ( ! found ) { return ; }
+	}
+
+	// Filter out tests that are not relevant,
+	// each igrep should not match the test title or anyone of the ancestor parent suite.
+	for ( i = 0 , iMax = this.igrep.length ; i < iMax ; i ++ ) {
+		if ( title.match( this.igrep[ i ] ) ) { return ; }
+
+		for ( j = 1 , jMax = this.registerStack.length ; j < jMax ; j ++ ) {
+			if ( this.registerStack[ j ].title.match( this.igrep[ i ] ) ) { return ; }
+		}
 	}
 
 	this.testCount ++ ;
@@ -1775,7 +1819,7 @@ Reporter.report = function report( data ) {
 		' fail: ' + data.fail + ( data.assertionFail ? '|' + data.assertionFail : '' ) +
 		' opt fail: ' + data.optionalFail +
 		' pending: ' + data.skip ,
-		' coverage: ' + ( typeof data.coverageRate === 'number' ? Math.round( data.coverageRate * 100 ) + '%' : 'n/a' )
+	' coverage: ' + ( typeof data.coverageRate === 'number' ? Math.round( data.coverageRate * 100 ) + '%' : 'n/a' )
 	) ;
 } ;
 
