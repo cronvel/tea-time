@@ -591,7 +591,7 @@ TeaTime.create = ( ... args ) => new TeaTime( ... args ) ;
 
 
 
-var reporterAliases = {
+TeaTime.reporterAliases = {
 	"oneline": "one-line" ,
 	"one": "one-line" ,
 	"error": "error-report" ,
@@ -649,7 +649,7 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	}
 
 	// Manage reporter aliases
-	options.reporters = options.reporters.map( ( r ) => { return reporterAliases[ r ] || r ; } ) ;
+	options.reporters = options.reporters.map( ( r ) => { return TeaTime.reporterAliases[ r ] || r ; } ) ;
 
 
 	if ( args.clientReporter ) {
@@ -739,11 +739,11 @@ TeaTime.disableConsole = function disableConsole() {
 
 
 
-TeaTime.createSuite = function createSuite( name ) {
+TeaTime.createSuite = function createSuite( title ) {
 	var suite = [] ;
 
 	Object.defineProperties( suite , {
-		name: { value: name } ,
+		title: { value: title } ,
 		parent: { value: null , writable: true } ,
 		suiteSetup: { value: [] } ,
 		suiteTeardown: { value: [] } ,
@@ -793,7 +793,16 @@ TeaTime.prototype.run = function run( callback ) {
 
 			if ( this.cover ) { coverage = this.cover.getCoverage() ; }
 
-			this.emit( 'report' , this.ok , this.fail , this.optionalFail , this.skip , coverage && coverage.rate , duration , this.assertionOk , this.assertionFail ) ;
+			this.emit( 'report' , {
+				ok: this.ok ,
+				fail: this.fail ,
+				optionalFail: this.optionalFail ,
+				skip: this.skip ,
+				assertionOk: this.assertionOk ,
+				assertionFail: this.assertionFail ,
+				coverageRate: coverage && coverage.rate ,
+				duration: duration
+			} ) ;
 
 			if ( this.fail + this.optionalFail ) { this.emit( 'errorReport' , this.errors ) ; }
 
@@ -811,10 +820,10 @@ TeaTime.prototype.run = function run( callback ) {
 
 
 TeaTime.prototype.runSuite = function runSuite( suite , depth , callback ) {
-	if ( depth ) { this.emit( 'enterSuite' , suite.name , depth - 1 ) ; }
+	if ( depth ) { this.emit( 'enterSuite' , { title: suite.title , depth: depth - 1 } ) ; }
 
 	var triggerCallback = error => {
-		if ( depth ) { this.emit( 'exitSuite' , suite.name , depth - 1 ) ; }
+		if ( depth ) { this.emit( 'exitSuite' , { title: suite.title , depth: depth - 1 } ) ; }
 		callback( error ) ;
 	} ;
 
@@ -824,7 +833,7 @@ TeaTime.prototype.runSuite = function runSuite( suite , depth , callback ) {
 			this.patchError( suiteSetupError ) ;
 
 			this.errors.push( {
-				name: suiteSetupError.hookFn.hookName + '[' + suiteSetupError.hookFn.hookType + ']' ,
+				title: suiteSetupError.hookFn.title + '[' + suiteSetupError.hookFn.hookType + ']' ,
 				type: suiteSetupError.hookFn.hookType ,
 				fn: suiteSetupError.hookFn ,
 				error: suiteSetupError
@@ -848,7 +857,7 @@ TeaTime.prototype.runSuite = function runSuite( suite , depth , callback ) {
 					this.patchError( suiteTeardownError ) ;
 
 					this.errors.push( {
-						name: suiteTeardownError.hookFn.hookName + '[' + suiteTeardownError.hookFn.hookType + ']' ,
+						title: suiteTeardownError.hookFn.title + '[' + suiteTeardownError.hookFn.hookType + ']' ,
 						type: suiteTeardownError.hookFn.hookType ,
 						fn: suiteTeardownError.hookFn ,
 						error: suiteTeardownError
@@ -892,7 +901,7 @@ TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , er
 
 		this.done ++ ;
 		this.fail ++ ;
-		this.emit( 'fail' , suite[ i ].testName , depth , undefined , undefined , error ) ;
+		this.emit( 'fail' , suite[ i ].title , depth , undefined , undefined , error ) ;
 	}
 } ;
 
@@ -902,12 +911,19 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 	// /!\ Useful?
 	this.testInProgress = testFn ;
 
-
+	var data = {
+		title: testFn.title ,
+		type: testFn.name ,
+		optional: testFn.optional ,
+		depth: depth ,
+		fn: testFn
+	} ;
+	
 	// Early exit, if the functions should be skipped
 	if ( typeof testFn !== 'function' ) {
 		this.done ++ ;
 		this.skip ++ ;
-		this.emit( 'skip' , testFn.testName , depth ) ;
+		this.emit( 'skip' , data ) ;
 		callback() ;
 		return ;
 	}
@@ -928,29 +944,29 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 
 
 	// Finishing
-	var triggerCallback = ( error , time , slow , errorType ) => {
+	var triggerCallback = ( error , data ) => {
 
 		if ( error ) {
 			this.done ++ ;
 			this.patchError( error ) ;
 
 			this.errors.push( {
-				name:
-					( error.hookFn ? error.hookFn.hookName + '[' + error.hookFn.hookType + '] ' : '' ) +
-					testFn.testName ,
-				type: errorType ,
+				title:
+					( error.hookFn ? error.hookFn.title + '[' + error.hookFn.hookType + '] ' : '' ) +
+					data.title ,
+				type: data.errorType ,
 				fn: testFn ,
-				optional: testFn.optional ,
+				optional: data.optional ,
 				error: error
 			} ) ;
 
-			if ( testFn.optional ) {
+			if ( data.optional ) {
 				this.optionalFail ++ ;
-				this.emit( 'optionalFail' , testFn.testName , depth , time , slow , error ) ;
+				this.emit( 'optionalFail' , data ) ;
 			}
 			else {
 				this.fail ++ ;
-				this.emit( 'fail' , testFn.testName , depth , time , slow , error ) ;
+				this.emit( 'fail' , data ) ;
 			}
 
 			callback( error ) ;
@@ -958,7 +974,7 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 		else {
 			this.done ++ ;
 			this.ok ++ ;
-			this.emit( 'ok' , testFn.testName , depth , time , slow ) ;
+			this.emit( 'ok' , data ) ;
 			callback() ;
 		}
 	} ;
@@ -977,23 +993,32 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 
 		this.orphanError = null ;
 
-		// Add null at the end or NextGen Event will believe that testFn is a completion callback
-		this.emit( 'enterTest' , testFn.testName , depth , testFn , null ) ;
-
+		this.emit( 'enterTest' , data ) ;
+		
 		testWrapper( testFn , ( testError , time , slow ) => {
-
-			this.emit( 'exitTest' , testFn.testName , depth , time , slow , testError ) ;
+			
+			data.error = testError ;
+			data.duration = time ;
+			data.slow = slow ;
+			
+			this.emit( 'exitTest' , data ) ;
 
 			this.runHooks( teardown , depth , ( teardownError , teardownResults ) => {
 
+				
 				if ( testError ) {
-					triggerCallback( testError , time , slow , 'test' , testFn ) ;
+					data.errorType = 'test' ;
+					data.errorFn = testFn ;
+					triggerCallback( testError , data ) ;
 				}
 				else if ( teardownError ) {
-					triggerCallback( teardownError , time , slow , 'teardown' , teardownResults[ teardownResults.length - 1 ][ 2 ] ) ;
+					data.errorType = 'teardown' ;
+					data.error = teardownError ;
+					data.errorFn = teardownResults[ teardownResults.length - 1 ][ 2 ] ;
+					triggerCallback( teardownError , data ) ;
 				}
 				else {
-					triggerCallback( undefined , time , slow ) ;
+					triggerCallback( undefined , data ) ;
 				}
 			} ) ;
 		} ) ;
@@ -1148,11 +1173,18 @@ TeaTime.prototype.runHooks = function runHooks( hookList , depth , callback ) {
 
 		// Sync or async?
 		var hookWrapper = hookFn.length ? TeaTime.asyncHook.bind( this ) : TeaTime.syncHook.bind( this ) ;
-
-		this.emit( 'enterHook' , hookFn.hookType , hookFn.hookName , depth ) ;
+		
+		var data = {
+			hookType: hookFn.hookType ,
+			title: hookFn.title ,
+			depth: depth ,
+			fn: hookFn
+		} ;
+		
+		this.emit( 'enterHook' , data ) ;
 
 		hookWrapper( hookFn , ( error ) => {
-			this.emit( 'exitHook' , hookFn.hookType , hookFn.hookName , depth ) ;
+			this.emit( 'exitHook' , data ) ;
 			if ( error ) { error.hookFn = hookFn ; }
 			foreachCallback( error ) ;
 		} ) ;
@@ -1250,14 +1282,14 @@ TeaTime.prototype.assertionFailHook = function assertionFailHook() {
 
 
 // suite(), describe(), context()
-TeaTime.registerSuite = function registerSuite( suiteName , fn ) {
-	if ( ! suiteName || typeof suiteName !== 'string' || typeof fn !== 'function' ) {
-		throw new Error( "Usage is suite( name , fn )" ) ;
+TeaTime.registerSuite = function registerSuite( title , fn ) {
+	if ( ! title || typeof title !== 'string' || typeof fn !== 'function' ) {
+		throw new Error( "Usage is suite( title , fn )" ) ;
 	}
 
 	var parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
 
-	var suite = TeaTime.createSuite( suiteName ) ;
+	var suite = TeaTime.createSuite( title ) ;
 
 	this.registerStack.push( suite ) ;
 
@@ -1280,24 +1312,24 @@ TeaTime.registerSuite = function registerSuite( suiteName , fn ) {
 
 
 // test(), it(), specify()
-TeaTime.registerTest = function registerTest( testName , fn , optional ) {
+TeaTime.registerTest = function registerTest( title , fn , optional ) {
 	var i , iMax , j , jMax , found , parentSuite ;
 
-	if ( ! testName || typeof testName !== 'string' ) {
-		throw new Error( "Usage is test( name , [fn] , [optional] )" ) ;
+	if ( ! title || typeof title !== 'string' ) {
+		throw new Error( "Usage is test( title , [fn] , [optional] )" ) ;
 	}
 
 	parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
 
 	// Filter out tests that are not relevant,
-	// each grep should either match the test name or one of the ancestor parent suite.
+	// each grep should either match the test title or one of the ancestor parent suite.
 	for ( i = 0 , iMax = this.grep.length ; i < iMax ; i ++ ) {
 		found = false ;
 
-		if ( testName.match( this.grep[ i ] ) ) { continue ; }
+		if ( title.match( this.grep[ i ] ) ) { continue ; }
 
 		for ( j = 1 , jMax = this.registerStack.length ; j < jMax ; j ++ ) {
-			if ( this.registerStack[ j ].name.match( this.grep[ i ] ) ) { found = true ; break ; }
+			if ( this.registerStack[ j ].title.match( this.grep[ i ] ) ) { found = true ; break ; }
 		}
 
 		if ( ! found ) { return ; }
@@ -1308,7 +1340,7 @@ TeaTime.registerTest = function registerTest( testName , fn , optional ) {
 	if ( typeof fn !== 'function' ) { fn = {} ; }
 
 	Object.defineProperties( fn , {
-		testName: { value: testName } ,
+		title: { value: title } ,
 		optional: { value: !! optional } ,
 		order: { value: parentSuite.length }
 	} ) ;
@@ -1319,35 +1351,35 @@ TeaTime.registerTest = function registerTest( testName , fn , optional ) {
 
 
 // test.skip(), it.skip(), specify.skip()
-TeaTime.registerSkipTest = function registerSkipTest( testName /*, fn */ ) {
-	return TeaTime.registerTest.call( this , testName ) ;
+TeaTime.registerSkipTest = function registerSkipTest( title /*, fn */ ) {
+	return TeaTime.registerTest.call( this , title ) ;
 } ;
 
 
 
 // test.next(), it.next(), specify.next()
-TeaTime.registerOptionalTest = function registerOptionalTest( testName , fn ) {
+TeaTime.registerOptionalTest = function registerOptionalTest( title , fn ) {
 	return this.skipOptional ?
-		TeaTime.registerTest.call( this , testName ) :
-		TeaTime.registerTest.call( this , testName , fn , true ) ;
+		TeaTime.registerTest.call( this , title ) :
+		TeaTime.registerTest.call( this , title , fn , true ) ;
 } ;
 
 
 
 // setup(), suiteSetup(), teardown(), suiteTeardown(), before(), beforeEach(), after(), afterEach()
-TeaTime.registerHook = function registerHook( type , hookName , fn ) {
+TeaTime.registerHook = function registerHook( type , title , fn ) {
 	var parentSuite ;
 
-	if ( typeof hookName === 'function' ) {
-		fn = hookName ;
-		hookName = undefined ;
+	if ( typeof title === 'function' ) {
+		fn = title ;
+		title = undefined ;
 	}
 	else if ( typeof fn !== 'function' ) {
-		throw new Error( "Usage is hook( [name] , fn )" ) ;
+		throw new Error( "Usage is hook( [title] , fn )" ) ;
 	}
 
 	Object.defineProperties( fn , {
-		hookName: { value: hookName || fn.name || '[no name]' } ,
+		title: { value: title || fn.name || '[no name]' } ,
 		hookType: { value: type }
 	} ) ;
 
@@ -1478,7 +1510,7 @@ function indentStyle( depth ) {
 
 
 
-var timeStyle = "color:grey;" ;
+var durationStyle = "color:grey;" ;
 var passingStyle = "color:green;" ;
 var failingStyle = "color:red;" ;
 var optionalFailingStyle = "color:brown;" ;
@@ -1499,9 +1531,9 @@ var actualStyle = "background-color:red;color:white;font-weight:bold;" ;
 
 
 
-Reporter.enterSuite = function enterSuite( suiteName , depth ) {
+Reporter.enterSuite = function enterSuite( data ) {
 	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<h4 class="tea-time-classic-reporter" style="' + indentStyle( depth ) + '">' + suiteName + '</h4>'
+		'<h4 class="tea-time-classic-reporter" style="' + indentStyle( data.depth ) + '">' + data.title + '</h4>'
 	) ;
 
 	scrollDown() ;
@@ -1509,15 +1541,15 @@ Reporter.enterSuite = function enterSuite( suiteName , depth ) {
 
 
 
-Reporter.ok = function ok( testName , depth , time , slow ) {
-	var content = '✔ ' + testName ;
+Reporter.ok = function ok( data ) {
+	var content = '✔ ' + data.title ;
 
-	if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
-	else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
-	else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	if ( ! data.slow ) { content += ' <span style="' + fastStyle + '">(' + data.duration + 'ms)</span>' ; }
+	else if ( data.slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + data.duration + 'ms)</span>' ; }
+	else { content += ' <span style="' + slowerStyle + '">(' + data.duration + 'ms)</span>' ; }
 
 	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<p class="tea-time-classic-reporter" style="' + passingStyle + indentStyle( depth ) + '">' + content + '</p>'
+		'<p class="tea-time-classic-reporter" style="' + passingStyle + indentStyle( data.depth ) + '">' + content + '</p>'
 	) ;
 
 	scrollDown() ;
@@ -1525,17 +1557,17 @@ Reporter.ok = function ok( testName , depth , time , slow ) {
 
 
 
-Reporter.fail = function fail( testName , depth , time , slow , error ) {
-	var content = '✘ ' + testName ;
+Reporter.fail = function fail( data ) {
+	var content = '✘ ' + data.title ;
 
-	if ( time !== undefined ) {
-		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
-		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
-		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	if ( data.duration !== undefined ) {
+		if ( ! data.slow ) { content += ' <span style="' + fastStyle + '">(' + data.duration + 'ms)</span>' ; }
+		else if ( data.slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + data.duration + 'ms)</span>' ; }
+		else { content += ' <span style="' + slowerStyle + '">(' + data.duration + 'ms)</span>' ; }
 	}
 
 	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<p class="tea-time-classic-reporter" style="' + failingStyle + indentStyle( depth ) + '">' + content + '</p>'
+		'<p class="tea-time-classic-reporter" style="' + failingStyle + indentStyle( data.depth ) + '">' + content + '</p>'
 	) ;
 
 	scrollDown() ;
@@ -1543,17 +1575,17 @@ Reporter.fail = function fail( testName , depth , time , slow , error ) {
 
 
 
-Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error ) {
-	var content = '✘ ' + testName ;
+Reporter.optionalFail = function optionalFail( data ) {
+	var content = '✘ ' + data.title ;
 
-	if ( time !== undefined ) {
-		if ( ! slow ) { content += ' <span style="' + fastStyle + '">(' + time + 'ms)</span>' ; }
-		else if ( slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + time + 'ms)</span>' ; }
-		else { content += ' <span style="' + slowerStyle + '">(' + time + 'ms)</span>' ; }
+	if ( data.duration !== undefined ) {
+		if ( ! data.slow ) { content += ' <span style="' + fastStyle + '">(' + data.duration + 'ms)</span>' ; }
+		else if ( data.slow === 1 ) { content += ' <span style="' + slowStyle + '">(' + data.duration + 'ms)</span>' ; }
+		else { content += ' <span style="' + slowerStyle + '">(' + data.duration + 'ms)</span>' ; }
 	}
 
 	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<p class="tea-time-classic-reporter" style="' + optionalFailingStyle + indentStyle( depth ) + '">' + content + '</p>'
+		'<p class="tea-time-classic-reporter" style="' + optionalFailingStyle + indentStyle( data.depth ) + '">' + content + '</p>'
 	) ;
 
 	scrollDown() ;
@@ -1561,11 +1593,11 @@ Reporter.optionalFail = function optionalFail( testName , depth , time , slow , 
 
 
 
-Reporter.skip = function skip( testName , depth ) {
-	var content = '· ' + testName ;
+Reporter.skip = function skip( data ) {
+	var content = '· ' + data.title ;
 
 	this.container.insertAdjacentHTML( 'beforeend' ,
-		'<p class="tea-time-classic-reporter" style="' + pendingStyle + indentStyle( depth ) + '">' + content + '</p>'
+		'<p class="tea-time-classic-reporter" style="' + pendingStyle + indentStyle( data.depth ) + '">' + content + '</p>'
 	) ;
 
 	scrollDown() ;
@@ -1573,22 +1605,22 @@ Reporter.skip = function skip( testName , depth ) {
 
 
 
-Reporter.report = function report( ok , fail , optionalFail , skip , coverageRate , time , assertionOk , assertionFail ) {
+Reporter.report = function report( data ) {
 	this.container.insertAdjacentHTML(
 		'beforeend' ,
 		'<hr />' +
-		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + ok +
-		( assertionOk ? ' (' + assertionOk + ')' : '' ) + ' passing ' +
-		( time < 2000 ?
-			'<span style="' + timeStyle + '">(' + Math.floor( time ) + 'ms)</span>' :
-			'<span style="' + timeStyle + '">(' + Math.floor( time / 1000 ) + '.' + Math.floor( time % 1000 ) + 's)</span>'
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + passingStyle + indentStyle( 1 ) + '">' + data.ok +
+		( data.assertionOk ? '|' + data.assertionOk : '' ) + ' passing ' +
+		( data.duration < 2000 ?
+			'<span style="' + durationStyle + '">(' + Math.floor( data.duration ) + 'ms)</span>' :
+			'<span style="' + durationStyle + '">(' + Math.floor( data.duration / 1000 ) + '.' + Math.floor( data.duration % 1000 ) + 's)</span>'
 		) +
 		'</p>' +
-		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + failingStyle + indentStyle( 1 ) + '">' + fail +
-		( assertionFail ? ' (' + assertionFail + ')' : '' ) + ' failing</p>' +
-		( optionalFail ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + optionalFailingStyle + indentStyle( 1 ) + '">' + optionalFail + ' opt failing</p>' : '' ) +
-		( skip ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + skip + ' pending</p>' : '' ) +
-		( coverageRate !== undefined ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + coverageStyle + indentStyle( 1 ) + '">' + Math.round( coverageRate * 100 ) + '% coverage</p>' : '' )
+		'<p class="tea-time-classic-reporter" style="font-weight:bold;' + failingStyle + indentStyle( 1 ) + '">' + data.fail +
+		( data.assertionFail ? '|' + data.assertionFail : '' ) + ' failing</p>' +
+		( data.optionalFail ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + optionalFailingStyle + indentStyle( 1 ) + '">' + data.optionalFail + ' opt failing</p>' : '' ) +
+		( data.skip ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + pendingStyle + indentStyle( 1 ) + '">' + data.skip + ' pending</p>' : '' ) +
+		( data.coverageRate !== undefined ? '<p class="tea-time-classic-reporter" style="font-weight:bold;' + data.coverageStyle + indentStyle( 1 ) + '">' + Math.round( data.coverageRate * 100 ) + '% coverage</p>' : '' )
 	) ;
 
 	scrollDown() ;
@@ -1714,33 +1746,36 @@ module.exports = Reporter ;
 
 
 
-Reporter.ok = function ok( testName , depth , time , slow ) {
-	console.log( 'OK:' , testName , '(' + time + ')' ) ;
+Reporter.ok = function ok( data ) {
+	console.log( 'OK:' , data.title , '(' + data.duration + ')' ) ;
 } ;
 
 
 
-Reporter.fail = function fail( testName , depth , time , slow , error ) {
-	console.log( 'Fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
+Reporter.fail = function fail( data ) {
+	console.log( 'Fail:' , data.title , data.duration !== undefined ? '(' + data.duration + ')' : '' ) ;
 } ;
 
 
 
-Reporter.optionalFail = function optionalFail( testName , depth , time , slow , error ) {
-	console.log( 'Opt fail:' , testName , time !== undefined ? '(' + time + ')' : '' ) ;
+Reporter.optionalFail = function optionalFail( data ) {
+	console.log( 'Opt fail:' , data.title , data.duration !== undefined ? '(' + data.duration + ')' : '' ) ;
 } ;
 
 
 
-Reporter.skip = function skip( testName , depth ) {
-	console.log( 'Pending:' , testName ) ;
+Reporter.skip = function skip( data ) {
+	console.log( 'Pending:' , data.title ) ;
 } ;
 
 
 
-Reporter.report = function report( ok , fail , optionalFail , skip , coverageRate ) {
-	console.log( 'Report -- ok:' , ok , ' fail:' , fail , ' opt fail:' , optionalFail , ' pending:' , skip ,
-		' coverage:' , coverageRate !== undefined ? Math.round( coverageRate * 100 ) + '%' : 'n/a'
+Reporter.report = function report( data ) {
+	console.log( 'Report -- ok: ' + data.ok + ( data.assertionOk ? '|' + data.assertionOk : '' ) +
+		' fail: ' + data.fail + ( data.assertionFail ? '|' + data.assertionFail : '' ) +
+		' opt fail: ' + data.optionalFail +
+		' pending: ' + data.skip ,
+		' coverage: ' + ( typeof data.coverageRate === 'number' ? Math.round( data.coverageRate * 100 ) + '%' : 'n/a' )
 	) ;
 } ;
 
@@ -1797,18 +1832,11 @@ function Reporter( teaTime , self ) {
 	self.teaTime.on( 'fail' , Reporter.forward.bind( self , 'fail' ) ) ;
 	self.teaTime.on( 'optionalFail' , Reporter.forward.bind( self , 'optionalFail' ) ) ;
 	self.teaTime.on( 'skip' , Reporter.forward.bind( self , 'skip' ) ) ;
+	self.teaTime.on( 'assertionOk' , Reporter.forward.bind( self , 'assertionOk' ) ) ;
+	self.teaTime.on( 'assertionFail' , Reporter.forward.bind( self , 'assertionFail' ) ) ;
 	self.teaTime.on( 'report' , Reporter.forward.bind( self , 'report' ) ) ;
 	self.teaTime.on( 'errorReport' , Reporter.forward.bind( self , 'errorReport' ) ) ;
 	self.teaTime.on( 'exit' , Reporter.exit.bind( self , 'exit' ) ) ;
-
-
-	//self.teaTime.on( 'enterSuite' , Reporter.enterSuite.bind( self ) ) ;
-	//self.teaTime.on( 'ok' , Reporter.ok.bind( self ) ) ;
-	//self.teaTime.on( 'fail' , Reporter.fail.bind( self ) ) ;
-	//self.teaTime.on( 'optionalFail' , Reporter.optionalFail.bind( self ) ) ;
-	//self.teaTime.on( 'skip' , Reporter.skip.bind( self ) ) ;
-	//self.teaTime.on( 'report' , Reporter.report.bind( self ) ) ;
-	//self.teaTime.on( 'errorReport' , Reporter.errorReport.bind( self ) ) ;
 
 	return self ;
 }
@@ -1854,8 +1882,6 @@ Reporter.exit = function exit( callback ) {
 	//console.log( "Exit event received!" ) ;
 	this.ws.close() ;
 } ;
-
-
 
 
 },{}],6:[function(require,module,exports){
