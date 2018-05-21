@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "engines": {
     "node": ">=6.0.0"
   },
@@ -23,8 +23,8 @@
     "glob": "^7.1.2",
     "minimist": "^1.2.0",
     "nextgen-events": "^0.14.6",
-    "string-kit": "^0.6.17",
-    "terminal-kit": "^1.16.1",
+    "string-kit": "^0.7.3",
+    "terminal-kit": "^1.17.5",
     "tree-kit": "^0.5.27",
     "ws": "^5.1.1"
   },
@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "expect.js": "^0.3.1",
-    "seventh": "^0.7.4",
+    "seventh": "^0.7.5",
     "uglify-js-es6": "^2.8.9"
   },
   "scripts": {
