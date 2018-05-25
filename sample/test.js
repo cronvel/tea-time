@@ -101,6 +101,10 @@ describe( "Promise-returning function and async function tests" , function() {
 		return SeventhPromise.resolveTimeout( 20 ) ;
 	} ) ;
 	
+	it( "Promise async resolve (3000ms)" , function() {
+		return SeventhPromise.resolveTimeout( 3000 ) ;
+	} ) ;
+	
 	it( "Promise async reject" , function() {
 		return SeventhPromise.reject( new Error( "Failed!" ) ) ;
 	} ) ;
