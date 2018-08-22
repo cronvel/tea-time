@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "engines": {
     "node": ">=6.0.0"
   },
@@ -18,23 +18,23 @@
     "browserify": "^16.2.2",
     "diff": "^3.5.0",
     "dom-kit": "^0.3.8",
-    "doormen": "^0.7.21",
+    "doormen": "^0.7.23",
     "falafel": "^2.1.0",
     "glob": "^7.1.2",
     "minimist": "^1.2.0",
-    "nextgen-events": "^1.0.0",
-    "string-kit": "^0.7.10",
-    "terminal-kit": "^1.17.5",
+    "nextgen-events": "^1.1.0",
+    "string-kit": "^0.8.10",
+    "terminal-kit": "^1.26.2",
     "tree-kit": "^0.5.27",
-    "ws": "^5.2.0"
+    "ws": "^6.0.0"
   },
   "optionalDependencies": {
     "freedesktop-notifications": "^1.2.2"
   },
   "devDependencies": {
     "expect.js": "^0.3.1",
-    "seventh": "^0.7.6",
-    "uglify-js-es6": "^2.8.9"
+    "seventh": "^0.7.15",
+    "uglify-es": "^3.3.9"
   },
   "scripts": {
     "test": "mocha -R dot"
