@@ -499,7 +499,7 @@ Cover.prototype.getCoverage = function getCoverage() {
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":69,"falafel":57,"fs":38}],2:[function(require,module,exports){
+},{"_process":61,"falafel":49,"fs":30}],2:[function(require,module,exports){
 (function (global){
 /*
 	Tea Time!
@@ -538,46 +538,42 @@ var asyncTryCatch = require( 'async-try-catch' ) ;
 asyncTryCatch.substitute() ;
 var asyncTry = asyncTryCatch.try ;
 
-var async = require( 'async-kit' ) ;
+var Promise = require( 'seventh' ) ;
+
 var Cover = require( './Cover.js' ) ;
 
 
 
 function TeaTime( options ) {
-	Object.defineProperties( this , {
-		timeout: { value: options.timeout || 2000 , writable: true , enumerable: true } ,
-		slowTime: { value: options.slowTime || 75 , writable: true , enumerable: true } ,
-		suite: { value: TeaTime.createSuite() , enumerable: true } ,
-		grep: { value: Array.isArray( options.grep ) ? options.grep : [] , writable: true , enumerable: true } ,
-		igrep: { value: Array.isArray( options.igrep ) ? options.igrep : [] , writable: true , enumerable: true } ,
-		allowConsole: { value: !! options.allowConsole , writable: true , enumerable: true } ,
-		bail: { value: !! options.bail , writable: true , enumerable: true } ,
-		skipOptional: { value: !! options.skipOptional , writable: true , enumerable: true } ,
-		cover: { value: options.cover && Cover.create( options.cover ) , writable: true , enumerable: true } ,
+	this.timeout = options.timeout || 2000 ;
+	this.slowTime = options.slowTime || 75 ;
+	this.suite = TeaTime.createSuite() ;
+	this.grep = Array.isArray( options.grep ) ? options.grep : [] ;
+	this.igrep = Array.isArray( options.igrep ) ? options.igrep : [] ;
+	this.allowConsole = !! options.allowConsole ;
+	this.bail = !! options.bail ;
+	this.skipOptional = !! options.skipOptional ;
+	this.cover = options.cover && Cover.create( options.cover ) ;
 
-		token: { value: options.token || null , writable: true , enumerable: true } , // for slave instance
-		acceptTokens: { value: options.acceptTokens || null , writable: true , enumerable: true } , // for master instance
+	this.token = options.token || null ; // for slave instance
+	this.acceptTokens = options.acceptTokens || null ; // for master instance
 
-		startTime: { value: 0 , writable: true , enumerable: true } ,
-		testCount: { value: 0 , writable: true , enumerable: true } ,
-		done: { value: 0 , writable: true , enumerable: true } ,
-		ok: { value: 0 , writable: true , enumerable: true } ,
-		fail: { value: 0 , writable: true , enumerable: true } ,
-		optionalFail: { value: 0 , writable: true , enumerable: true } ,
-		skip: { value: 0 , writable: true , enumerable: true } ,
-		assertionOk: { value: 0 , writable: true , enumerable: true } ,
-		assertionFail: { value: 0 , writable: true , enumerable: true } ,
-		errors: { value: [] , enumerable: true } ,
-		orphanError: { value: null , enumerable: true , writable: true } ,
+	this.startTime = 0 ;
+	this.testCount = 0 ;
+	this.done = 0 ;
+	this.ok = 0 ;
+	this.fail = 0 ;
+	this.optionalFail = 0 ;
+	this.skip = 0 ;
+	this.assertionOk = 0 ;
+	this.assertionFail = 0 ;
+	this.errors = [] ;
+	this.orphanError = null ;
 
-		microTimeout: { value: options.microTimeout , enumerable: true } ,
-		onceUncaughtException: { value: options.onceUncaughtException , enumerable: true } ,
-		offUncaughtException: { value: options.offUncaughtException , enumerable: true }
-	} ) ;
+	this.onceUncaughtException = options.onceUncaughtException ;
+	this.offUncaughtException = options.offUncaughtException ;
 
-	Object.defineProperties( this , {
-		registerStack: { value: [ this.suite ] , writable: true , enumerable: true }
-	} ) ;
+	this.registerStack = [ this.suite ] ;
 }
 
 TeaTime.prototype = Object.create( NGEvents.prototype ) ;
@@ -694,7 +690,7 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 
 
 
-TeaTime.prototype.init = function init( callback ) {
+TeaTime.prototype.init = function init() {
 	// Register to global
 	global.asyncTry = asyncTry ;
 
@@ -758,14 +754,13 @@ TeaTime.disableConsole = function disableConsole() {
 TeaTime.createSuite = function createSuite( title ) {
 	var suite = [] ;
 
-	Object.defineProperties( suite , {
-		title: { value: title } ,
-		parent: { value: null , writable: true } ,
-		suiteSetup: { value: [] } ,
-		suiteTeardown: { value: [] } ,
-		setup: { value: [] } ,
-		teardown: { value: [] }
-	} ) ;
+	suite.title = title ;
+	suite.parent = null ;
+	suite.suiteSetup = [] ;
+	suite.suiteTeardown = [] ;
+	suite.setup = [] ;
+	suite.teardown = [] ;
+	suite.order = 0 ;
 
 	return suite ;
 } ;
@@ -783,126 +778,131 @@ TeaTime.sortSuite = function sortSuite( suite ) {
 
 
 
-TeaTime.prototype.run = function run( callback ) {
-	var callbackTriggered = false ;
+TeaTime.prototype.run = async function run() {
+	var duration , coverage ;
 
 	TeaTime.sortSuite( this.suite ) ;
 
-	this.emit( 'ready' , () => {
+	// Wait for everything to be ready
+	await this.waitForEmit( 'ready' ) ;
 
-		this.emit( 'start' , this.testCount ) ;
+	this.emit( 'start' , this.testCount ) ;
 
-		var triggerCallback = () => {
-			if ( callbackTriggered ) { return ; }
-			if ( typeof callback === 'function' ) { callback() ; }
-		} ;
+	// Start coverage tracking NOW!
+	if ( this.cover ) { this.cover.start() ; }
 
-		// Start coverage tracking NOW!
-		if ( this.cover ) { this.cover.start() ; }
+	this.startTime = Date.now() ;
 
-		this.startTime = Date.now() ;
+	try {
+		await this.runSuite( this.suite , 0 ) ;
+	}
+	catch ( dontCare ) {}
 
-		this.runSuite( this.suite , 0 , () => {
+	duration = Date.now() - this.startTime ;
 
-			var duration = Date.now() - this.startTime ;
-			var coverage ;
+	if ( this.cover ) { coverage = this.cover.getCoverage() ; }
 
-			if ( this.cover ) { coverage = this.cover.getCoverage() ; }
-
-			this.emit( 'report' , {
-				ok: this.ok ,
-				fail: this.fail ,
-				optionalFail: this.optionalFail ,
-				skip: this.skip ,
-				assertionOk: this.assertionOk ,
-				assertionFail: this.assertionFail ,
-				coverageRate: coverage && coverage.rate ,
-				duration: duration
-			} ) ;
-
-			if ( this.fail + this.optionalFail ) { this.emit( 'errorReport' , this.errors ) ; }
-
-			if ( this.cover ) { this.emit( 'coverageReport' , coverage ) ; }
-
-			this.emit( 'end' ) ;
-			this.emit( 'exit' , triggerCallback ) ;
-
-			// Exit anyway after 10 seconds
-			setTimeout( triggerCallback , 10000 ) ;
-		} ) ;
+	this.emit( 'report' , {
+		ok: this.ok ,
+		fail: this.fail ,
+		optionalFail: this.optionalFail ,
+		skip: this.skip ,
+		assertionOk: this.assertionOk ,
+		assertionFail: this.assertionFail ,
+		coverageRate: coverage && coverage.rate ,
+		duration: duration
 	} ) ;
+
+	if ( this.fail + this.optionalFail ) { this.emit( 'errorReport' , this.errors ) ; }
+	if ( this.cover ) { this.emit( 'coverageReport' , coverage ) ; }
+
+	this.emit( 'end' ) ;
+
+	return Promise.timeLimit( 10000 , this.waitForEmit( 'exit' ) ) ;
 } ;
 
 
 
-TeaTime.prototype.runSuite = function runSuite( suite , depth , callback ) {
+TeaTime.prototype.runSuite = async function runSuite( suite , depth ) {
 	if ( depth ) { this.emit( 'enterSuite' , { title: suite.title , depth: depth - 1 } ) ; }
 
-	var triggerCallback = error => {
-		if ( depth ) { this.emit( 'exitSuite' , { title: suite.title , depth: depth - 1 } ) ; }
-		callback( error ) ;
-	} ;
+	// Run setup hooks
+	try {
+		await this.runHooks( suite.suiteSetup , depth ) ;
+	}
+	catch ( suiteSetupError ) {
+		this.patchError( suiteSetupError ) ;
 
-	this.runHooks( suite.suiteSetup , depth , ( suiteSetupError ) => {
-
-		if ( suiteSetupError ) {
-			this.patchError( suiteSetupError ) ;
-
-			this.errors.push( {
-				title: suiteSetupError.hookFn.title + '[' + suiteSetupError.hookFn.hookType + ']' ,
-				type: suiteSetupError.hookFn.hookType ,
-				fn: suiteSetupError.hookFn ,
-				error: suiteSetupError
-			} ) ;
-
-			this.failSuite( suite , depth , 'suiteSetup' , suiteSetupError.hookFn , suiteSetupError ) ;
-
-			// Run teardown anyway?
-			this.runHooks( suite.suiteTeardown , depth , ( suiteTeardownError ) => {
-				triggerCallback( suiteSetupError ) ;
-			} ) ;
-			return ;
-		}
-
-		this.runSuiteTests( suite , depth , ( suiteTestsError ) => {
-			this.runHooks( suite.suiteTeardown , depth , ( suiteTeardownError ) => {
-				if ( suiteTestsError ) {
-					triggerCallback( suiteTestsError ) ;
-				}
-				else if ( suiteTeardownError ) {
-					this.patchError( suiteTeardownError ) ;
-
-					this.errors.push( {
-						title: suiteTeardownError.hookFn.title + '[' + suiteTeardownError.hookFn.hookType + ']' ,
-						type: suiteTeardownError.hookFn.hookType ,
-						fn: suiteTeardownError.hookFn ,
-						error: suiteTeardownError
-					} ) ;
-
-					triggerCallback( suiteTeardownError ) ;
-				}
-				else {
-					triggerCallback() ;
-				}
-			} ) ;
+		this.errors.push( {
+			title: suiteSetupError.hookFn.title + '[' + suiteSetupError.hookFn.hookType + ']' ,
+			type: suiteSetupError.hookFn.hookType ,
+			fn: suiteSetupError.hookFn ,
+			error: suiteSetupError
 		} ) ;
-	} ) ;
+
+		this.failSuite( suite , depth , 'suiteSetup' , suiteSetupError.hookFn , suiteSetupError ) ;
+
+		// Run teardown anyway?
+		try {
+			await this.runHooks( suite.suiteTeardown , depth ) ;
+		}
+		catch ( suiteTeardownError ) {}
+
+		if ( depth ) { this.emit( 'exitSuite' , { title: suite.title , depth: depth - 1 } ) ; }
+
+		throw suiteSetupError ;
+	}
+
+	// Run tests
+	try {
+		await this.runSuiteTests( suite , depth ) ;
+	}
+	catch ( suiteTestsError ) {
+		// Run teardown
+		try {
+			await this.runHooks( suite.suiteTeardown , depth ) ;
+		}
+		catch ( suiteTeardownError ) {}
+
+		if ( depth ) { this.emit( 'exitSuite' , { title: suite.title , depth: depth - 1 } ) ; }
+		throw suiteTestsError ;
+	}
+
+	// Run teardown
+	try {
+		await this.runHooks( suite.suiteTeardown , depth ) ;
+	}
+	catch ( suiteTeardownError ) {
+		this.patchError( suiteTeardownError ) ;
+
+		this.errors.push( {
+			title: suiteTeardownError.hookFn.title + '[' + suiteTeardownError.hookFn.hookType + ']' ,
+			type: suiteTeardownError.hookFn.hookType ,
+			fn: suiteTeardownError.hookFn ,
+			error: suiteTeardownError
+		} ) ;
+
+		if ( depth ) { this.emit( 'exitSuite' , { title: suite.title , depth: depth - 1 } ) ; }
+		throw suiteTeardownError ;
+	}
 } ;
 
 
 
-TeaTime.prototype.runSuiteTests = function runSuiteTests( suite , depth , callback ) {
-	async.foreach( suite , ( item , foreachCallback ) => {
-
-		if ( Array.isArray( item ) ) {
-			this.runSuite( item , depth + 1 , foreachCallback ) ;
-			return ;
+TeaTime.prototype.runSuiteTests = async function runSuiteTests( suite , depth ) {
+	return Promise.forEach( suite , async ( item ) => {
+		try {
+			if ( Array.isArray( item ) ) {
+				await this.runSuite( item , depth + 1 ) ;
+			}
+			else {
+				await this.runTest( suite , depth , item ) ;
+			}
 		}
-
-		this.runTest( suite , depth , item , foreachCallback ) ;
-	} )
-	.fatal( this.bail )
-	.exec( callback ) ;
+		catch ( error ) {
+			if ( this.bail ) { throw error ; }
+		}
+	} ) ;
 } ;
 
 
@@ -937,7 +937,7 @@ TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , er
 
 
 
-TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback ) {
+TeaTime.prototype.runTest = async function runTest( suite , depth , testFn ) {
 	// /!\ Useful?
 	this.testInProgress = testFn ;
 
@@ -946,7 +946,12 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 		type: testFn.name ,
 		optional: testFn.optional ,
 		depth: depth ,
-		fn: testFn
+		fn: testFn ,
+		duration: null ,
+		slow: null ,
+		error: null ,
+		errorType: null ,
+		errorFn: null
 	} ;
 
 	// Early exit, if the functions should be skipped
@@ -954,7 +959,6 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 		this.done ++ ;
 		this.skip ++ ;
 		this.emit( 'skip' , data ) ;
-		callback() ;
 		return ;
 	}
 
@@ -969,241 +973,182 @@ TeaTime.prototype.runTest = function runTest( suite , depth , testFn , callback 
 	}
 
 
-	// Sync or async?
-	var testWrapper = testFn.length ? TeaTime.asyncTest.bind( this ) : TeaTime.syncTest.bind( this ) ;
-
-
 	// Finishing
-	var triggerCallback = ( error , data ) => {
+	var testFailed = error => {
+		this.done ++ ;
+		this.patchError( error ) ;
 
-		if ( error ) {
-			this.done ++ ;
-			this.patchError( error ) ;
+		this.errors.push( {
+			title:
+				( error.hookFn ? error.hookFn.title + '[' + error.hookFn.hookType + '] ' : '' ) +
+				data.title ,
+			type: data.errorType ,
+			fn: testFn ,
+			optional: data.optional ,
+			error: error
+		} ) ;
 
-			this.errors.push( {
-				title:
-					( error.hookFn ? error.hookFn.title + '[' + error.hookFn.hookType + '] ' : '' ) +
-					data.title ,
-				type: data.errorType ,
-				fn: testFn ,
-				optional: data.optional ,
-				error: error
-			} ) ;
-
-			if ( data.optional ) {
-				this.optionalFail ++ ;
-				this.emit( 'optionalFail' , data ) ;
-			}
-			else {
-				this.fail ++ ;
-				this.emit( 'fail' , data ) ;
-			}
-
-			callback( error ) ;
+		if ( data.optional ) {
+			this.optionalFail ++ ;
+			this.emit( 'optionalFail' , data ) ;
 		}
 		else {
-			this.done ++ ;
-			this.ok ++ ;
-			this.emit( 'ok' , data ) ;
-			callback() ;
+			this.fail ++ ;
+			this.emit( 'fail' , data ) ;
 		}
 	} ;
 
-
-	// Async flow
-	this.runHooks( setup , depth , ( setupError , setupResults ) => {
-
-		if ( setupError ) {
-			data.errorType = 'setup' ;
-			data.error = setupError ;
-			data.errorFn = setupResults[ setupResults.length - 1 ][ 2 ] ;
-
-			// Run teardown anyway?
-			this.runHooks( teardown , depth , ( teardownError ) => {
-				triggerCallback( setupError , data ) ;
-			} ) ;
-			return ;
-		}
-
-		this.orphanError = null ;
-
-		this.emit( 'enterTest' , data ) ;
-
-		testWrapper( testFn , ( testError , time , slow ) => {
-
-			data.error = testError ;
-			data.duration = time ;
-			data.slow = slow ;
-
-			this.emit( 'exitTest' , data ) ;
-
-			this.runHooks( teardown , depth , ( teardownError , teardownResults ) => {
-
-
-				if ( testError ) {
-					data.errorType = 'test' ;
-					data.errorFn = testFn ;
-					triggerCallback( testError , data ) ;
-				}
-				else if ( teardownError ) {
-					data.errorType = 'teardown' ;
-					data.error = teardownError ;
-					data.errorFn = teardownResults[ teardownResults.length - 1 ][ 2 ] ;
-					triggerCallback( teardownError , data ) ;
-				}
-				else {
-					triggerCallback( undefined , data ) ;
-				}
-			} ) ;
-		} ) ;
-	} ) ;
-} ;
-
-
-
-// Sync or promise tests
-TeaTime.syncTest = function syncTest( testFn , callback ) {
-	var startTime , time , returnValue ,
-		timer = null ,
-		callbackTriggered = false ,
-		slowTime = this.slowTime ;
-
-	// We need a fresh callstack after each test
-	callback = this.freshCallback( callback ) ;
-
-	var context = {
-		timeout: timeout => {
-			if ( callbackTriggered ) { return ; }
-			if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
-
-			timer = setTimeout( () => {
-				if ( this.orphanError ) {
-					triggerCallback( this.orphanError ) ;
-					return ;
-				}
-
-				var timeoutError = new Error( 'Test timeout (local)' ) ;
-				timeoutError.testTimeout = true ;
-				triggerCallback( timeoutError ) ;
-			} , timeout ) ;
-		} ,
-		slow: ( slowTime_ ) => { slowTime = slowTime_ ; }
+	var testOk = () => {
+		this.done ++ ;
+		this.ok ++ ;
+		this.emit( 'ok' , data ) ;
 	} ;
 
-	var triggerCallback = error => {
-		if ( callbackTriggered ) { return ; }
-		callbackTriggered = true ;
-
-		time = Date.now() - startTime ;
-
-		// Stop coverage tracking
-		if ( this.cover ) { this.cover.stop() ; }
-
-		if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
-
-		callback( error , time , Math.floor( time / slowTime ) ) ;
-	} ;
-
-	// Should come before running the test, or it would override the user-set timeout
-	timer = setTimeout( () => {
-		if ( this.orphanError ) {
-			triggerCallback( this.orphanError ) ;
-			return ;
-		}
-
-		var timeoutError = new Error( 'Test timeout' ) ;
-		timeoutError.testTimeout = true ;
-		triggerCallback( timeoutError ) ;
-	} , this.timeout ) ;
 
 	try {
-		// Start coverage tracking NOW!
-		if ( this.cover ) { this.cover.start() ; }
-
-		startTime = Date.now() ;
-		returnValue = testFn.call( context ) ;
-
-		if ( returnValue && typeof returnValue === 'object' && returnValue.then ) {
-
-			Promise.resolve( returnValue ).then( () => {
-				triggerCallback() ;
-			} ).catch( error => {
-				triggerCallback( error ) ;
-			} ) ;
-			return ;
-		}
-
-		time = Date.now() - startTime ;
+		await this.runHooks( setup , depth ) ;
 	}
-	catch ( error ) {
-		triggerCallback( error ) ;
+	catch ( setupError ) {
+		data.errorType = 'setup' ;
+		data.error = setupError ;
+		data.errorFn = setupError.hookFn ;
+
+		// Run teardown anyway?
+		try {
+			await this.runHooks( teardown , depth ) ;
+		}
+		catch ( teardownError ) {}
+
+		testFailed( setupError ) ;
 		return ;
 	}
 
-	triggerCallback() ;
+	this.orphanError = null ;
+
+	this.emit( 'enterTest' , data ) ;
+
+	try {
+		Object.assign( data , await this.runTestFn( testFn ) ) ;
+	}
+	catch ( testError ) {
+		Object.assign( data , testError.data ) ;
+		data.error = testError ;
+		data.errorType = 'test' ;
+		data.errorFn = testFn ;
+
+		this.emit( 'exitTest' , data ) ;
+
+		// Run teardown
+		try {
+			await this.runHooks( teardown , depth ) ;
+		}
+		catch ( teardownError ) {}
+
+		testFailed( testError ) ;
+		return ;
+	}
+
+	this.emit( 'exitTest' , data ) ;
+
+	// Run teardown
+	try {
+		await this.runHooks( teardown , depth ) ;
+	}
+	catch ( teardownError ) {
+		data.errorType = 'teardown' ;
+		data.error = teardownError ;
+		data.errorFn = teardownError.hookFn ;
+		testFailed( teardownError ) ;
+		return ;
+	}
+
+	testOk() ;
 } ;
 
 
 
-TeaTime.asyncTest = function asyncTest( testFn , callback ) {
-	var returnValue , badTest , startTime , time , callbackTriggered = false ,
-		timer = null ,
+TeaTime.prototype.runTestFn = function runTestFn( testFn_ ) {
+	var startTime , finishTriggered = false ,
+		timer = null , testFn ,
 		slowTime = this.slowTime ;
 
-	// We need a fresh callstack after each test
-	callback = this.freshCallback( callback ) ;
+	var promise = new Promise() ;
 
 	var context = {
 		timeout: timeout => {
-			if ( callbackTriggered ) { return ; }
+			if ( finishTriggered ) { return ; }
 			if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
 
 			timer = setTimeout( () => {
 				if ( this.orphanError ) {
-					triggerCallback( this.orphanError ) ;
+					finish( this.orphanError ) ;
 					return ;
 				}
 
 				var timeoutError = new Error( 'Test timeout (local)' ) ;
 				timeoutError.testTimeout = true ;
-				triggerCallback( timeoutError ) ;
+				finish( timeoutError ) ;
 			} , timeout ) ;
 		} ,
 		slow: slowTime_ => { slowTime = slowTime_ ; }
 	} ;
 
-	var uncaughtExceptionHandler = error => {
-		error.uncaught = true ;
-		triggerCallback( error ) ;
-	} ;
+	if ( testFn_.length ) {
+		testFn = () => {
+			return new Promise( ( resolve , reject ) => {
+				var returnValue = testFn_.call( context , error => {
+					return error ? reject( error ) : resolve() ;
+				} ) ;
 
-	var triggerCallback = error => {
+				if ( Promise.isThenable( returnValue ) ) {
+					reject( new Error( "Bad test: mixing the Promise/thenable and the callback interface" ) ) ;
+				}
+			} ) ;
+		} ;
+	}
+	else {
+		testFn = testFn_ ;
+	}
 
+	var finish = error => {
+		// Immediately, before checking if already called:
+		var duration = Date.now() - startTime ;
 		this.offUncaughtException( uncaughtExceptionHandler ) ;
-		if ( callbackTriggered ) { return ; }
-		callbackTriggered = true ;
 
-		time = Date.now() - startTime ;
+		if ( finishTriggered ) { return ; }
+		finishTriggered = true ;
 
 		// Stop coverage tracking
 		if ( this.cover ) { this.cover.stop() ; }
 
 		if ( timer !== null ) { clearTimeout( timer ) ; timer = null ; }
 
-		callback( error , time , Math.floor( time / slowTime ) ) ;
+		var data = { duration , slow: Math.floor( duration / slowTime ) } ;
+
+		if ( error ) {
+			error.data = data ;
+			promise.reject( error ) ;
+		}
+		else {
+			promise.resolve( data ) ;
+		}
 	} ;
 
+	var uncaughtExceptionHandler = error => {
+		error.uncaught = true ;
+		finish( error ) ;
+	} ;
 
 	// Should come before running the test, or it would override the user-set timeout
 	timer = setTimeout( () => {
 		if ( this.orphanError ) {
-			triggerCallback( this.orphanError ) ;
+			finish( this.orphanError ) ;
 			return ;
 		}
 
 		var timeoutError = new Error( 'Test timeout' ) ;
 		timeoutError.testTimeout = true ;
-		triggerCallback( timeoutError ) ;
+		finish( timeoutError ) ;
 	} , this.timeout ) ;
 
 	this.onceUncaughtException( uncaughtExceptionHandler ) ;
@@ -1213,27 +1158,27 @@ TeaTime.asyncTest = function asyncTest( testFn , callback ) {
 		if ( this.cover ) { this.cover.start() ; }
 
 		startTime = Date.now() ;
-		returnValue = testFn.call( context , triggerCallback ) ;
+		var returnValue = testFn.call( context ) ;
 
-		if ( returnValue && typeof returnValue === 'object' && returnValue.then ) {
-			badTest = true ;
-			triggerCallback( new Error( "Bad test: mixing the Promise/thenable and the callback interface" ) ) ;
+		if ( Promise.isThenable( returnValue ) ) {
+			Promise.resolve( returnValue ).callback( finish ) ;
+			return ;
 		}
+
+		finish() ;
 	} )
-	.catch( ( error ) => {
-		if ( callbackTriggered && ! badTest ) { this.orphanError = error ; }
-		triggerCallback( error ) ;
-	} ) ;
+		.catch( ( error ) => {
+			if ( finishTriggered ) { this.orphanError = error ; }
+			finish( error ) ;
+		} ) ;
+
+	return promise ;
 } ;
 
 
 
-TeaTime.prototype.runHooks = function runHooks( hookList , depth , callback ) {
-	async.foreach( hookList , ( hookFn , foreachCallback ) => {
-
-		// Sync or async?
-		var hookWrapper = hookFn.length ? TeaTime.asyncHook.bind( this ) : TeaTime.syncHook.bind( this ) ;
-
+TeaTime.prototype.runHooks = function runHooks( hookList , depth ) {
+	return Promise.forEach( hookList , hookFn => {
 		var data = {
 			hookType: hookFn.hookType ,
 			title: hookFn.title ,
@@ -1243,80 +1188,81 @@ TeaTime.prototype.runHooks = function runHooks( hookList , depth , callback ) {
 
 		this.emit( 'enterHook' , data ) ;
 
-		hookWrapper( hookFn , ( error ) => {
-			this.emit( 'exitHook' , data ) ;
-			if ( error ) { error.hookFn = hookFn ; }
-			foreachCallback( error ) ;
-		} ) ;
-	} )
-	.fatal( true )
-	.exec( callback ) ;
+		return this.runHookFn( hookFn ).then(
+			() => {
+				this.emit( 'exitHook' , data ) ;
+			} ,
+			error => {
+				error.hookFn = hookFn ;
+				this.emit( 'exitHook' , data ) ;
+				throw error ;
+			}
+		) ;
+	} ) ;
 } ;
 
 
 
-TeaTime.syncHook = function syncHook( hookFn , callback ) {
-	var returnValue ;
+TeaTime.prototype.runHookFn = function runHookFn( hookFn_ ) {
+	var hookFn , finishTriggered = false ;
 
-	// We need a fresh callstack after each hook
-	callback = this.freshCallback( callback ) ;
+	var promise = new Promise() ;
 
-	try {
-		returnValue = hookFn() ;
+	if ( hookFn_.length ) {
+		hookFn = () => {
+			return new Promise( ( resolve , reject ) => {
+				var returnValue = hookFn_( error => {
+					return error ? reject( error ) : resolve() ;
+				} ) ;
 
-		if ( returnValue && typeof returnValue === 'object' && returnValue.then ) {
-			Promise.resolve( returnValue ).then( () => {
-				callback() ;
-			} ).catch( error => {
-				callback( error ) ;
+				if ( Promise.isThenable( returnValue ) ) {
+					reject( new Error( "Bad test: mixing the Promise/thenable and the callback interface" ) ) ;
+				}
 			} ) ;
-			return ;
+		} ;
+	}
+	else {
+		hookFn = hookFn_ ;
+	}
+
+	var finish = error => {
+		// Immediately, before checking if already called:
+		this.offUncaughtException( uncaughtExceptionHandler ) ;
+
+		if ( finishTriggered ) { return ; }
+		finishTriggered = true ;
+
+		if ( error ) {
+			promise.reject( error ) ;
 		}
-	}
-	catch ( error ) {
-		callback( error ) ;
-		return ;
-	}
-
-	callback() ;
-} ;
-
-
-
-TeaTime.asyncHook = function asyncHook( hookFn , callback ) {
-	var returnValue , badHook , callbackTriggered = false ;
-
-	// We need a fresh callstack after each hook
-	callback = this.freshCallback( callback ) ;
+		else {
+			promise.resolve() ;
+		}
+	} ;
 
 	var uncaughtExceptionHandler = error => {
 		error.uncaught = true ;
-		triggerCallback( error ) ;
-	} ;
-
-	var triggerCallback = error => {
-
-		this.offUncaughtException( uncaughtExceptionHandler ) ;
-		if ( callbackTriggered ) { return ; }
-
-		callbackTriggered = true ;
-		callback( error ) ;
+		finish( error ) ;
 	} ;
 
 	this.onceUncaughtException( uncaughtExceptionHandler ) ;
 
 	asyncTry( () => {
-		returnValue = hookFn( triggerCallback ) ;
+		var returnValue = hookFn() ;
 
-		if ( returnValue && typeof returnValue === 'object' && returnValue.then ) {
-			badHook = true ;
-			triggerCallback( new Error( "Bad hook: mixing the Promise/thenable and the callback interface" ) ) ;
+		if ( Promise.isThenable( returnValue ) ) {
+			Promise.resolve( returnValue ).callback( finish ) ;
+			return ;
 		}
+
+		finish() ;
 	} )
-	.catch( ( error ) => {
-		if ( callbackTriggered && ! badHook ) { this.orphanError = error ; }
-		triggerCallback( error ) ;
-	} ) ;
+		.catch( ( error ) => {
+			if ( finishTriggered ) { this.orphanError = error ; }
+			finish( error ) ;
+		} ) ;
+
+	return promise ;
 } ;
 
 
@@ -1360,13 +1306,11 @@ TeaTime.registerSuite = function registerSuite( title , fn ) {
 	// Only add this suite to its parent if it is not empty
 	if ( ! suite.length ) { return ; }
 
-	Object.defineProperties( suite , {
-		order: { value: parentSuite.length }
-	} ) ;
+	suite.order = parentSuite.length ;
+	suite.parent = parentSuite ;
 
 	TeaTime.sortSuite( suite ) ;
 	parentSuite.push( suite ) ;
-	Object.defineProperty( suite , 'parent' , { value: parentSuite } ) ;
 } ;
 
 
@@ -1409,11 +1353,9 @@ TeaTime.registerTest = function registerTest( title , fn , optional ) {
 
 	if ( typeof fn !== 'function' ) { fn = {} ; }
 
-	Object.defineProperties( fn , {
-		title: { value: title } ,
-		optional: { value: !! optional } ,
-		order: { value: parentSuite.length }
-	} ) ;
+	fn.title = title ;
+	fn.optional = !! optional ;
+	fn.order = parentSuite.length ;
 
 	parentSuite.push( fn ) ;
 } ;
@@ -1448,10 +1390,8 @@ TeaTime.registerHook = function registerHook( type , title , fn ) {
 		throw new Error( "Usage is hook( [title] , fn )" ) ;
 	}
 
-	Object.defineProperties( fn , {
-		title: { value: title || fn.name || '[no name]' } ,
-		hookType: { value: type }
-	} ) ;
+	fn.title = title || fn.name || '[no name]' ;
+	fn.hookType = type ;
 
 	parentSuite = this.registerStack[ this.registerStack.length - 1 ] ;
 	parentSuite[ type ].push( fn ) ;
@@ -1462,18 +1402,6 @@ TeaTime.registerHook = function registerHook( type , title , fn ) {
 
 
 /* Misc functions */
-
-
-
-// Transform a callback into a fresh callback:
-// It use setImmediate() or process.nextTick() to prevent "Maximum call stack"
-TeaTime.prototype.freshCallback = function freshCallback( callback ) {
-	return ( ... args ) => {
-		this.microTimeout( () => {
-			callback.call( this , ... args ) ;
-		} ) ;
-	} ;
-} ;
 
 
 
@@ -1499,7 +1427,7 @@ TeaTime.prototype.patchError = function patchError( error ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./Cover.js":1,"async-kit":27,"async-try-catch":35,"doormen/lib/expect.js":47,"nextgen-events":63}],3:[function(require,module,exports){
+},{"./Cover.js":1,"async-try-catch":27,"doormen/lib/expect.js":39,"nextgen-events":55,"seventh":73}],3:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -1544,9 +1472,9 @@ function Reporter( teaTime , self ) {
 	}
 
 	document.querySelector( 'body' )
-	.insertAdjacentHTML( 'beforeend' ,
-		'<div class="tea-time-classic-reporter" style="background-color:black;color:white"></div>'
-	) ;
+		.insertAdjacentHTML( 'beforeend' ,
+			'<div class="tea-time-classic-reporter" style="background-color:black;color:white"></div>'
+		) ;
 
 	self.container = document.querySelector( 'div.tea-time-classic-reporter' ) ;
 
@@ -1569,7 +1497,7 @@ function scrollDown() {
 	( document.querySelector( 'div.tea-time-classic-reporter p:last-child' ) ||
 		document.querySelector( 'div.tea-time-classic-reporter h4:last-child' ) ||
 		document.querySelector( 'div.tea-time-classic-reporter pre:last-child' ) )
-	.scrollIntoView() ;
+		.scrollIntoView() ;
 }
 
 
@@ -1998,9 +1926,6 @@ var url = require( 'url' ) ;
 
 function createTeaTime() {
 	var options = {
-		microTimeout: function( callback ) {
-			setTimeout( callback , 0 ) ;
-		} ,
 		onceUncaughtException: function( callback ) {
 			window.onerror = function( message , source , lineno , colno , error ) {
 				window.onerror = function() {} ;
@@ -2103,7 +2028,7 @@ dom.ready( () => {
 
 
 
-},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":41,"string-kit/lib/inspect.js":76,"url":82}],7:[function(require,module,exports){
+},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":33,"string-kit/lib/inspect.js":77,"url":82}],7:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -2191,7 +2116,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode ) {
 
 
 
-},{"diff":40,"string-kit/lib/inspect.js":76}],8:[function(require,module,exports){
+},{"diff":32,"string-kit/lib/inspect.js":77}],8:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -3926,7 +3851,7 @@ try{
 	exports.XMLSerializer = XMLSerializer;
 //}
 
-},{"nwmatcher":66,"string-kit":22}],11:[function(require,module,exports){
+},{"nwmatcher":58,"string-kit":22}],11:[function(require,module,exports){
 exports.entityMap = {
        lt: '<',
        gt: '>',
@@ -4924,7 +4849,7 @@ exports.format.hasFormatting = function hasFormatting( str ) {
 
 
 }).call(this,require("buffer").Buffer)
-},{"./ansi.js":12,"./inspect.js":16,"buffer":39}],16:[function(require,module,exports){
+},{"./ansi.js":12,"./inspect.js":16,"buffer":31}],16:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -5519,7 +5444,7 @@ inspectStyle.html = Object.assign( {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../../../../is-buffer/index.js")},require('_process'))
-},{"../../../../../is-buffer/index.js":62,"./ansi.js":12,"./escape.js":14,"_process":69}],17:[function(require,module,exports){
+},{"../../../../../is-buffer/index.js":54,"./ansi.js":12,"./escape.js":14,"_process":61}],17:[function(require,module,exports){
 module.exports={"߀":"0","́":""," ":" ","Ⓐ":"A","Ａ":"A","À":"A","Á":"A","Â":"A","Ầ":"A","Ấ":"A","Ẫ":"A","Ẩ":"A","Ã":"A","Ā":"A","Ă":"A","Ằ":"A","Ắ":"A","Ẵ":"A","Ẳ":"A","Ȧ":"A","Ǡ":"A","Ä":"A","Ǟ":"A","Ả":"A","Å":"A","Ǻ":"A","Ǎ":"A","Ȁ":"A","Ȃ":"A","Ạ":"A","Ậ":"A","Ặ":"A","Ḁ":"A","Ą":"A","Ⱥ":"A","Ɐ":"A","Ꜳ":"AA","Æ":"AE","Ǽ":"AE","Ǣ":"AE","Ꜵ":"AO","Ꜷ":"AU","Ꜹ":"AV","Ꜻ":"AV","Ꜽ":"AY","Ⓑ":"B","Ｂ":"B","Ḃ":"B","Ḅ":"B","Ḇ":"B","Ƀ":"B","Ɓ":"B","ｃ":"C","Ⓒ":"C","Ｃ":"C","Ꜿ":"C","Ḉ":"C","Ç":"C","Ⓓ":"D","Ｄ":"D","Ḋ":"D","Ď":"D","Ḍ":"D","Ḑ":"D","Ḓ":"D","Ḏ":"D","Đ":"D","Ɗ":"D","Ɖ":"D","ᴅ":"D","Ꝺ":"D","Ð":"Dh","Ǳ":"DZ","Ǆ":"DZ","ǲ":"Dz","ǅ":"Dz","ɛ":"E","Ⓔ":"E","Ｅ":"E","È":"E","É":"E","Ê":"E","Ề":"E","Ế":"E","Ễ":"E","Ể":"E","Ẽ":"E","Ē":"E","Ḕ":"E","Ḗ":"E","Ĕ":"E","Ė":"E","Ë":"E","Ẻ":"E","Ě":"E","Ȅ":"E","Ȇ":"E","Ẹ":"E","Ệ":"E","Ȩ":"E","Ḝ":"E","Ę":"E","Ḙ":"E","Ḛ":"E","Ɛ":"E","Ǝ":"E","ᴇ":"E","ꝼ":"F","Ⓕ":"F","Ｆ":"F","Ḟ":"F","Ƒ":"F","Ꝼ":"F","Ⓖ":"G","Ｇ":"G","Ǵ":"G","Ĝ":"G","Ḡ":"G","Ğ":"G","Ġ":"G","Ǧ":"G","Ģ":"G","Ǥ":"G","Ɠ":"G","Ꞡ":"G","Ᵹ":"G","Ꝿ":"G","ɢ":"G","Ⓗ":"H","Ｈ":"H","Ĥ":"H","Ḣ":"H","Ḧ":"H","Ȟ":"H","Ḥ":"H","Ḩ":"H","Ḫ":"H","Ħ":"H","Ⱨ":"H","Ⱶ":"H","Ɥ":"H","Ⓘ":"I","Ｉ":"I","Ì":"I","Í":"I","Î":"I","Ĩ":"I","Ī":"I","Ĭ":"I","İ":"I","Ï":"I","Ḯ":"I","Ỉ":"I","Ǐ":"I","Ȉ":"I","Ȋ":"I","Ị":"I","Į":"I","Ḭ":"I","Ɨ":"I","Ⓙ":"J","Ｊ":"J","Ĵ":"J","Ɉ":"J","ȷ":"J","Ⓚ":"K","Ｋ":"K","Ḱ":"K","Ǩ":"K","Ḳ":"K","Ķ":"K","Ḵ":"K","Ƙ":"K","Ⱪ":"K","Ꝁ":"K","Ꝃ":"K","Ꝅ":"K","Ꞣ":"K","Ⓛ":"L","Ｌ":"L","Ŀ":"L","Ĺ":"L","Ľ":"L","Ḷ":"L","Ḹ":"L","Ļ":"L","Ḽ":"L","Ḻ":"L","Ł":"L","Ƚ":"L","Ɫ":"L","Ⱡ":"L","Ꝉ":"L","Ꝇ":"L","Ꞁ":"L","Ǉ":"LJ","ǈ":"Lj","Ⓜ":"M","Ｍ":"M","Ḿ":"M","Ṁ":"M","Ṃ":"M","Ɱ":"M","Ɯ":"M","ϻ":"M","Ꞥ":"N","Ƞ":"N","Ⓝ":"N","Ｎ":"N","Ǹ":"N","Ń":"N","Ñ":"N","Ṅ":"N","Ň":"N","Ṇ":"N","Ņ":"N","Ṋ":"N","Ṉ":"N","Ɲ":"N","Ꞑ":"N","ᴎ":"N","Ǌ":"NJ","ǋ":"Nj","Ⓞ":"O","Ｏ":"O","Ò":"O","Ó":"O","Ô":"O","Ồ":"O","Ố":"O","Ỗ":"O","Ổ":"O","Õ":"O","Ṍ":"O","Ȭ":"O","Ṏ":"O","Ō":"O","Ṑ":"O","Ṓ":"O","Ŏ":"O","Ȯ":"O","Ȱ":"O","Ö":"O","Ȫ":"O","Ỏ":"O","Ő":"O","Ǒ":"O","Ȍ":"O","Ȏ":"O","Ơ":"O","Ờ":"O","Ớ":"O","Ỡ":"O","Ở":"O","Ợ":"O","Ọ":"O","Ộ":"O","Ǫ":"O","Ǭ":"O","Ø":"O","Ǿ":"O","Ɔ":"O","Ɵ":"O","Ꝋ":"O","Ꝍ":"O","Œ":"OE","Ƣ":"OI","Ꝏ":"OO","Ȣ":"OU","Ⓟ":"P","Ｐ":"P","Ṕ":"P","Ṗ":"P","Ƥ":"P","Ᵽ":"P","Ꝑ":"P","Ꝓ":"P","Ꝕ":"P","Ⓠ":"Q","Ｑ":"Q","Ꝗ":"Q","Ꝙ":"Q","Ɋ":"Q","Ⓡ":"R","Ｒ":"R","Ŕ":"R","Ṙ":"R","Ř":"R","Ȑ":"R","Ȓ":"R","Ṛ":"R","Ṝ":"R","Ŗ":"R","Ṟ":"R","Ɍ":"R","Ɽ":"R","Ꝛ":"R","Ꞧ":"R","Ꞃ":"R","Ⓢ":"S","Ｓ":"S","ẞ":"S","Ś":"S","Ṥ":"S","Ŝ":"S","Ṡ":"S","Š":"S","Ṧ":"S","Ṣ":"S","Ṩ":"S","Ș":"S","Ş":"S","Ȿ":"S","Ꞩ":"S","Ꞅ":"S","Ⓣ":"T","Ｔ":"T","Ṫ":"T","Ť":"T","Ṭ":"T","Ț":"T","Ţ":"T","Ṱ":"T","Ṯ":"T","Ŧ":"T","Ƭ":"T","Ʈ":"T","Ⱦ":"T","Ꞇ":"T","Þ":"Th","Ꜩ":"TZ","Ⓤ":"U","Ｕ":"U","Ù":"U","Ú":"U","Û":"U","Ũ":"U","Ṹ":"U","Ū":"U","Ṻ":"U","Ŭ":"U","Ü":"U","Ǜ":"U","Ǘ":"U","Ǖ":"U","Ǚ":"U","Ủ":"U","Ů":"U","Ű":"U","Ǔ":"U","Ȕ":"U","Ȗ":"U","Ư":"U","Ừ":"U","Ứ":"U","Ữ":"U","Ử":"U","Ự":"U","Ụ":"U","Ṳ":"U","Ų":"U","Ṷ":"U","Ṵ":"U","Ʉ":"U","Ⓥ":"V","Ｖ":"V","Ṽ":"V","Ṿ":"V","Ʋ":"V","Ꝟ":"V","Ʌ":"V","Ꝡ":"VY","Ⓦ":"W","Ｗ":"W","Ẁ":"W","Ẃ":"W","Ŵ":"W","Ẇ":"W","Ẅ":"W","Ẉ":"W","Ⱳ":"W","Ⓧ":"X","Ｘ":"X","Ẋ":"X","Ẍ":"X","Ⓨ":"Y","Ｙ":"Y","Ỳ":"Y","Ý":"Y","Ŷ":"Y","Ỹ":"Y","Ȳ":"Y","Ẏ":"Y","Ÿ":"Y","Ỷ":"Y","Ỵ":"Y","Ƴ":"Y","Ɏ":"Y","Ỿ":"Y","Ⓩ":"Z","Ｚ":"Z","Ź":"Z","Ẑ":"Z","Ż":"Z","Ž":"Z","Ẓ":"Z","Ẕ":"Z","Ƶ":"Z","Ȥ":"Z","Ɀ":"Z","Ⱬ":"Z","Ꝣ":"Z","ⓐ":"a","ａ":"a","ẚ":"a","à":"a","á":"a","â":"a","ầ":"a","ấ":"a","ẫ":"a","ẩ":"a","ã":"a","ā":"a","ă":"a","ằ":"a","ắ":"a","ẵ":"a","ẳ":"a","ȧ":"a","ǡ":"a","ä":"a","ǟ":"a","ả":"a","å":"a","ǻ":"a","ǎ":"a","ȁ":"a","ȃ":"a","ạ":"a","ậ":"a","ặ":"a","ḁ":"a","ą":"a","ⱥ":"a","ɐ":"a","ɑ":"a","ꜳ":"aa","æ":"ae","ǽ":"ae","ǣ":"ae","ꜵ":"ao","ꜷ":"au","ꜹ":"av","ꜻ":"av","ꜽ":"ay","ⓑ":"b","ｂ":"b","ḃ":"b","ḅ":"b","ḇ":"b","ƀ":"b","ƃ":"b","ɓ":"b","Ƃ":"b","ⓒ":"c","ć":"c","ĉ":"c","ċ":"c","č":"c","ç":"c","ḉ":"c","ƈ":"c","ȼ":"c","ꜿ":"c","ↄ":"c","C":"c","Ć":"c","Ĉ":"c","Ċ":"c","Č":"c","Ƈ":"c","Ȼ":"c","ⓓ":"d","ｄ":"d","ḋ":"d","ď":"d","ḍ":"d","ḑ":"d","ḓ":"d","ḏ":"d","đ":"d","ƌ":"d","ɖ":"d","ɗ":"d","Ƌ":"d","Ꮷ":"d","ԁ":"d","Ɦ":"d","ð":"dh","ǳ":"dz","ǆ":"dz","ⓔ":"e","ｅ":"e","è":"e","é":"e","ê":"e","ề":"e","ế":"e","ễ":"e","ể":"e","ẽ":"e","ē":"e","ḕ":"e","ḗ":"e","ĕ":"e","ė":"e","ë":"e","ẻ":"e","ě":"e","ȅ":"e","ȇ":"e","ẹ":"e","ệ":"e","ȩ":"e","ḝ":"e","ę":"e","ḙ":"e","ḛ":"e","ɇ":"e","ǝ":"e","ⓕ":"f","ｆ":"f","ḟ":"f","ƒ":"f","ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ⓖ":"g","ｇ":"g","ǵ":"g","ĝ":"g","ḡ":"g","ğ":"g","ġ":"g","ǧ":"g","ģ":"g","ǥ":"g","ɠ":"g","ꞡ":"g","ꝿ":"g","ᵹ":"g","ⓗ":"h","ｈ":"h","ĥ":"h","ḣ":"h","ḧ":"h","ȟ":"h","ḥ":"h","ḩ":"h","ḫ":"h","ẖ":"h","ħ":"h","ⱨ":"h","ⱶ":"h","ɥ":"h","ƕ":"hv","ⓘ":"i","ｉ":"i","ì":"i","í":"i","î":"i","ĩ":"i","ī":"i","ĭ":"i","ï":"i","ḯ":"i","ỉ":"i","ǐ":"i","ȉ":"i","ȋ":"i","ị":"i","į":"i","ḭ":"i","ɨ":"i","ı":"i","ⓙ":"j","ｊ":"j","ĵ":"j","ǰ":"j","ɉ":"j","ⓚ":"k","ｋ":"k","ḱ":"k","ǩ":"k","ḳ":"k","ķ":"k","ḵ":"k","ƙ":"k","ⱪ":"k","ꝁ":"k","ꝃ":"k","ꝅ":"k","ꞣ":"k","ⓛ":"l","ｌ":"l","ŀ":"l","ĺ":"l","ľ":"l","ḷ":"l","ḹ":"l","ļ":"l","ḽ":"l","ḻ":"l","ſ":"l","ł":"l","ƚ":"l","ɫ":"l","ⱡ":"l","ꝉ":"l","ꞁ":"l","ꝇ":"l","ɭ":"l","ǉ":"lj","ⓜ":"m","ｍ":"m","ḿ":"m","ṁ":"m","ṃ":"m","ɱ":"m","ɯ":"m","ⓝ":"n","ｎ":"n","ǹ":"n","ń":"n","ñ":"n","ṅ":"n","ň":"n","ṇ":"n","ņ":"n","ṋ":"n","ṉ":"n","ƞ":"n","ɲ":"n","ŉ":"n","ꞑ":"n","ꞥ":"n","ԉ":"n","ǌ":"nj","ⓞ":"o","ｏ":"o","ò":"o","ó":"o","ô":"o","ồ":"o","ố":"o","ỗ":"o","ổ":"o","õ":"o","ṍ":"o","ȭ":"o","ṏ":"o","ō":"o","ṑ":"o","ṓ":"o","ŏ":"o","ȯ":"o","ȱ":"o","ö":"o","ȫ":"o","ỏ":"o","ő":"o","ǒ":"o","ȍ":"o","ȏ":"o","ơ":"o","ờ":"o","ớ":"o","ỡ":"o","ở":"o","ợ":"o","ọ":"o","ộ":"o","ǫ":"o","ǭ":"o","ø":"o","ǿ":"o","ꝋ":"o","ꝍ":"o","ɵ":"o","ɔ":"o","ᴑ":"o","œ":"oe","ƣ":"oi","ꝏ":"oo","ȣ":"ou","ⓟ":"p","ｐ":"p","ṕ":"p","ṗ":"p","ƥ":"p","ᵽ":"p","ꝑ":"p","ꝓ":"p","ꝕ":"p","ρ":"p","ⓠ":"q","ｑ":"q","ɋ":"q","ꝗ":"q","ꝙ":"q","ⓡ":"r","ｒ":"r","ŕ":"r","ṙ":"r","ř":"r","ȑ":"r","ȓ":"r","ṛ":"r","ṝ":"r","ŗ":"r","ṟ":"r","ɍ":"r","ɽ":"r","ꝛ":"r","ꞧ":"r","ꞃ":"r","ⓢ":"s","ｓ":"s","ś":"s","ṥ":"s","ŝ":"s","ṡ":"s","š":"s","ṧ":"s","ṣ":"s","ṩ":"s","ș":"s","ş":"s","ȿ":"s","ꞩ":"s","ꞅ":"s","ẛ":"s","ʂ":"s","ß":"ss","ⓣ":"t","ｔ":"t","ṫ":"t","ẗ":"t","ť":"t","ṭ":"t","ț":"t","ţ":"t","ṱ":"t","ṯ":"t","ŧ":"t","ƭ":"t","ʈ":"t","ⱦ":"t","ꞇ":"t","þ":"th","ꜩ":"tz","ⓤ":"u","ｕ":"u","ù":"u","ú":"u","û":"u","ũ":"u","ṹ":"u","ū":"u","ṻ":"u","ŭ":"u","ü":"u","ǜ":"u","ǘ":"u","ǖ":"u","ǚ":"u","ủ":"u","ů":"u","ű":"u","ǔ":"u","ȕ":"u","ȗ":"u","ư":"u","ừ":"u","ứ":"u","ữ":"u","ử":"u","ự":"u","ụ":"u","ṳ":"u","ų":"u","ṷ":"u","ṵ":"u","ʉ":"u","ⓥ":"v","ｖ":"v","ṽ":"v","ṿ":"v","ʋ":"v","ꝟ":"v","ʌ":"v","ꝡ":"vy","ⓦ":"w","ｗ":"w","ẁ":"w","ẃ":"w","ŵ":"w","ẇ":"w","ẅ":"w","ẘ":"w","ẉ":"w","ⱳ":"w","ⓧ":"x","ｘ":"x","ẋ":"x","ẍ":"x","ⓨ":"y","ｙ":"y","ỳ":"y","ý":"y","ŷ":"y","ỹ":"y","ȳ":"y","ẏ":"y","ÿ":"y","ỷ":"y","ẙ":"y","ỵ":"y","ƴ":"y","ɏ":"y","ỿ":"y","ⓩ":"z","ｚ":"z","ź":"z","ẑ":"z","ż":"z","ž":"z","ẓ":"z","ẕ":"z","ƶ":"z","ȥ":"z","ɀ":"z","ⱬ":"z","ꝣ":"z"}
 },{}],18:[function(require,module,exports){
 /*
@@ -5850,7 +5775,7 @@ stringKit.installPolyfills = function installPolyfills() {
 
 
 
-},{"./ansi.js":12,"./camel.js":13,"./escape.js":14,"./format.js":15,"./inspect.js":16,"./latinize.js":18,"./misc.js":19,"./polyfill.js":20,"./regexp.js":21,"./toTitleCase.js":23,"./unicode.js":24,"./wordwrap.js":25,"xregexp":38}],23:[function(require,module,exports){
+},{"./ansi.js":12,"./camel.js":13,"./escape.js":14,"./format.js":15,"./inspect.js":16,"./latinize.js":18,"./misc.js":19,"./polyfill.js":20,"./regexp.js":21,"./toTitleCase.js":23,"./unicode.js":24,"./wordwrap.js":25,"xregexp":30}],23:[function(require,module,exports){
 /*
 	String Kit
 
@@ -6893,4077 +6818,6 @@ exports.XMLReader = XMLReader;
 
 
 },{}],27:[function(require,module,exports){
-/*
-	Async Kit
-	
-	Copyright (c) 2014 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-var async = require( './core.js' ) ;
-module.exports = async ;
-
-async.wrapper = require( './wrapper.js' ) ;
-async.exit = require( './exit.js' ) ;
-
-var safeTimeout = require( './safeTimeout.js' ) ;
-async.setSafeTimeout = safeTimeout.setSafeTimeout ;
-async.clearSafeTimeout = safeTimeout.clearSafeTimeout ;
-
-
-
-},{"./core.js":28,"./exit.js":29,"./safeTimeout.js":30,"./wrapper.js":31}],28:[function(require,module,exports){
-(function (process,global){
-/*
-	Async Kit
-	
-	Copyright (c) 2014 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-
-
-// Async flow
-
-
-/*
-	TODO:
-	- this: in all callback and event, it would be nice to bind the current execContext as 'this',
-	  so for example each jobs can access to results of others...
-	  -> DONE for callback but not for event
-	- serialProgress() callback/event that is called for each element, but that respect sequence order 
-	  even in parallel mode
-	- config(): just set everything in one place?
-	- dependenciesTree(): jobs are resolved using a dependencies' tree, that give arguments to transmit
-	  from one Async function to another
-	- async.Queue: job can be added after exec(), forever, until quit() is called (it needs some brainstorming here),
-	  basicaly, some work should be done to move jobs from async.Plan to async.ExecContext
-	- caolan/async's: compose(), detect(), filter() ?
-	- Real async try/catch/finally, using node's Domain?
-	- exportProxy() export a proxy function, if you call the function twice (or more) with the same arguments,
-	  the subsequent call will process immediately, replaying all callback immediately and returning,
-	  all with the same value
-	
-	TODO Promises:
-	- promise() returning a Promise
-	- Promise as a job item, or action function
-	
-	TODO Doc:
-	- Jeu de piste/Organigramme en Markdown, de simples questions proposent des liens en réponse,
-	  menant sur d'autres questions avec d'autres liens de réponses, etc... à la fin, on obtient
-	  un code d'exemple qui sert de template à copier/coller.
-*/
-
-"use strict" ;
-
-
-
-// Load modules dependencies
-var NextGenEvents = require( 'nextgen-events' ) ;
-var treeExtend = require( 'tree-kit/lib/extend.js' ) ;
-
-
-
-var async = {} ;
-module.exports = async ;
-
-
-
-// Used to store important global variable, like the recursion counter (avoid stack overflow)
-if ( ! global.__ASYNC_KIT__ )
-{
-	global.__ASYNC_KIT__ = {
-		recursionCounter: 0 ,
-		// Fix that to Infinity by default, until this feature is stable enough
-		defaultMaxRecursion: Infinity
-	} ;
-}
-
-
-
-
-
-			//////////////////////////
-			// Internal Async Error //
-			//////////////////////////
-
-
-
-// Extend Error
-async.AsyncError = function AsyncError( message )
-{
-	Error.call( this ) ;
-	Error.captureStackTrace && Error.captureStackTrace( this , this.constructor ) ;	// jshint ignore:line
-	this.message = message ;
-} ;
-
-async.AsyncError.prototype = Object.create( Error.prototype ) ;
-async.AsyncError.prototype.constructor = async.AsyncError ;
-
-
-
-			//////////////////////////////////////////////////////
-			// Async Plan factory: create different Plan object //
-			//////////////////////////////////////////////////////
-
-
-
-// Empty constructor, it is just there to support instanceof operator
-async.Plan = function Plan()
-{
-	throw new Error( "[async] Cannot create an async Plan object directly" ) ;
-} ;
-
-//async.Plan.prototype = Object.create( NextGenEvents.prototype ) ;
-async.Plan.prototype.constructor = async.Plan ;
-
-
-
-// Common properties for all instance of async.Plan
-var planCommonProperties = {
-	// Configurable
-	parallelLimit: { value: 1 , writable: true , enumerable: true , configurable: true } ,
-	raceMode: { value: false , writable: true , enumerable: true , configurable: true } ,
-	waterfallMode: { value: false , writable: true , enumerable: true , configurable: true } ,
-	waterfallTransmitError: { value: false , writable: true , enumerable: true , configurable: true } ,
-	whileAction: { value: undefined , writable: true , enumerable: true , configurable: true } ,
-	whileActionBefore: { value: false , writable: true , enumerable: true , configurable: true } ,
-	errorsAreFatal: { value: true , writable: true , enumerable: true , configurable: true } ,
-	returnMapping1to1: { value: false , writable: true , enumerable: true , configurable: true } ,
-	
-	// Not configurable
-	maxRecursion: { value: Infinity , writable: true , enumerable: true } ,
-	jobsData: { value: {} , writable: true , enumerable: true } ,
-	jobsKeys: { value: [] , writable: true , enumerable: true } ,
-	jobsUsing: { value: undefined , writable: true , enumerable: true } ,
-	jobsTimeout: { value: undefined , writable: true , enumerable: true } ,
-	useSafeTimeout: { value: false , writable: true , enumerable: true } ,
-	returnLastJobOnly: { value: false , writable: true , enumerable: true } ,
-	defaultAggregate: { value: undefined , writable: true , enumerable: true } ,
-	returnAggregate: { value: false , writable: true , enumerable: true } ,
-	transmitAggregate: { value: false , writable: true , enumerable: true } ,
-	usingIsIterator: { value: false , writable: true , enumerable: true } ,
-	thenAction: { value: undefined , writable: true , enumerable: true } ,
-	catchAction: { value: undefined , writable: true , enumerable: true } ,
-	finallyAction: { value: undefined , writable: true , enumerable: true } ,
-	asyncEventNice: { value: -20 , writable: true , enumerable: true } ,
-	maxRetry: { value: 0 , writable: true , enumerable: true } ,
-	retryTimeout: { value: 0 , writable: true , enumerable: true } ,
-	retryMultiply: { value: 1 , writable: true , enumerable: true } ,
-	retryMaxTimeout: { value: Infinity , writable: true , enumerable: true } ,
-	execMappingMinInputs: { value: 0 , writable: true , enumerable: true } ,
-	execMappingMaxInputs: { value: 100 , writable: true , enumerable: true } ,
-	execMappingCallbacks: { value: [ 'finally' ] , writable: true , enumerable: true } ,
-	execMappingAggregateArg: { value: false , writable: true , enumerable: true } ,
-	execMappingMinArgs: { value: 0 , writable: true , enumerable: true } ,
-	execMappingMaxArgs: { value: 101 , writable: true , enumerable: true } ,
-	execMappingSignature: { value: '( [finallyCallback] )' , writable: true , enumerable: true } ,
-	locked: { value: false , writable: true , enumerable: true }
-} ;
-
-
-
-// Create an async.Plan flow, parallel limit is preset to 1 (series) as default, but customizable with .parallel()
-async.do = function _do( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async parallel flow
-async.parallel = function parallel( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		parallelLimit: { value: Infinity , writable: true , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async series flow
-async.series = function series( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		parallelLimit: { value: 1 , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async parallel flow, and return the result of the first non-error
-async.race = function race( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		raceMode: { value: true , enumerable: true } ,
-		parallelLimit: { value: Infinity , writable: true , enumerable: true } ,
-		errorsAreFatal: { value: false , writable: true , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	// We only want the result of the first succeeding job
-	asyncPlan.returnLastJobOnly = true ;
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async series flow, each job transmit its results to the next jobs
-async.waterfall = function waterfall( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		waterfallMode: { value: true , enumerable: true } ,
-		waterfallTransmitError: { value: false , writable: true , enumerable: true } ,
-		parallelLimit: { value: 1 , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	// We only want the result of the first succeeding job
-	asyncPlan.returnLastJobOnly = true ;
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async foreach, parallel limit is preset to 1 (series) as default, but customizable with .parallel()
-async.foreach = async.forEach = function foreach( jobsData , iterator )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		usingIsIterator: { value: true , writable: true , enumerable: true } ,
-		errorsAreFatal: { value: false , writable: true , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	asyncPlan.iterator( iterator ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async map, parallel limit is preset to Infinity, but customizable with .parallel()
-async.map = function map( jobsData , iterator )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		parallelLimit: { value: Infinity , writable: true , enumerable: true } ,
-		usingIsIterator: { value: true , writable: true , enumerable: true } ,
-		errorsAreFatal: { value: false , writable: true , enumerable: true } ,
-		// the result mapping should match the jobs' data 1:1
-		returnMapping1to1: { value: true , writable: false , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	asyncPlan.iterator( iterator ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async reduce, force parallel limit to 1 (does it make sense to do it in parallel?)
-async.reduce = function reduce( jobsData , defaultAggregate , iterator )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		parallelLimit: { value: 1 , writable: false , enumerable: true } ,
-		usingIsIterator: { value: true , writable: true , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	if ( arguments.length < 3 )
-	{
-		// No defaultAggregate given
-		iterator = defaultAggregate ;
-		defaultAggregate = undefined ;
-		
-		// Force exec signature to have an aggregateArg
-		asyncPlan.execMappingMinInputs = 0 ;
-		asyncPlan.execMappingMaxInputs = 100 ;
-		asyncPlan.execMappingCallbacks = [ 'finally' ] ;
-		asyncPlan.execMappingAggregateArg = true ;
-		asyncPlan.execMappingMinArgs = 1 ;
-		asyncPlan.execMappingMaxArgs = 102 ;
-		asyncPlan.execMappingSignature = '( aggregateArg, [finallyCallback] )' ;
-	}
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	asyncPlan.transmitAggregate = true ;
-	asyncPlan.returnAggregate = true ;
-	asyncPlan.defaultAggregate = defaultAggregate ;
-	
-	asyncPlan.do( jobsData ) ;
-	asyncPlan.iterator( iterator ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// async while
-// Here, simple callback is mandatory, since it should process its inputs correctly in order to loop or not
-async.while = function _while( whileAction )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		waterfallMode: { value: false , enumerable: true } ,
-		whileAction: { value: undefined , writable: true , enumerable: true } ,
-		whileActionBefore: { value: true , writable: false , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.while( whileAction ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async AND
-async.and = function and( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		elseAction: { value: undefined , writable: true , enumerable: true } ,
-		castToBoolean: { value: false , writable: true , enumerable: true } ,
-		useLogicAnd: { value: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execLogicCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execLogicFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Create an async OR (it's close to AND)
-async.or = function or( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		elseAction: { value: undefined , writable: true , enumerable: true } ,
-		castToBoolean: { value: false , writable: true , enumerable: true } ,
-		useLogicAnd: { value: false } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execLogicCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execLogicFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	asyncPlan.do( jobsData ) ;
-	
-	return asyncPlan ;
-} ;
-
-
-
-// Syntaxic sugar: various if notations
-async.if = function _if( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		elseAction: { value: true , writable: true , enumerable: true } ,
-		castToBoolean: { value: true , writable: true , enumerable: true } ,
-		useLogicAnd: { value: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execLogicCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execLogicFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	if ( jobsData ) { asyncPlan.do( jobsData ) ; }
-	
-	return asyncPlan ;
-} ;
-
-async.if.and = async.if ;
-async.if.or = function ifOr( jobsData )
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		elseAction: { value: true , writable: true , enumerable: true } ,
-		castToBoolean: { value: true , writable: true , enumerable: true } ,
-		useLogicAnd: { value: false } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execLogicCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execLogicFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	asyncPlan.maxRecursion = global.__ASYNC_KIT__.defaultMaxRecursion ;
-	
-	if ( jobsData ) { asyncPlan.do( jobsData ) ; }
-	
-	return asyncPlan ;
-} ;
-
-
-
-			////////////////
-			// Shorthands //
-			////////////////
-
-
-
-// Accept only one function, timeout it
-// async.timeout( fn , timeout , [maxRetry] , [retryTimeout] , [multiply] , [maxRetryTimeout] )
-//async.timeout = function timeout( func , timeoutValue , maxRetry , retryTimeout , multiply , maxRetryTimeout )
-async.callTimeout = function callTimeout( timeout , completionCallback , fn , this_ )
-{
-	if ( typeof fn !== 'function' ) { throw new Error( '[async] async.callTimeout(): argument #0 should be a function' ) ; }
-	
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	
-	Object.defineProperties( asyncPlan , {
-		returnLastJobOnly: { value: true , enumerable: true } ,
-		jobsTimeout: { value: timeout , writable: true , enumerable: true } ,
-		execInit: { value: execDoInit.bind( asyncPlan ) } ,
-		execNext: { value: execDoNext.bind( asyncPlan ) } ,
-		execCallback: { value: execDoCallback } ,
-		execLoopCallback: { value: execWhileCallback } ,
-		execFinal: { value: execDoFinal.bind( asyncPlan ) }
-	} ) ;
-	
-	var job = [ fn.bind( this_ ) ].concat( Array.prototype.slice.call( arguments , 4 ) ) ;
-	asyncPlan.do( [ job ] ) ;
-	
-	//if ( arguments.length > 2 ) { asyncPlan.retry( maxRetry , retryTimeout , multiply , maxRetryTimeout ) ; }
-	
-	return asyncPlan.exec( completionCallback ) ;
-} ;
-
-
-
-			///////////////////////
-			// Async Plan object //
-			///////////////////////
-
-
-
-// Set the job's list
-async.Plan.prototype.do = function _do( jobsData )
-{
-	if ( this.locked ) { return this ; }
-	
-	if ( jobsData && typeof jobsData === 'object' ) { this.jobsData = jobsData ; }
-	else if ( typeof jobsData === 'function' )  { this.jobsData = [ jobsData ] ; this.returnLastJobOnly = true ; }
-	else { this.jobsData = {} ; }
-	
-	// Arrays and Objects are unified, Object.keys() does the job but...
-	this.jobsKeys = Object.keys( this.jobsData ) ;
-	
-	// ... we should avoid troubles with arrays that have enumerable properties
-	if ( Array.isArray( this.jobsData ) ) { this.jobsKeys.length = this.jobsData.length ; }
-	
-	return this ;
-} ;
-
-
-
-// Set number of jobs running in parallel
-async.Plan.prototype.parallel = function parallel( parallelLimit )
-{
-	if ( this.locked ) { return this ; }
-	
-	if ( parallelLimit === undefined || parallelLimit === true ) { this.parallelLimit = Infinity ; }
-	else if ( parallelLimit === false ) { this.parallelLimit = 1 ; }
-	else if ( typeof parallelLimit === 'number' ) { this.parallelLimit = parallelLimit ; }
-	
-	return this ;
-} ;
-
-
-
-// Set race mode: we stop processing jobs when the first non-error job finish.
-// Notice: when using race() this way (without the async.race() factory), you have to call .fatal( false ) too if you want the same behaviour.
-async.Plan.prototype.race = function race( raceMode )
-{
-	if ( ! this.locked ) { this.raceMode = raceMode || raceMode === undefined ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Set waterfall mode: each job pass its results to the next job.
-// Be careful, this does not support parallel mode ATM, but may fail silently.
-// TODO: should probably raise an exception if we use parallel mode.
-async.Plan.prototype.waterfall = function waterfall( waterfallMode )
-{
-	if ( ! this.locked ) { this.waterfallMode = waterfallMode || waterfallMode === undefined ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Set while action.
-// Here, simple callback is mandatory, since it should process its inputs correctly in order to loop or not.
-// If whileActionBefore is given and truthy, then it makes a do( jobs ).while( callback , true ) the same as while( whileAction ).do( jobs ):
-// the while condition is evaluated before any jobs are processed.
-// Write this form only for non-trivial uses.
-async.Plan.prototype.while = function _while( whileAction , whileActionBefore )
-{
-	if ( this.locked ) { return this ; }
-	this.whileAction = whileAction ;
-	if ( whileActionBefore !== undefined ) { this.whileActionBefore = whileActionBefore ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Set the number of time to repeat the action.
-// It is the same as while(), provided with a simple counter function.
-async.Plan.prototype.repeat = function repeat( n )
-{
-	if ( this.locked ) { return this ; }
-	
-	var i = 0 ;
-	
-	if ( typeof n !== 'number' ) { n = parseInt( n ) ; }
-	this.whileActionBefore = true ;
-	
-	this.whileAction = function( error , results , callback ) {
-		// callback should be called last, to avoid sync vs async mess, hence i++ come first, and we check i<=n rather than i<n
-		i ++ ;
-		callback( i <= n ) ;
-	} ;
-	
-	return this ;
-} ;
-
-
-
-// Set if errors are fatal or not
-async.Plan.prototype.fatal = function fatal( errorsAreFatal )
-{
-	if ( ! this.locked ) { this.errorsAreFatal = errorsAreFatal || errorsAreFatal === undefined ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Cast logic jobs to boolean
-async.Plan.prototype.boolean = function boolean( castToBoolean )
-{
-	if ( ! this.locked ) { this.castToBoolean = castToBoolean || castToBoolean === undefined ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Transmit error, in waterfall mode
-async.Plan.prototype.transmitError = function transmitError( waterfallTransmitError )
-{
-	if ( ! this.locked ) { this.waterfallTransmitError = waterfallTransmitError || waterfallTransmitError === undefined ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Set the timeout for each jobs, the callback will be called with an async error for each of them that timeout
-async.Plan.prototype.timeout = function timeout( jobsTimeout )
-{
-	if ( ! this.locked )
-	{
-		if ( typeof jobsTimeout === 'number' ) { this.jobsTimeout = jobsTimeout ; }
-		else { this.jobsTimeout = undefined ; }
-	}
-	return this ;
-} ;
-
-
-
-// Set the 'safeTimeout' mode for all internal timeout
-async.Plan.prototype.safeTimeout = function safeTimeout( useSafeTimeout )
-{
-	if ( ! this.locked ) { this.useSafeTimeout = useSafeTimeout === undefined ? true : !! useSafeTimeout ; }
-} ;
-
-
-
-// Set how to retry jobs in error
-async.Plan.prototype.retry = function retry( maxRetry , timeout , multiply , maxTimeout )
-{
-	if ( this.locked ) { return this ; }
-	
-	if ( typeof maxRetry === 'number' ) { this.maxRetry = maxRetry ; }
-	if ( typeof timeout === 'number' ) { this.retryTimeout = timeout ; }
-	if ( typeof multiply === 'number' ) { this.retryMultiply = multiply ; }
-	if ( typeof maxTimeout === 'number' ) { this.retryMaxTimeout = maxTimeout ; }
-	
-	return this ;
-} ;
-
-
-
-// Set if only the last job's results should be passed to the callback
-async.Plan.prototype.lastJobOnly = function lastJobOnly( returnLastJobOnly )
-{
-	if ( ! this.locked ) { this.returnLastJobOnly = returnLastJobOnly || returnLastJobOnly === undefined ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Set if the result mapping should match the jobs' data 1:1
-async.Plan.prototype.mapping1to1 = function mapping1to1( returnMapping1to1 )
-{
-	if ( ! this.locked ) { this.returnMapping1to1 = returnMapping1to1 || returnMapping1to1 === undefined ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Set the performer of the jobs: if set, do() is not feeded by callback but by arguments for this single callback function.
-// The performer function should accept a callback as its last argument, in the nodejs' way.
-async.Plan.prototype.using = function using( jobsUsing )
-{
-	if ( ! this.locked ) { this.jobsUsing = jobsUsing ; }
-	return this ;
-} ;
-
-
-
-// Same as using(), but the given function receive an uniq "element" containing the whole job as its first argument:
-// it is like using().usingIterator(), a behaviour similar to the async.foreach() factory
-async.Plan.prototype.iterator = function iterator( iterator_ )
-{
-	if ( this.locked ) { return this ; }
-	this.jobsUsing = iterator_ ;
-	this.usingIsIterator = true ;
-	return this ;
-} ;
-
-
-
-// Transmit aggregate, for aggregator mode (reduce, etc)
-async.Plan.prototype.aggregator = function aggregator( transmitAggregate , returnAggregate , defaultAggregate )
-{
-	if ( ! this.locked )  { return this ; }
-	this.transmitAggregate = transmitAggregate || transmitAggregate === undefined ? true : false ;
-	this.returnAggregate = returnAggregate || returnAggregate === undefined ? true : false ;
-	if ( arguments.length > 2 )  { this.defaultAggregate = defaultAggregate ; }
-	return this ;
-} ;
-
-
-
-// Set if using() is an iterator (like async.foreach()), if so, the whole job is transmitted as one argument rather than an argument list
-// NODOC
-async.Plan.prototype.usingIterator = function usingIterator( usingIsIterator )
-{
-	if ( ! this.locked )  { this.usingIsIterator = usingIsIterator || usingIsIterator === undefined ? true : false ; }
-	return this ;
-} ;
-
-
-
-// Set the async'ness of the flow, even sync jobs can be turned async
-async.Plan.prototype.nice = function nice( asyncEventNice )
-{
-	if ( this.locked ) { return this ; }
-	
-	if ( asyncEventNice === undefined || asyncEventNice === null || asyncEventNice === true ) { this.asyncEventNice = -1 ; }
-	else if ( asyncEventNice === false ) { this.asyncEventNice = -20 ; }
-	else { this.asyncEventNice = asyncEventNice ; }
-	
-	return this ;
-} ;
-
-
-
-// Set the async'ness of the flow, even sync jobs can be turned async
-async.Plan.prototype.setMaxRecursion = function setMaxRecursion( maxRecursion )
-{
-	if ( this.locked ) { return this ; }
-	if ( maxRecursion >= 0 ) { this.maxRecursion = maxRecursion ; }
-	return this ;
-} ;
-
-
-
-// Set action to do on completion.
-// If catch() or else() are present and match, then() is not triggered.
-async.Plan.prototype.then = function then( thenAction )
-{
-	if ( ! this.locked ) { this.thenAction = thenAction ; }
-	return this ;
-} ;
-
-
-
-// Set action to do on logical false status
-async.Plan.prototype.else = function _else( elseAction )
-{
-	if ( ! this.locked ) { this.elseAction = elseAction || true ; }
-	return this ;
-} ;
-
-
-
-// Set action to do on error
-async.Plan.prototype.catch = function _catch( catchAction )
-{
-	if ( ! this.locked ) { this.catchAction = catchAction || true ; }
-	return this ;
-} ;
-
-
-
-// Set action to do, that trigger whether it has triggered or not any of then()/catch()/else()
-async.Plan.prototype.finally = function _finally( finallyAction )
-{
-	if ( ! this.locked ) { this.finallyAction = finallyAction || true ; }
-	return this ;
-} ;
-
-
-
-// Return a clone of the object
-async.Plan.prototype.clone = function clone()
-{
-	var asyncPlan = Object.create( async.Plan.prototype , planCommonProperties ) ;
-	treeExtend( null , asyncPlan , this ) ;
-	asyncPlan.locked = false ;
-	return asyncPlan ;
-} ;
-
-
-
-// Export the async.Plan object as an async function, so it can be called later at will
-async.Plan.prototype.export = function _export( execMethod )
-{
-	switch ( execMethod )
-	{
-		case 'execFinally' :
-			return this.clone().execFinally.bind( this ) ;
-		case 'execThenCatch' :
-			return this.clone().execThenCatch.bind( this ) ;
-		case 'execThenElse' :
-			return this.clone().execThenElse.bind( this ) ;
-		case 'execThenElseCatch' :
-			return this.clone().execThenElseCatch.bind( this ) ;
-		case 'execArgs' :
-			return this.clone().execArgs.bind( this ) ;
-		case 'execKV' :
-			return this.clone().execKV.bind( this ) ;
-		default :
-			return this.clone().exec.bind( this ) ;
-	}
-} ;
-
-
-
-// This is the common exec() function, its arguments can be mapped using execMapping()
-async.Plan.prototype.exec = function exec()
-{
-	var config = { inputs: [] , callbacks: {} } , offset = 0 , i ;
-	
-	if ( arguments.length < this.execMappingMinArgs )
-	{
-		throw new Error( "[async] Too few arguments, in this instance, the function signature is: fn" + this.execMappingSignature ) ;
-	}
-	else if ( arguments.length > this.execMappingMaxArgs )
-	{
-		throw new Error( "[async] Too much arguments, in this instance, the function signature is: fn" + this.execMappingSignature ) ;
-	}
-	
-	if ( this.execMappingAggregateArg )
-	{
-		offset ++ ;
-		config.aggregate = arguments[ 0 ] ;
-	}
-	
-	if ( this.execMappingMinInputs === this.execMappingMaxInputs )
-	{
-		// Fixed arguments count, variable callback count possible
-		config.inputs = Array.prototype.slice.call( arguments , offset , this.execMappingMaxInputs + offset ) ;
-		
-		for ( i = 0 ; i < this.execMappingCallbacks.length && config.inputs.length + i < arguments.length ; i ++ )
-		{
-			config.callbacks[ this.execMappingCallbacks[ i ] ] = arguments[ config.inputs.length + offset + i ] ;
-		}
-	}
-	else
-	{
-		// Variable arguments count, fixed callback count
-		config.inputs = Array.prototype.slice.call( arguments , offset , - this.execMappingCallbacks.length ) ;
-		
-		for ( i = 0 ; i < this.execMappingCallbacks.length ; i ++ )
-		{
-			config.callbacks[ this.execMappingCallbacks[ i ] ] = arguments[ config.inputs.length + offset + i ] ;
-		}
-	}
-	
-	return this.execInit( config ) ;
-} ;
-
-
-
-// Exec templates
-async.Plan.prototype.execFinally = function execFinally( finallyCallback )
-{
-	return this.execInit( { inputs: [] , callbacks: { 'finally': finallyCallback } } ) ;
-} ;
-
-
-
-async.Plan.prototype.execThenCatch = function execThenCatch( thenCallback , catchCallback , finallyCallback )
-{
-	return this.execInit( { inputs: [] , callbacks: { 'then': thenCallback , 'catch': catchCallback , 'finally': finallyCallback } } ) ;
-} ;
-
-
-
-async.Plan.prototype.execThenElse = function execThenElse( thenCallback , elseCallback , finallyCallback )
-{
-	return this.execInit( { inputs: [] , callbacks: { 'then': thenCallback , 'else': elseCallback , 'finally': finallyCallback } } ) ;
-} ;
-
-
-
-async.Plan.prototype.execThenElseCatch = function execThenElseCatch( thenCallback , elseCallback , catchCallback , finallyCallback )
-{
-	return this.execInit( { inputs: [] , callbacks: { 'then': thenCallback , 'else': elseCallback , 'catch': catchCallback , 'finally': finallyCallback } } ) ;
-} ;
-
-
-
-async.Plan.prototype.execArgs = function execArgs()
-{
-	return this.execInit( { inputs: arguments , callbacks: {} } ) ;
-} ;
-
-
-
-// Configure the inputs of exec() function
-// .callbacks
-// .minInputs
-// .maxInputs
-// .inputsName
-// .aggregateArg
-async.Plan.prototype.execMapping = function execMapping( config )
-{
-	if ( this.locked )  { return this ; }
-	
-	config = treeExtend( null , { minInputs: 0 , maxInputs: 0 } , config ) ;
-	
-	var i , j , maxUnnamed = 5 ;
-	
-	config.minInputs = parseInt( config.minInputs ) ;
-	config.maxInputs = parseInt( config.maxInputs ) ;
-	
-	if ( config.minInputs < config.maxInputs )
-	{
-		this.execMappingMinInputs = config.minInputs ;
-		this.execMappingMaxInputs = config.maxInputs ;
-	}
-	else
-	{
-		// User is stOopid, swap...
-		this.execMappingMinInputs = config.maxInputs ;
-		this.execMappingMaxInputs = config.minInputs ;
-	}
-	
-	this.execMappingCallbacks = Array.isArray( config.callbacks ) ? config.callbacks : [] ;
-	this.execMappingInputsName = Array.isArray( config.inputsName ) ? config.inputsName : [] ;
-	this.execMappingSignature = '( ' ;
-	
-	if ( this.execMappingMinInputs === this.execMappingMaxInputs )
-	{
-		// Fixed input count, variable callback count possible
-		this.execMappingMinArgs = this.execMappingMinInputs ;
-		this.execMappingMaxArgs = this.execMappingMaxInputs + this.execMappingCallbacks.length ;
-		
-		if ( config.aggregateArg )
-		{
-			this.execMappingAggregateArg = config.aggregateArg ;
-			this.execMappingMinArgs ++ ;
-			this.execMappingMaxArgs ++ ;
-			this.execMappingSignature += 'aggregateValue' ;
-		}
-		
-		for ( i = 0 ; i < this.execMappingMaxInputs ; i ++ )
-		{
-			if ( i > 0 || config.aggregateArg )  { this.execMappingSignature += ', ' ; }
-			if ( i >= maxUnnamed && typeof this.execMappingInputsName[ i ] !== 'string' )  { this.execMappingSignature += '... ' ; break ; }
-			
-			this.execMappingSignature += typeof this.execMappingInputsName[ i ] === 'string' ? this.execMappingInputsName[ i ] : 'arg#' + ( i + 1 ) ;
-		}
-		
-		for ( j = 0 ; j < this.execMappingCallbacks.length ; j ++ )
-		{
-			if ( i + j > 0 || config.aggregateArg )  { this.execMappingSignature += ', ' ; }
-			this.execMappingSignature += '[' + this.execMappingCallbacks[ j ] + 'Callback]' ;
-		}
-	}
-	else
-	{
-		// Variable input count, fixed callback count
-		this.execMappingMinArgs = this.execMappingMinInputs + this.execMappingCallbacks.length ;
-		this.execMappingMaxArgs = this.execMappingMaxInputs + this.execMappingCallbacks.length ;
-		
-		if ( config.aggregateArg )
-		{
-			this.execMappingAggregateArg = config.aggregateArg ;
-			this.execMappingMinArgs ++ ;
-			this.execMappingMaxArgs ++ ;
-			this.execMappingSignature += 'aggregateValue' ;
-		}
-		
-		for ( i = 0 ; i < this.execMappingMaxInputs ; i ++ )
-		{
-			if ( i > 0 || config.aggregateArg )  { this.execMappingSignature += ', ' ; }
-			
-			if ( i < this.execMappingMinInputs )
-			{
-				if ( i >= maxUnnamed && typeof this.execMappingInputsName[ i ] !== 'string' )  { this.execMappingSignature += '... ' ; break ; }
-				this.execMappingSignature += typeof this.execMappingInputsName[ i ] === 'string' ? this.execMappingInputsName[ i ] : 'arg#' + ( i + 1 ) ;
-			}
-			else
-			{
-				if ( i >= maxUnnamed && typeof this.execMappingInputsName[ i ] !== 'string' )  { this.execMappingSignature += '[...] ' ; break ; }
-				this.execMappingSignature += '[' + ( typeof this.execMappingInputsName[ i ] === 'string' ? this.execMappingInputsName[ i ] : 'arg#' + ( i + 1 ) ) + ']' ;
-			}
-		}
-		
-		for ( j = 0 ; j < this.execMappingCallbacks.length ; j ++ )
-		{
-			if ( i + j > 0 || config.aggregateArg )  { this.execMappingSignature += ', ' ; }
-			this.execMappingSignature += this.execMappingCallbacks[ j ] + 'Callback' ;
-		}
-	}
-	
-	this.execMappingSignature += ' )' ;
-	
-	return this ;
-} ;
-
-
-
-// More sage and deterministic exec(), with all arguments given into a single object
-async.Plan.prototype.execKV = function execKV( config )
-{
-	if ( config.inputs === undefined )  { config.inputs = [] ; }
-	else if ( ! Array.isArray( config.inputs ) )  { config.inputs = [ config.inputs ] ; }
-	
-	if ( config.callbacks === undefined || typeof config.callbacks !== 'object' )  { config.callbacks = {} ; }
-	if ( config.then )  { config.callbacks.then = config.then ; }
-	if ( config.else )  { config.callbacks.else = config.else ; }
-	if ( config.catch )  { config.callbacks.catch = config.catch ; }
-	if ( config.finally )  { config.callbacks.finally = config.finally ; }
-	
-	// Nothing to do here, user is free to pass whatever is needed
-	//if ( config.aggregate === undefined )  { config.aggregate = null ; }
-	
-	return this.execInit( config ) ;
-} ;
-
-
-
-// Internal, what to do on new loop iteration
-async.Plan.prototype.execLoop = function execLoop( fromExecContext ) { return this.execInit( {} , fromExecContext ) ; } ;
-
-
-
-// Internal exec of callback-like job/action
-async.Plan.prototype.execJob = function execJob( execContext , job , indexOfKey , tryIndex )
-{
-	var self = this , args , key = execContext.jobsKeys[ indexOfKey ] ;
-	
-	// Create the job's context
-	var jobContext = Object.create( async.JobContext.prototype , {
-		execContext: { value: execContext , enumerable: true } ,
-		indexOfKey: { value: indexOfKey , enumerable: true } ,
-		tryIndex: { value: tryIndex , enumerable: true } ,
-		aborted: { value: false , writable: true , enumerable: true } ,
-		abortedLoop: { value: false , writable: true , enumerable: true }
-	} ) ;
-	
-	// Add the callback to the context
-	Object.defineProperty( jobContext , 'callback' , {
-		value: this.execCallback.bind( this , jobContext ) ,
-		enumerable: true
-	} ) ;
-	
-	// Also add the jobContext into the bounded function: it's an alternate way to access a job's context.
-	Object.defineProperty( jobContext.callback , 'jobContext' , {
-		value: jobContext ,
-		enumerable: true
-	} ) ;
-	
-	
-	// Set the current job's status to 'pending'
-	execContext.jobsStatus[ key ].status = 'pending' ;
-	execContext.jobsStatus[ key ].tried ++ ;
-	
-	// Set up the nice value? For instance only syncEmit() are used
-	//jobContext.setNice( this.asyncEventNice ) ;
-	
-	
-	if ( typeof this.jobsUsing === 'function' )
-	{
-		if ( this.usingIsIterator )
-		{
-			if ( this.transmitAggregate )
-			{
-				if ( this.jobsUsing.length <= 3 )
-				{
-					this.jobsUsing.call( jobContext , execContext.aggregate , job , jobContext.callback ) ;
-				}
-				else if ( this.jobsUsing.length <= 4 )
-				{
-					this.jobsUsing.call( jobContext , execContext.aggregate , job , Array.isArray( execContext.jobsData ) ? indexOfKey : key , jobContext.callback ) ;
-				}
-				else
-				{
-					this.jobsUsing.call( jobContext , execContext.aggregate , job , Array.isArray( execContext.jobsData ) ? indexOfKey : key , execContext.jobsData , jobContext.callback ) ;
-				}
-			}
-			else
-			{
-				if ( this.jobsUsing.length <= 2 )
-				{
-					this.jobsUsing.call( jobContext , job , jobContext.callback ) ;
-				}
-				else if ( this.jobsUsing.length <= 3 )
-				{
-					this.jobsUsing.call( jobContext , job , Array.isArray( execContext.jobsData ) ? indexOfKey : key , jobContext.callback ) ;
-				}
-				else
-				{
-					this.jobsUsing.call( jobContext , job , Array.isArray( execContext.jobsData ) ? indexOfKey : key , execContext.jobsData , jobContext.callback ) ;
-				}
-			}
-		}
-		else if ( Array.isArray( job ) )
-		{
-			args = job.slice() ;
-			
-			if ( this.transmitAggregate )  { args.unshift( execContext.aggregate ) ; }
-			
-			args.push( jobContext.callback ) ;
-			this.jobsUsing.apply( jobContext , args ) ;
-		}
-		else
-		{
-			this.jobsUsing.call( jobContext , job , jobContext.callback ) ;
-		}
-	}
-	else if ( typeof job === 'function' )
-	{
-		if ( this.waterfallMode && indexOfKey > 0 )
-		{
-			// remove the first, error arg if waterfallTransmitError is false
-			//console.log( index , key , execContext.results ) ;
-			args = execContext.results[ execContext.jobsKeys[ indexOfKey - 1 ] ].slice( this.waterfallTransmitError ? 0 : 1 ) ;
-			args.push( jobContext.callback ) ;
-			job.apply( jobContext , args ) ;
-		}
-		else if ( Array.isArray( this.jobsUsing ) || this.execMappingMaxInputs )
-		{
-			if ( Array.isArray( this.jobsUsing ) ) { args = treeExtend( null , [] , this.jobsUsing , execContext.execInputs ) ; }
-			else { args = treeExtend( null , [] , execContext.execInputs ) ; }
-			
-			args.push( jobContext.callback ) ;
-			job.apply( jobContext , args ) ;
-		}
-		else
-		{
-			job.call( jobContext , jobContext.callback ) ;
-		}
-	}
-	else if ( Array.isArray( job ) && typeof job[ 0 ] === 'function' )
-	{
-		args = job.slice( 1 ) ;
-		args.push( jobContext.callback ) ;
-		job[ 0 ].apply( jobContext , args ) ;
-	}
-	else if ( typeof job === 'object' && job instanceof async.Plan )
-	{
-		// What to do with jobUsing and execContext.execInputs here? Same as if( typeof job === 'function' ) ?
-		job.exec( jobContext.callback ) ;
-	}
-	else
-	{
-		this.execCallback.call( this , jobContext ) ;
-		return this ;
-	}
-	
-	
-	// Timers management
-	if ( execContext.jobsTimeoutTimers[ key ] !== undefined )
-	{
-		clearTimeout( execContext.jobsTimeoutTimers[ key ] ) ;
-		execContext.jobsTimeoutTimers[ key ] = undefined ;
-	}
-	
-	if ( execContext.retriesTimers[ key ] !== undefined )
-	{
-		clearTimeout( execContext.retriesTimers[ key ] ) ;
-		execContext.retriesTimers[ key ] = undefined ;
-	}
-	
-	if ( typeof this.jobsTimeout === 'number' && this.jobsTimeout !== Infinity )
-	{
-		execContext.jobsTimeoutTimers[ key ] = setTimeout( function() {
-			execContext.jobsTimeoutTimers[ key ] = undefined ;
-			execContext.jobsStatus[ key ].status = 'timeout' ;
-			jobContext.emit( 'timeout' ) ;
-			self.execCallback.call( self , jobContext , new async.AsyncError( 'jobTimeout' ) ) ;
-		} , this.jobsTimeout ) ;
-	}
-	
-	return this ;
-} ;
-
-
-
-// Internal exec of callback-like action
-async.Plan.prototype.execAction = function execAction( execContext , action , args )
-{
-	// call the matching action
-	if ( typeof action === 'function' )
-	{
-		action.apply( execContext , args ) ;
-	}
-	else if ( typeof action === 'object' && action instanceof async.Plan )
-	{
-		action.exec() ;
-	}
-} ;
-
-
-
-			/////////////////////////////////////////////////////////////////////////
-			// Async JobContext: Context of a job execution, transmitted as *this* //
-			/////////////////////////////////////////////////////////////////////////
-
-
-
-// Empty constructor, it is just there to support instanceof operator
-async.JobContext = function JobContext()
-{
-	throw new Error( "[async] Cannot create an async JobContext object directly" ) ;
-} ;
-
-// Extends it from EventEmitter
-async.JobContext.prototype = Object.create( NextGenEvents.prototype ) ;
-async.JobContext.prototype.constructor = async.JobContext ;
-
-
-
-// Permit a userland-side abort of the job's queue
-async.JobContext.prototype.abort = function abort()
-{
-	this.aborted = true ;
-	this.callback.apply( undefined , arguments ) ;
-} ;
-
-
-
-// Permit a userland-side abort of the job's queue, and event the whole loop
-async.JobContext.prototype.abortLoop = function abortLoop()
-{
-	this.aborted = true ;
-	this.abortedLoop = true ;
-	this.callback.apply( undefined , arguments ) ;
-} ;
-
-
-
-			//////////////////////////////////////////////////
-			// Async ExecContext: Context of plan execution //
-			//////////////////////////////////////////////////
-
-
-
-// Empty constructor, it is just there to support instanceof operator
-async.ExecContext = function ExecContext()
-{
-	throw new Error( "[async] Cannot create an async ExecContext object directly" ) ;
-} ;
-
-// Extends it from EventEmitter
-async.ExecContext.prototype = Object.create( NextGenEvents.prototype ) ;
-async.ExecContext.prototype.constructor = async.ExecContext ;
-
-
-
-// This is used to complete jobsStatus only on-demand, so big data that are not object (e.g. big string)
-// does not get duplicated for nothing
-async.ExecContext.prototype.getJobsStatus = function getJobsStatus()
-{
-	var i , key , fullJobsStatus = Array.isArray( this.jobsData ) ? [] : {} ;
-	
-	for ( i = 0 ; i < this.jobsKeys.length ; i ++ )
-	{
-		key = this.jobsKeys[ i ] ;
-		
-		fullJobsStatus[ key ] = treeExtend( null , {
-				job: this.jobsData[ key ] ,
-				result: this.results[ key ]
-			} ,
-			this.jobsStatus[ key ]
-		) ;
-	}
-	
-	return fullJobsStatus ;
-} ;
-
-
-
-function execDoInit( config , fromExecContext )
-{
-	var i , execContext , isArray = Array.isArray( this.jobsData ) ;
-	
-	if ( fromExecContext && fromExecContext.whileIterator === -1 )
-	{
-		// This is a async.while().do() construct, reuse the parent context
-		execContext = fromExecContext ;
-		execContext.whileIterator = 0 ;
-	}
-	else
-	{
-		// Create instanceof ExecContext
-		execContext = Object.create( async.ExecContext.prototype , {
-			plan: { value: this } ,
-			aggregate: { value: ( 'aggregate' in config  ? config.aggregate : this.defaultAggregate ) , writable: true , enumerable: true } ,
-			results: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-			result: { value: undefined , writable: true , enumerable: true } , // Conditionnal version
-			jobsTimeoutTimers: { value: ( isArray ? [] : {} ) , writable: true } ,
-			jobsStatus: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-			retriesTimers: { value: ( isArray ? [] : {} ) , writable: true } ,
-			retriesCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-			tryUserResponseCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-			tryResponseCounter: { value: ( isArray ? [] : {} ) , writable: true , enumerable: true } ,
-			iterator: { value: 0 , writable: true , enumerable: true } ,
-			pending: { value: 0 , writable: true , enumerable: true } ,
-			resolved: { value: 0 , writable: true , enumerable: true } ,
-			ok: { value: 0 , writable: true , enumerable: true } ,
-			failed: { value: 0 , writable: true , enumerable: true } ,
-			status: { value: undefined , writable: true , enumerable: true } ,
-			error: { value: undefined , writable: true , enumerable: true } ,
-			statusTriggerJobsKey: { value: undefined , writable: true , enumerable: true } ,
-			whileStatus: { value: undefined , writable: true } ,
-				// true if current execContext has looped in another execContext (one loop per execContext possible)
-				// false if this execContext will never loop, undefined if this isn't settled
-			whileChecked: { value: false , writable: true }
-		} ) ;
-		
-		// Add some properties depending on inherited ExecContext or not
-		if ( ! fromExecContext )
-		{
-			// This is the top-level/first ExecContext
-			Object.defineProperties( execContext , {
-				root: { value: execContext , enumerable: true } ,
-				jobsData: {
-					value: ( isArray ? this.jobsData.slice(0) : treeExtend( null , {} , this.jobsData ) ) ,
-					enumerable: true
-				} ,
-				jobsKeys: { value: this.jobsKeys.slice(0) , enumerable: true } ,
-				execInputs: { value: config.inputs , enumerable: true } ,
-				execCallbacks: { value: config.callbacks } ,
-				whileIterator: { value: 0 , enumerable: true , writable: true }
-			} ) ;
-		}
-		else
-		{
-			// This is a loop, and this ExecContext is derived from the first one
-			Object.defineProperties( execContext , {
-				root: { value: fromExecContext.root , enumerable: true } ,
-				jobsData: { value: fromExecContext.jobsData , enumerable: true } ,
-				jobsKeys: { value: fromExecContext.jobsKeys , enumerable: true } ,
-				execInputs: { value: fromExecContext.execInputs , enumerable: true } ,
-				execCallbacks: { value: fromExecContext.execCallbacks } ,
-				whileIterator: { value: fromExecContext.whileIterator + 1 , enumerable: true , writable: true }
-			} ) ;
-		}
-		
-		// Add more properties depending on previous properties
-		Object.defineProperties( execContext , {
-			waiting: { value: execContext.jobsKeys.length , writable: true , enumerable: true }
-		} ) ;
-		
-		// Init the jobsStatus
-		for ( i = 0 ; i < execContext.jobsKeys.length ; i ++ )
-		{
-			execContext.jobsStatus[ execContext.jobsKeys[ i ] ] = {
-				status: 'waiting' ,
-				errors: [] ,
-				tried: 0
-			} ;
-		}
-		
-		// Set up the nice value
-		execContext.setNice( this.asyncEventNice ) ;
-		
-		
-		// Initialize event listeners, only the first time
-		if ( fromExecContext === undefined )
-		{
-			// Register execFinal to the 'resolved' event
-			execContext.root.on( 'resolved' , this.execFinal.bind( this , execContext ) ) ;
-			
-			
-			// Register whileAction to the 'while' event and exec to the 'nextLoop' event
-			// Here, simple callback is mandatory
-			if ( typeof this.whileAction === 'function' )
-			{
-				execContext.root.on( 'while' , this.whileAction.bind( this ) ) ;
-				execContext.root.on( 'nextLoop' , this.execLoop.bind( this ) ) ;
-			}
-			else
-			{
-				this.whileAction = undefined ; // falsy value: do not trigger while code
-				execContext.whileStatus = false ; // settle while status to false
-			}
-			
-			
-			// Register execNext to the next event
-			execContext.root.on( 'next' , this.execNext.bind( this ) ) ;
-			
-			
-			// If we are in a async.while().do() scheme, start whileAction before doing anything
-			if ( this.whileAction && this.whileActionBefore )
-			{
-				execContext.whileIterator = -1 ;
-				execContext.root.emit( 'while' , execContext.error , execContext.results , this.execLoopCallback.bind( this , execContext ) , null ) ;
-				return this ;
-			}
-		}
-	}
-	
-	// If no jobs are provided, then exit right now
-	if ( execContext.jobsKeys.length <= 0 )
-	{
-		execContext.root.emit( 'resolved' , execContext.error , execContext.results ) ;
-		execContext.root.emit( 'progress' , {
-				resolved: execContext.resolved ,
-				ok: execContext.ok ,
-				failed: execContext.failed ,
-				pending: execContext.pending ,
-				waiting: execContext.waiting ,
-				loop: execContext.whileIterator
-			} ,
-			execContext.error , execContext.results
-		) ;
-		execContext.root.emit( 'finish' , execContext.error , execContext.results ) ;
-		return execContext.root ;
-	}
-	
-	// Run...
-	execContext.root.emit( 'next' , execContext ) ;
-	
-	// If uncommented, «if» will emit a «progress» event too, which we don't want
-	//execContext.root.emit( 'progress' , { resolved: execContext.resolved , pending: execContext.pending , waiting: execContext.waiting , loop: execContext.whileIterator } , execContext.results ) ;
-	
-	return execContext.root ;
-}
-
-
-
-// Iterator/next
-function execDoNext( execContext )
-{
-	// Stack overflow/recursion protection against synchronous jobs
-	if ( global.__ASYNC_KIT__.recursionCounter >= execContext.plan.maxRecursion )
-	{
-		//process.stdout.write( 'Alert: high recursion counter: ' + global.__ASYNC_KIT__.recursionCounter + '\n' ) ;
-		process.nextTick( execDoNext.bind( this , execContext ) ) ;
-		return ;
-	}
-	
-	var self = this , indexOfKey , key , length = execContext.jobsKeys.length , startIndex , endIndex ;
-	
-	startIndex = execContext.iterator ;
-	
-	for ( ; execContext.iterator < length && execContext.pending < this.parallelLimit ; execContext.iterator ++ )
-	{
-		execContext.pending ++ ;
-		execContext.waiting -- ;
-		
-		// Current key...
-		indexOfKey = execContext.iterator ;
-		key = execContext.jobsKeys[ indexOfKey ] ;
-		
-		// Set retriesCounter[] to 0 for this key
-		execContext.retriesCounter[ key ] = 0 ;
-		
-		// Create the retries array for this key
-		execContext.tryResponseCounter[ key ] = [] ;
-		execContext.tryResponseCounter[ key ][ 0 ] = 0 ;
-		execContext.tryUserResponseCounter[ key ] = [] ;
-		execContext.tryUserResponseCounter[ key ][ 0 ] = 0 ;
-		
-		// This is to make the result's keys in the same order than the jobs's keys
-		execContext.results[ key ] = undefined ;
-		
-		// execJob() later, or synchronous jobs will mess up the current code flow
-		
-		endIndex = execContext.iterator ;
-	}
-	
-	// Defered execution of jobs
-	for ( indexOfKey = startIndex ; indexOfKey <= endIndex ; indexOfKey ++ )
-	{
-		global.__ASYNC_KIT__.recursionCounter ++ ;
-		this.execJob( execContext , execContext.jobsData[ execContext.jobsKeys[ indexOfKey ] ] , indexOfKey , 0 ) ;
-		global.__ASYNC_KIT__.recursionCounter -- ;
-	}
-}
-
-
-
-// Result callback
-function execDoCallback( jobContext , error )
-{
-	var execContext = jobContext.execContext ,
-		aborted = jobContext.aborted ,
-		abortedLoop = jobContext.abortedLoop ,
-		indexOfKey = jobContext.indexOfKey ,
-		tryIndex = jobContext.tryIndex ;
-	
-	var self = this , timeout , nextTryIndex , length = execContext.jobsKeys.length , key = execContext.jobsKeys[ indexOfKey ] ;
-	
-	// Emit() are postponed at the end of the function: we want a consistent flow, wheither we are running sync or async
-	var emitNext = false , emitResolved = false , emitFinish = false , emitWhile = false ;
-	
-	// Increment the current tryResponseCounter and tryUserResponseCounter
-	execContext.tryResponseCounter[ key ][ tryIndex ] ++ ;
-	if ( ! ( error instanceof async.AsyncError ) ) { execContext.tryUserResponseCounter[ key ][ tryIndex ] ++ ; }
-	
-	// Clear timers if needed
-	if ( execContext.jobsTimeoutTimers[ key ] !== undefined )
-	{
-		clearTimeout( execContext.jobsTimeoutTimers[ key ] ) ;
-		execContext.jobsTimeoutTimers[ key ] = undefined ;
-	}
-	
-	if ( execContext.retriesTimers[ key ] !== undefined )
-	{
-		clearTimeout( execContext.retriesTimers[ key ] ) ;
-		execContext.retriesTimers[ key ] = undefined ;
-	}
-	
-	
-	/*
-	console.log( "\n  key: " , key ) ;
-	console.log( "    retriesCounter: " , execContext.retriesCounter[ key ] , "/" , this.maxRetry ) ;
-	console.log( "    tryIndex: " , tryIndex ) ;
-	console.log( "    tryResponseCounter: " , execContext.tryResponseCounter[ key ][ tryIndex ] ) ;
-	console.log( "    tryUserResponseCounter: " , execContext.tryUserResponseCounter[ key ][ tryIndex ] ) ;
-	//*/
-	
-	//console.log( "    --> No result yet" ) ;
-	
-	// User code shouldn't call the callback more than once... even abort() is cancelled here
-	if ( execContext.tryUserResponseCounter[ key ][ tryIndex ] > 1 )
-	{
-		execContext.jobsStatus[ key ].errors.push( new Error( 'This job has called its completion callback ' + execContext.tryUserResponseCounter[ key ][ tryIndex ] + ' times' ) ) ;
-		return ;
-	}
-	
-	// The callback has already been called for this job: either a user error or a timeout reach there before this job completion
-	// Not sure if this case still exists
-	if ( ! aborted && execContext.results[ key ] !== undefined )
-	{
-		return ;
-	}
-	//console.log( "    --> First user's response" ) ;
-	
-	// Eventually retry on error, if we can retry this job and if this try has not triggered another retry yet
-	if ( ! aborted && error && this.maxRetry > execContext.retriesCounter[ key ] && execContext.tryResponseCounter[ key ][ tryIndex ] <= 1 )
-	{
-		// First "log" the error in the jobsStatus
-		execContext.jobsStatus[ key ].errors.push( error ) ;
-		
-		timeout = this.retryTimeout * Math.pow( this.retryMultiply , execContext.retriesCounter[ key ] ) ;
-		if ( timeout > this.retryMaxTimeout ) { timeout = this.retryMaxTimeout ; }
-		
-		/*
-		console.log( "\n    Retry for key: " , key ) ;
-		console.log( "      retryMultiply: " , this.retryMultiply ) ;
-		console.log( "      retriesCounter: " , execContext.retriesCounter[ key ] ) ;
-		console.log( "      timeout: " , timeout ) ;
-		//*/
-		
-		execContext.retriesCounter[ key ] ++ ;
-		nextTryIndex = execContext.retriesCounter[ key ] ;
-		//console.log( "      nextTryIndex: " , nextTryIndex ) ;
-		
-		execContext.retriesTimers[ key ] = setTimeout( function() {
-			//console.log( "    Retry Timeout triggered... for key: " , key ) ;
-			execContext.retriesTimers[ key ] = undefined ;
-			execContext.tryResponseCounter[ key ][ nextTryIndex ] = 0 ;
-			execContext.tryUserResponseCounter[ key ][ nextTryIndex ] = 0 ;
-			self.execJob( execContext , execContext.jobsData[ key ] , indexOfKey , nextTryIndex ) ;
-		} , timeout ) ;
-		
-		return ;
-	}
-	//console.log( "    --> Don't have to retry" ) ;
-	
-	// If it is an error and posterior tries are in progress
-	if ( ! aborted && error && tryIndex < execContext.retriesCounter[ key ] ) { return ; }
-	//console.log( "    --> Can proceed results" ) ;
-	
-	
-	// Update stats & results
-	execContext.resolved ++ ;
-	execContext.pending -- ;
-	execContext.aggregate = arguments[ 2 ] ;
-	
-	if ( aborted )
-	{
-		execContext.failed ++ ;
-		execContext.jobsStatus[ key ].status = 'aborted' ;
-	}
-	else if ( error )
-	{
-		execContext.failed ++ ;
-		execContext.jobsStatus[ key ].errors.push( error ) ;
-		if ( error instanceof async.AsyncError && error.message === 'jobTimeout' ) { execContext.jobsStatus[ key ].status = 'timeout' ; }
-		else { execContext.jobsStatus[ key ].status = 'failed' ; }
-	}
-	else
-	{
-		execContext.ok ++ ;
-		execContext.jobsStatus[ key ].status = 'ok' ;
-	}
-	
-	if ( this.returnMapping1to1 )  { execContext.results[ key ] = arguments[ 2 ] ; }
-	else  { execContext.results[ key ] = Array.prototype.slice.call( arguments , 1 ) ; }
-	
-	
-	// Check immediate success or failure
-	if ( execContext.status === undefined )
-	{
-		if ( this.raceMode && ! error )
-		{
-			execContext.status = 'ok' ;
-			execContext.statusTriggerJobsKey = key ;
-			
-			if ( this.whileAction && ! abortedLoop ) { emitWhile = true ; }
-			else { emitResolved = true ; }
-		}
-		else if ( ! this.raceMode && error && this.errorsAreFatal )
-		{
-			execContext.status = 'fail' ;
-			execContext.error = error ;
-			execContext.statusTriggerJobsKey = key ;
-			
-			if ( this.whileAction && ! abortedLoop ) { emitWhile = true ; }
-			else { emitResolved = true ; }
-		}
-		else if ( aborted )
-		{
-			execContext.status = 'aborted' ;
-			execContext.statusTriggerJobsKey = key ;
-			
-			if ( this.whileAction && ! abortedLoop ) { emitWhile = true ; }
-			else { emitResolved = true ; }
-		}
-	}
-	
-	
-	// What to do next?
-	if ( execContext.resolved >= length )
-	{
-		// We have resolved everything
-		
-		if ( execContext.status === undefined )
-		{
-			// If still no status, fix the status and emit 'resolved' and 'finish'
-			if ( this.raceMode ) { execContext.status = 'fail' ; }
-			else { execContext.status = 'ok' ; }
-			execContext.statusTriggerJobsKey = key ;
-			
-			if ( this.whileAction ) { emitWhile = true ; }
-			else { emitResolved = emitFinish = true ; }
-		}
-		else
-		{
-			// If we are here, whileAction (if any) has already been called
-			// So if it is already settled, and false, emit 'finish'
-			if ( ! this.whileAction || ( execContext.whileChecked && execContext.whileStatus !== true ) ) { emitFinish = true ; }
-		}
-	}
-	else if ( execContext.status === undefined )
-	{
-		// Iterate to the next job if status have not been settled (or settled to error in a non-race mode if errors are not fatal)
-		if ( execContext.iterator < length ) { emitNext = true ; }
-	}
-	else if ( execContext.pending <= 0 )
-	{
-		// No more item are pending, so we can emit 'finish'
-		
-		// If we are here, whileAction (if any) has already been called
-		// So if it is already settled, and false, emit 'finish'
-		if ( ! this.whileAction || ( execContext.whileChecked && execContext.whileStatus !== true ) ) { emitFinish = true ; }
-	}
-	
-	// Emit events, the order matter
-	if ( emitResolved ) { execContext.root.emit( 'resolved' , execContext.error , execContext.results ) ; }
-	if ( emitNext ) { execContext.root.emit( 'next' , execContext ) ; }
-	if ( emitWhile ) { execContext.root.emit( 'while' , execContext.error , execContext.results , this.execLoopCallback.bind( this , execContext ) , null ) ; }
-	execContext.root.emit( 'progress' , {
-			resolved: execContext.resolved ,
-			ok: execContext.ok ,
-			failed: execContext.failed ,
-			pending: execContext.pending ,
-			waiting: execContext.waiting ,
-			loop: execContext.whileIterator
-		} ,
-		execContext.error , execContext.results
-	) ;
-	if ( emitFinish ) { execContext.root.emit( 'finish' , execContext.error , execContext.results ) ; }
-}
-
-
-
-function execWhileCallback( execContext )
-{
-	var result , logic ;
-	
-	// Emit() are postponed at the end of the function: we want a consistent flow, wheither we are running sync or async
-	var emitNextLoop = false , emitResolved = false , emitFinish = false ;
-	
-	// Arguments checking for fn( [Error] , logic )
-	if ( arguments.length <= 1 ) { result = undefined ; logic = false ; }
-	else if ( arguments[ 1 ] instanceof Error ) { execContext.error = arguments[ 1 ] ; result = arguments[ 1 ] ; logic = false ; }
-	else if ( arguments.length <= 2 ) { result = arguments[ 1 ] ; logic = result ? true : false ; }
-	else { result = arguments[ 2 ] ; logic = result ? true : false ; }
-	
-	/*
-	console.log( 'execWhileCallback(), logic: ' + logic + ', result: ' + result ) ;
-	console.log( arguments ) ;
-	*/
-	
-	if ( logic )
-	{
-		execContext.whileStatus = true ;
-		emitNextLoop = true ;
-	}
-	else
-	{
-		execContext.whileStatus = false ;
-		emitResolved = true ;
-		if ( execContext.pending <= 0 ) { emitFinish = true ; }
-	}
-	
-	// Emit events, the order is important
-	if ( emitResolved ) { execContext.root.emit( 'resolved' , execContext.error , execContext.results ) ; }
-	if ( emitNextLoop ) { execContext.root.emit( 'nextLoop' , execContext ) ; }
-	if ( emitFinish ) { execContext.root.emit( 'finish' , execContext.error , execContext.results ) ; }
-	
-	execContext.whileChecked = true ;
-}
-
-
-
-// What to do when the job is resolved
-function execDoFinal( execContext , error , results )
-{
-	var toReturn ;
-	
-	if ( error )
-	{
-		// Catch...
-		// Should catch() get all the results?
-		if ( this.returnAggregate )  { toReturn = [ error , execContext.aggregate ] ; }
-		else if ( this.returnLastJobOnly )  { toReturn = results[ execContext.statusTriggerJobsKey ] ; }
-		else  { toReturn = [ error , results ] ; }
-		
-		if ( this.catchAction )  { this.execAction( execContext , this.catchAction , toReturn ) ; }
-		if ( error && execContext.execCallbacks.catch )  { this.execAction( execContext , execContext.execCallbacks.catch , toReturn ) ; }
-	}
-	else
-	{
-		// Then...
-		if ( this.returnAggregate )  { toReturn = [ execContext.aggregate ] ; }
-		else if ( this.returnLastJobOnly )  { toReturn = results[ execContext.statusTriggerJobsKey ].slice( 1 ) ; }
-		else  { toReturn = [ results ] ; }
-		
-		if ( this.thenAction )  { this.execAction( execContext , this.thenAction , toReturn ) ; }
-		if ( execContext.execCallbacks.then )  { this.execAction( execContext , execContext.execCallbacks.then , toReturn ) ; }
-	}
-	
-	// Finally...
-	if ( this.returnAggregate )  { toReturn = [ error , execContext.aggregate ] ; }
-	else if ( this.returnLastJobOnly )  { toReturn = results[ execContext.statusTriggerJobsKey ] ; }
-	else  { toReturn = [ error , results ] ; }
-	
-	if ( this.finallyAction )  { this.execAction( execContext , this.finallyAction , toReturn ) ; }
-	if ( execContext.execCallbacks.finally )  { this.execAction( execContext , execContext.execCallbacks.finally , toReturn ) ; }
-}
-
-
-
-// Handle AND & OR
-function execLogicCallback( jobContext )
-{
-	var execContext = jobContext.execContext ,
-		indexOfKey = jobContext.indexOfKey ,
-		tryIndex = jobContext.tryIndex ;
-	
-	var self = this , logic , timeout , nextTryIndex , error ,
-		length = execContext.jobsKeys.length , key = execContext.jobsKeys[ indexOfKey ] ;
-	
-	// Emit() are postponed at the end of the function
-	var emitNext = false , emitResolved = false , emitFinish = false ;
-	
-	// Arguments checking for fn( [Error] , logic )
-	if ( arguments.length <= 1 ) { execContext.result = undefined ; logic = false ; }
-	else if ( arguments[ 1 ] instanceof Error ) { execContext.error = error = arguments[ 1 ] ; execContext.result = arguments[ 1 ] ; logic = false ; }
-	else if ( arguments.length <= 2 ) { execContext.result = arguments[ 1 ] ; logic = execContext.result ? true : false ; }
-	else { execContext.result = arguments[ 2 ] ; logic = execContext.result ? true : false ; }
-	
-	
-	
-	// Increment the current tryResponseCounter and tryUserResponseCounter
-	execContext.tryResponseCounter[ key ][ tryIndex ] ++ ;
-	if ( ! ( error instanceof async.AsyncError ) ) { execContext.tryUserResponseCounter[ key ][ tryIndex ] ++ ; }
-	
-	// Clear timers if needed
-	if ( execContext.jobsTimeoutTimers[ key ] !== undefined )
-	{
-		clearTimeout( execContext.jobsTimeoutTimers[ key ] ) ;
-		execContext.jobsTimeoutTimers[ key ] = undefined ;
-	}
-	
-	if ( execContext.retriesTimers[ key ] !== undefined )
-	{
-		clearTimeout( execContext.retriesTimers[ key ] ) ;
-		execContext.retriesTimers[ key ] = undefined ;
-	}
-	
-	
-	/*
-	console.log( "\n  key: " , key ) ;
-	console.log( "    retriesCounter: " , execContext.retriesCounter[ key ] , "/" , this.maxRetry ) ;
-	console.log( "    tryIndex: " , tryIndex ) ;
-	console.log( "    tryResponseCounter: " , execContext.tryResponseCounter[ key ][ tryIndex ] ) ;
-	console.log( "    tryUserResponseCounter: " , execContext.tryUserResponseCounter[ key ][ tryIndex ] ) ;
-	//*/
-	
-	// The callback has already been called for this job: either a user error or a timeout reach there before this job completion
-	if ( execContext.results[ key ] !== undefined ) { return ; }
-	//console.log( "    --> No result yet" ) ;
-	
-	// User code shouldn't call the callback more than once
-	if ( execContext.tryUserResponseCounter[ key ][ tryIndex ] > 1 ) { return ; }
-	//console.log( "    --> First user's response" ) ;
-	
-	// Eventually retry on error, if we can retry this job and if this try has not triggered another retry yet
-	if ( error && this.maxRetry > execContext.retriesCounter[ key ] && execContext.tryResponseCounter[ key ][ tryIndex ] <= 1 )
-	{
-		timeout = this.retryTimeout * Math.pow( this.retryMultiply , execContext.retriesCounter[ key ] ) ;
-		if ( timeout > this.retryMaxTimeout ) { timeout = this.retryMaxTimeout ; }
-		
-		/*
-		console.log( "\n    Retry for key: " , key ) ;
-		console.log( "      retryMultiply: " , this.retryMultiply ) ;
-		console.log( "      retriesCounter: " , execContext.retriesCounter[ key ] ) ;
-		console.log( "      timeout: " , timeout ) ;
-		//*/
-		
-		execContext.retriesCounter[ key ] ++ ;
-		nextTryIndex = execContext.retriesCounter[ key ] ;
-		//console.log( "      nextTryIndex: " , nextTryIndex ) ;
-		
-		execContext.retriesTimers[ key ] = setTimeout( function() {
-			//console.log( "    Retry Timeout triggered... for key: " , key ) ;
-			execContext.retriesTimers[ key ] = undefined ;
-			execContext.tryResponseCounter[ key ][ nextTryIndex ] = 0 ;
-			execContext.tryUserResponseCounter[ key ][ nextTryIndex ] = 0 ;
-			self.execJob( execContext , execContext.jobsData[ key ] , indexOfKey , nextTryIndex ) ;
-		} , timeout ) ;
-		
-		return ;
-	}
-	//console.log( "    --> Don't have to retry" ) ;
-	
-	// If it is an error and posterior tries are in progress
-	if ( error && tryIndex < execContext.retriesCounter[ key ] ) { return ; }
-	//console.log( "    --> Can proceed results" ) ;
-	
-	
-	// Update stats & results
-	execContext.resolved ++ ;
-	execContext.pending -- ;
-	
-	if ( error )
-	{
-		execContext.failed ++ ;
-		if ( error instanceof async.AsyncError && error.message === 'jobTimeout' ) { execContext.jobsStatus[ key ].status = 'timeout' ; }
-		else { execContext.jobsStatus[ key ].status = 'failed' ; }
-	}
-	else
-	{
-		execContext.ok ++ ;
-		execContext.jobsStatus[ key ].status = 'ok' ;
-	}
-	
-	if ( this.castToBoolean && ( ! ( execContext.result instanceof Error ) || ! this.catchAction ) ) { execContext.result = logic ; }
-	execContext.results[ key ] = execContext.result ;
-	
-	
-	// Check immediate success or failure
-	if ( logic !== this.useLogicAnd && execContext.status === undefined )
-	{
-		execContext.status = ! this.useLogicAnd ;
-		emitResolved = true ;
-	}
-	
-	
-	// What to do next?
-	if ( execContext.resolved >= length )
-	{
-		// We have resolved everything
-		
-		if ( execContext.status === undefined )
-		{
-			execContext.status = this.useLogicAnd ;
-			emitResolved = true ;
-		}
-		
-		emitFinish = true ;
-	}
-	else if ( execContext.status === undefined )
-	{
-		// Iterate to the next job if status have not been settled
-		
-		if ( execContext.iterator < length ) { emitNext =  true ; }
-	}
-	else if ( execContext.pending <= 0 )
-	{
-		// No more item are pending, so we can emit 'finish'
-		
-		emitFinish = true ;
-	}
-	
-	// Emit events, the order matter
-	if ( emitResolved ) { execContext.root.emit( 'resolved' , execContext.result ) ; }
-	if ( emitNext ) { execContext.root.emit( 'next' , execContext ) ; }
-	execContext.root.emit( 'progress' , { resolved: execContext.resolved , pending: execContext.pending , waiting: execContext.waiting , loop: execContext.whileIterator } , execContext.result ) ;
-	if ( emitFinish ) { execContext.root.emit( 'finish' , execContext.result ) ; }
-}
-
-
-
-// What to do when the job is resolved
-function execLogicFinal( execContext , result )
-{
-	// First, the internally registered action
-	if ( result instanceof Error )
-	{
-		if ( this.catchAction ) { this.execAction( execContext , this.catchAction , [ result ] ) ; }
-		else if ( this.elseAction ) { this.execAction( execContext , this.elseAction , [ result ] ) ; }
-	}
-	else if ( ! execContext.result && this.elseAction ) { this.execAction( execContext , this.elseAction , [ result ] ) ; }
-	else if ( execContext.result && this.thenAction ) { this.execAction( execContext , this.thenAction , [ result ] ) ; }
-	
-	if ( this.finallyAction ) { this.execAction( execContext , this.finallyAction , [ result ] ) ; }
-	
-	
-	// Same things, for execContext callback
-	if ( result instanceof Error )
-	{
-		if ( execContext.execCallbacks.catch ) { this.execAction( execContext , execContext.execCallbacks.catch , [ result ] ) ; }
-		else if ( execContext.execCallbacks.else ) { this.execAction( execContext , execContext.execCallbacks.else , [ result ] ) ; }
-	}
-	else if ( ! execContext.result && execContext.execCallbacks.else ) { this.execAction( execContext , execContext.execCallbacks.else , [ result ] ) ; }
-	else if ( execContext.result && execContext.execCallbacks.then ) { this.execAction( execContext , execContext.execCallbacks.then , [ result ] ) ; }
-	
-	if ( execContext.execCallbacks.finally ) { this.execAction( execContext , execContext.execCallbacks.finally , [ result ] ) ; }
-}
-
-
-
-
-}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"_process":69,"nextgen-events":32,"tree-kit/lib/extend.js":81}],29:[function(require,module,exports){
-(function (process){
-/*
-	Async Kit
-	
-	Copyright (c) 2014 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-var async = require( './async.js' ) ;
-
-
-
-var exitInProgress = false ;
-
-
-
-/*
-	Asynchronously exit.
-	
-	Wait for all listeners of the 'asyncExit' event (on the 'process' object) to have called their callback.
-	The listeners receive the exit code about to be produced and a completion callback.
-*/
-
-function exit( code , timeout )
-{
-	// Already exiting? no need to call it twice!
-	if ( exitInProgress ) { return ; }
-	
-	exitInProgress = true ;
-	
-	var listeners = process.listeners( 'asyncExit' ) ;
-	
-	if ( ! listeners.length ) { process.exit( code ) ; return ; }
-	
-	if ( timeout === undefined ) { timeout = 1000 ; }
-	
-	async.parallel( listeners )
-	.using( function( listener , usingCallback ) {
-		
-		if ( listener.length < 3 )
-		{
-			// This listener does not have a callback, it is interested in the event but does not need to perform critical stuff.
-			// E.g. a server will not accept connection or data anymore, but doesn't need cleanup.
-			listener( code , timeout ) ;
-			usingCallback() ;
-		}
-		else
-		{
-			// This listener have a callback, it probably has critical stuff to perform before exiting.
-			// E.g. a server that needs to gracefully exit will not accept connection or data anymore,
-			// but still want to deliver request in progress.
-			listener( code , timeout , usingCallback ) ;
-		}
-	} )
-	.fatal( false )
-	.timeout( timeout )
-	.exec( function() {
-		// We don't care about errors here... We are exiting!
-		process.exit( code ) ;
-	} ) ;
-}
-
-module.exports = exit ;
-
-
-}).call(this,require('_process'))
-},{"./async.js":27,"_process":69}],30:[function(require,module,exports){
-/*
-	Async Kit
-	
-	Copyright (c) 2014 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-/*
-	Safe Timeout.
-	
-	A timeout that ensure a task get the time to perform its action.
-*/
-
-exports.setSafeTimeout = function setSafeTimeout( fn , timeout )
-{
-	var timer = { isSafeTimeout: true } ;
-	
-	timer.timer = setTimeout( function() {
-		timer.timer = setTimeout( function() {
-			timer.timer = setTimeout( function() {
-				timer.timer = setTimeout( fn , 0 ) ;
-			} , timeout / 2 ) ;
-		} , timeout / 2 ) ;
-	} , 0 ) ;
-	
-	return timer ;
-} ;
-
-
-
-exports.clearSafeTimeout = function clearSafeTimeout( timer )
-{
-	if ( timer && typeof timer === 'object' && timer.isSafeTimeout )
-	{
-		clearTimeout( timer.timer ) ;
-	}
-	else
-	{
-		clearTimeout( timer ) ;
-	}
-} ;
-
-
-
-},{}],31:[function(require,module,exports){
-/*
-	Async Kit
-	
-	Copyright (c) 2014 - 2016 Cédric Ronvel
-	
-	The MIT License (MIT)
-	
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-	
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-	
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-var wrapper = {} ;
-module.exports = wrapper ;
-
-
-// Maybe I should have a look to the 'wrappy' package from npm
-
-wrapper.timeout = function timeout( fn , timeout_ , fnThis )
-{
-	var fnWrapper = function() {
-		
-		var this_ = fnThis || this ,
-			alreadyCalledBack = false ,
-			args = Array.prototype.slice.call( arguments ) ,
-			callback = args.pop() ;
-		
-		var callbackWrapper = function() {
-			
-			if ( alreadyCalledBack ) { return ; }
-			
-			alreadyCalledBack = true ;
-			callback.apply( this_ , arguments ) ;
-		} ;
-		
-		args.push( callbackWrapper ) ;
-		fn.apply( this_ , args ) ;
-		
-		setTimeout( callbackWrapper.bind( undefined , new Error( 'Timeout' ) ) , timeout_ ) ;
-	} ;
-	
-	// Should we copy own properties of fn into fnWrapper?
-	
-	return fnWrapper ;
-} ;
-
-
-
-},{}],32:[function(require,module,exports){
-(function (process,global){
-/*
-	Next-Gen Events
-
-	Copyright (c) 2015 - 2018 Cédric Ronvel
-
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-// Some features needs a portable nextTick
-const nextTick = process.browser ? window.setImmediate : process.nextTick ;
-
-
-
-if ( ! global.__NEXTGEN_EVENTS__ ) {
-	global.__NEXTGEN_EVENTS__ = {
-		recursions: 0
-	} ;
-}
-
-var globalData = global.__NEXTGEN_EVENTS__ ;
-
-
-
-function NextGenEvents() {}
-module.exports = NextGenEvents ;
-NextGenEvents.prototype.__prototypeUID__ = 'nextgen-events/NextGenEvents' ;
-NextGenEvents.prototype.__prototypeVersion__ = require( '../package.json' ).version ;
-
-
-
-/* Basic features, more or less compatible with Node.js */
-
-
-
-NextGenEvents.SYNC = -Infinity ;
-NextGenEvents.DESYNC = -1 ;
-
-// Not part of the prototype, because it should not pollute userland's prototype.
-// It has an eventEmitter as 'this' anyway (always called using call()).
-NextGenEvents.init = function init() {
-	Object.defineProperty( this , '__ngev' , {
-		configurable: true ,
-		value: new NextGenEvents.Internal()
-	} ) ;
-} ;
-
-
-
-NextGenEvents.Internal = function Internal( from ) {
-	this.nice = NextGenEvents.SYNC ;
-	this.interruptible = false ;
-	this.contexts = {} ;
-	this.desync = setImmediate ;
-	this.depth = 0 ;
-
-	// States by events
-	this.states = {} ;
-
-	// State groups by events
-	this.stateGroups = {} ;
-
-	// Listeners by events
-	this.listeners = {
-		// Special events
-		error: [] ,
-		interrupt: [] ,
-		newListener: [] ,
-		removeListener: []
-	} ;
-
-	if ( from ) {
-		this.nice = from.nice ;
-		this.interruptible = from.interruptible ;
-		Object.assign( this.states , from.states ) ,
-		Object.assign( this.stateGroups , from.stateGroups ) ,
-
-		Object.keys( from.listeners ).forEach( eventName => {
-			this.listeners[ eventName ] = from.listeners[ eventName ].slice() ;
-		} ) ;
-
-		// Copy all contexts
-		Object.keys( from.contexts ).forEach( contextName => {
-			var context = from.contexts[ contextName ] ;
-			this.contexts[ contextName ] = {
-				nice: context.nice ,
-				ready: true ,
-				status: context.status ,
-				serial: context.serial ,
-				scopes: {}
-			} ;
-		} ) ;
-	}
-} ;
-
-
-
-NextGenEvents.initFrom = function initFrom( from ) {
-	if ( ! from.__ngev ) { NextGenEvents.init.call( from ) ; }
-
-	Object.defineProperty( this , '__ngev' , {
-		configurable: true ,
-		value: new NextGenEvents.Internal( from.__ngev )
-	} ) ;
-} ;
-
-
-
-/*
-	Merge listeners of duplicated event bus:
-		* listeners that are present locally but not in all foreigner are removed (one of the foreigner has removed it)
-		* listeners that are not present locally but present in at least one foreigner are copied
-
-	Not sure if it will ever go public, it was a very specific use-case (Spellcast).
-*/
-NextGenEvents.mergeListeners = function mergeListeners( foreigners ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-
-	// Backup the current listeners...
-	var oldListeners = this.__ngev.listeners ;
-
-
-	// Reset listeners...
-	this.__ngev.listeners = {} ;
-
-	Object.keys( oldListeners ).forEach( eventName => {
-		this.__ngev.listeners[ eventName ] = [] ;
-	} ) ;
-
-	foreigners.forEach( foreigner => {
-		if ( ! foreigner.__ngev ) { NextGenEvents.init.call( foreigner ) ; }
-
-		Object.keys( foreigner.__ngev.listeners ).forEach( eventName => {
-			if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-		} ) ;
-	} ) ;
-
-
-	// Now we can scan by eventName first
-	Object.keys( this.__ngev.listeners ).forEach( eventName => {
-
-		var i , iMax , blacklist = [] ;
-
-		// First pass: find all removed listeners and add them to the blacklist
-		if ( oldListeners[ eventName ] ) {
-			oldListeners[ eventName ].forEach( listener => {
-				for ( i = 0 , iMax = foreigners.length ; i < iMax ; i ++ ) {
-					if (
-						! foreigners[ i ].__ngev.listeners[ eventName ] ||
-						foreigners[ i ].__ngev.listeners[ eventName ].indexOf( listener ) === -1
-					) {
-						blacklist.push( listener ) ;
-						break ;
-					}
-				}
-			} ) ;
-		}
-
-		// Second pass: add all listeners still not present and that are not blacklisted
-		foreigners.forEach( foreigner => {
-
-			foreigner.__ngev.listeners[ eventName ].forEach( listener => {
-				if ( this.__ngev.listeners[ eventName ].indexOf( listener ) === -1 && blacklist.indexOf( listener ) === -1 ) {
-					this.__ngev.listeners[ eventName ].push( listener ) ;
-				}
-			} ) ;
-		} ) ;
-	} ) ;
-} ;
-
-
-
-// Use it with .bind()
-NextGenEvents.filterOutCallback = function( what , currentElement ) { return what !== currentElement ; } ;
-
-
-
-// .addListener( eventName , [fn] , [options] )
-NextGenEvents.prototype.addListener = function addListener( eventName , fn , options ) {
-	var listener = {} , newListenerListeners ;
-
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-
-	if ( ! eventName || typeof eventName !== 'string' ) {
-		throw new TypeError( ".addListener(): argument #0 should be a non-empty string" ) ;
-	}
-
-	if ( typeof fn !== 'function' ) {
-		if ( options === true && fn && typeof fn === 'object' ) {
-			// We want to use the current object as the listener object (used by Spellcast's serializer)
-			options = listener = fn ;
-			fn = undefined ;
-		}
-		else {
-			options = fn ;
-			fn = undefined ;
-		}
-	}
-
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	listener.fn = fn || options.fn ;
-	listener.id = options.id !== undefined ? options.id : listener.fn ;
-	listener.once = !! options.once ;
-	listener.async = !! options.async ;
-	listener.eventObject = !! options.eventObject ;
-	listener.nice = options.nice !== undefined ? Math.floor( options.nice ) : NextGenEvents.SYNC ;
-	listener.context = typeof options.context === 'string' ? options.context : null ;
-
-	if ( typeof listener.fn !== 'function' ) {
-		throw new TypeError( ".addListener(): a function or an object with a 'fn' property which value is a function should be provided" ) ;
-	}
-
-	// Implicit context creation
-	if ( listener.context && typeof listener.context === 'string' && ! this.__ngev.contexts[ listener.context ] ) {
-		this.addListenerContext( listener.context ) ;
-	}
-
-	// Note: 'newListener' and 'removeListener' event return an array of listener, but not the event name.
-	// So the event's name can be retrieved in the listener itself.
-	listener.event = eventName ;
-
-	if ( this.__ngev.listeners.newListener.length ) {
-		// Extra care should be taken with the 'newListener' event, we should avoid recursion
-		// in the case that eventName === 'newListener', but inside a 'newListener' listener,
-		// .listenerCount() should report correctly
-		newListenerListeners = this.__ngev.listeners.newListener.slice() ;
-
-		this.__ngev.listeners[ eventName ].push( listener ) ;
-
-		// Return an array, because one day, .addListener() may support multiple event addition at once,
-		// e.g.: .addListener( { request: onRequest, close: onClose, error: onError } ) ;
-		NextGenEvents.emitEvent( {
-			emitter: this ,
-			name: 'newListener' ,
-			args: [ [ listener ] ] ,
-			listeners: newListenerListeners
-		} ) ;
-
-		if ( this.__ngev.states[ eventName ] ) { NextGenEvents.emitToOneListener( this.__ngev.states[ eventName ] , listener ) ; }
-
-		return this ;
-	}
-
-	this.__ngev.listeners[ eventName ].push( listener ) ;
-
-	if ( this.__ngev.states[ eventName ] ) { NextGenEvents.emitToOneListener( this.__ngev.states[ eventName ] , listener ) ; }
-
-	return this ;
-} ;
-
-NextGenEvents.prototype.on = NextGenEvents.prototype.addListener ;
-
-
-
-// Short-hand
-// .once( eventName , [fn] , [options] )
-NextGenEvents.prototype.once = function once( eventName , fn , options ) {
-	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
-	else if ( options && typeof options === 'object' ) { options.once = true ; }
-	else { options = { once: true } ; }
-
-	return this.addListener( eventName , fn , options ) ;
-} ;
-
-
-
-// .waitFor( eventName )
-// A Promise-returning .once() variant, only the first arg is returned
-NextGenEvents.prototype.waitFor = function waitFor( eventName ) {
-	return new Promise( resolve => {
-		this.addListener( eventName , ( firstArg ) => resolve( firstArg ) , { once: true } ) ;
-	} ) ;
-} ;
-
-
-
-// .waitForAll( eventName )
-// A Promise-returning .once() variant, all args are returned as an array
-NextGenEvents.prototype.waitForAll = function waitForAll( eventName ) {
-	return new Promise( resolve => {
-		this.addListener( eventName , ( ... args ) => resolve( args ) , { once: true } ) ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.prototype.removeListener = function removeListener( eventName , id ) {
-	var i , length , newListeners = [] , removedListeners = [] ;
-
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeListener(): argument #0 should be a non-empty string" ) ; }
-
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-
-	length = this.__ngev.listeners[ eventName ].length ;
-
-	// It's probably faster to create a new array of listeners
-	for ( i = 0 ; i < length ; i ++ ) {
-		if ( this.__ngev.listeners[ eventName ][ i ].id === id ) {
-			removedListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
-		}
-		else {
-			newListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
-		}
-	}
-
-	this.__ngev.listeners[ eventName ] = newListeners ;
-
-	if ( removedListeners.length && this.__ngev.listeners.removeListener.length ) {
-		this.emit( 'removeListener' , removedListeners ) ;
-	}
-
-	return this ;
-} ;
-
-NextGenEvents.prototype.off = NextGenEvents.prototype.removeListener ;
-
-
-
-NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventName ) {
-	var removedListeners ;
-
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-
-	if ( eventName ) {
-		// Remove all listeners for a particular event
-
-		if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeAllListeners(): argument #0 should be undefined or a non-empty string" ) ; }
-
-		if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-
-		removedListeners = this.__ngev.listeners[ eventName ] ;
-		this.__ngev.listeners[ eventName ] = [] ;
-
-		if ( removedListeners.length && this.__ngev.listeners.removeListener.length ) {
-			this.emit( 'removeListener' , removedListeners ) ;
-		}
-	}
-	else {
-		// Remove all listeners for any events
-		// 'removeListener' listeners cannot be triggered: they are already deleted
-		this.__ngev.listeners = {} ;
-	}
-
-	return this ;
-} ;
-
-
-
-NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , contextScope , serial ) {
-	var returnValue , listenerCallback ;
-
-	if ( event.interrupt ) { return ; }
-
-	if ( listener.async ) {
-		if ( contextScope ) {
-			contextScope.ready = ! serial ;
-		}
-
-		listenerCallback = ( arg ) => {
-
-			event.listenersDone ++ ;
-
-			// Async interrupt
-			if ( arg && event.emitter.__ngev.interruptible && ! event.interrupt && event.name !== 'interrupt' ) {
-				event.interrupt = arg ;
-
-				if ( event.callback ) { NextGenEvents.emitCallback( event ) ; }
-
-				event.emitter.emit( 'interrupt' , event.interrupt ) ;
-			}
-			else if ( event.listenersDone >= event.listeners.length && event.callback ) {
-				NextGenEvents.emitCallback( event ) ;
-			}
-
-			// Process the queue if serialized
-			if ( serial ) { NextGenEvents.processScopeQueue( event.emitter , contextScope , true , true ) ; }
-		} ;
-
-		if ( listener.eventObject ) { listener.fn( event , listenerCallback ) ; }
-		else { returnValue = listener.fn.apply( undefined , event.args.concat( listenerCallback ) ) ; }
-	}
-	else {
-		if ( listener.eventObject ) { listener.fn( event ) ; }
-		else { returnValue = listener.fn.apply( undefined , event.args ) ; }
-
-		event.listenersDone ++ ;
-	}
-
-	// Interrupt if non-falsy return value, if the emitter is interruptible, not already interrupted (emit once),
-	// and not within an 'interrupt' event.
-	if ( returnValue && event.emitter.__ngev.interruptible && ! event.interrupt && event.name !== 'interrupt' ) {
-		event.interrupt = returnValue ;
-
-		if ( event.callback ) { NextGenEvents.emitCallback( event ) ; }
-
-		event.emitter.emit( 'interrupt' , event.interrupt ) ;
-	}
-	else if ( event.listenersDone >= event.listeners.length && event.callback ) {
-		NextGenEvents.emitCallback( event ) ;
-	}
-} ;
-
-
-
-// A unique event ID
-var nextEventId = 0 ;
-
-
-
-/*
-	emit( [nice] , eventName , [arg1] , [arg2] , [...] , [emitCallback] )
-*/
-NextGenEvents.prototype.emit = function emit( ... args ) {
-	var event ;
-
-	event = {
-		emitter: this ,
-		interrupt: null ,
-		sync: true
-	} ;
-
-	// Arguments handling
-	if ( typeof args[ 0 ] === 'number' ) {
-		event.nice = Math.floor( args[ 0 ] ) ;
-		event.name = args[ 1 ] ;
-
-		if ( ! event.name || typeof event.name !== 'string' ) {
-			throw new TypeError( ".emit(): when argument #0 is a number, argument #1 should be a non-empty string" ) ;
-		}
-
-		if ( typeof args[ args.length - 1 ] === 'function' ) {
-			event.callback = args[ args.length - 1 ] ;
-			event.args = args.slice( 2 , -1 ) ;
-		}
-		else {
-			event.args = args.slice( 2 ) ;
-		}
-	}
-	else {
-		//event.nice = this.__ngev.nice ;
-		event.name = args[ 0 ] ;
-
-		if ( ! event.name || typeof event.name !== 'string' ) {
-			throw new TypeError( ".emit(): argument #0 should be an number or a non-empty string" ) ;
-		}
-
-		if ( typeof args[ args.length - 1 ] === 'function' ) {
-			event.callback = args[ args.length - 1 ] ;
-			event.args = args.slice( 1 , -1 ) ;
-		}
-		else {
-			event.args = args.slice( 1 ) ;
-		}
-	}
-
-	return NextGenEvents.emitEvent( event ) ;
-} ;
-
-
-
-NextGenEvents.prototype.waitForEmit = function waitForEmit( ... args ) {
-	return new Promise( resolve => {
-		this.emit( ... args , ( interrupt ) => resolve( interrupt ) ) ;
-	} ) ;
-} ;
-
-
-
-/*
-	At this stage, 'event' should be an object having those properties:
-		* emitter: the event emitter
-		* name: the event name
-		* args: array, the arguments of the event
-		* nice: (optional) nice value
-		* callback: (optional) a callback for emit
-		* listeners: (optional) override the listeners array stored in __ngev
-*/
-NextGenEvents.emitEvent = function emitEvent( event ) {
-	var self = event.emitter ,
-		i , iMax , count = 0 , state , removedListeners ;
-
-	if ( ! self.__ngev ) { NextGenEvents.init.call( self ) ; }
-
-	state = self.__ngev.states[ event.name ] ;
-
-	// This is a state event, register it now!
-	if ( state !== undefined ) {
-		if ( state && event.args.length === state.args.length &&
-			event.args.every( ( arg , index ) => arg === state.args[ index ] ) ) {
-			// The emitter is already in this exact state, skip it now!
-			return ;
-		}
-
-		// Unset all states of that group
-		self.__ngev.stateGroups[ event.name ].forEach( ( eventName ) => {
-			self.__ngev.states[ eventName ] = null ;
-		} ) ;
-
-		self.__ngev.states[ event.name ] = event ;
-	}
-
-	if ( ! self.__ngev.listeners[ event.name ] ) { self.__ngev.listeners[ event.name ] = [] ; }
-
-	event.id = nextEventId ++ ;
-	event.listenersDone = 0 ;
-	event.once = !! event.once ;
-
-	if ( event.nice === undefined || event.nice === null ) { event.nice = self.__ngev.nice ; }
-
-	// Trouble arise when a listener is removed from another listener, while we are still in the loop.
-	// So we have to COPY the listener array right now!
-	if ( ! event.listeners ) { event.listeners = self.__ngev.listeners[ event.name ].slice() ; }
-
-	// Increment globalData.recursions
-	globalData.recursions ++ ;
-	event.depth = self.__ngev.depth ++ ;
-	removedListeners = [] ;
-
-	// Emit the event to all listeners!
-	for ( i = 0 , iMax = event.listeners.length ; i < iMax ; i ++ ) {
-		count ++ ;
-		NextGenEvents.emitToOneListener( event , event.listeners[ i ] , removedListeners ) ;
-	}
-
-	// Decrement globalData.recursions
-	globalData.recursions -- ;
-	if ( ! event.callback ) { self.__ngev.depth -- ; }
-
-	// Emit 'removeListener' after calling listeners
-	if ( removedListeners.length && self.__ngev.listeners.removeListener.length ) {
-		self.emit( 'removeListener' , removedListeners ) ;
-	}
-
-
-	// 'error' event is a special case: it should be listened for, or it will throw an error
-	if ( ! count ) {
-		if ( event.name === 'error' ) {
-			if ( event.args[ 0 ] ) { throw event.args[ 0 ] ; }
-			else { throw Error( "Uncaught, unspecified 'error' event." ) ; }
-		}
-
-		if ( event.callback ) { NextGenEvents.emitCallback( event ) ; }
-	}
-
-	// Leaving sync mode
-	event.sync = false ;
-
-	return event ;
-} ;
-
-
-
-// If removedListeners is not given, then one-time listener emit the 'removeListener' event,
-// if given: that's the caller business to do it
-NextGenEvents.emitToOneListener = function emitToOneListener( event , listener , removedListeners ) {
-	var self = event.emitter ,
-		context , contextScope , serial , currentNice , emitRemoveListener = false ;
-
-	context = listener.context && self.__ngev.contexts[ listener.context ] ;
-
-	// If the listener context is disabled...
-	if ( context && context.status === NextGenEvents.CONTEXT_DISABLED ) { return ; }
-
-	// The nice value for this listener...
-	if ( context ) {
-		currentNice = Math.max( event.nice , listener.nice , context.nice ) ;
-		serial = context.serial ;
-		contextScope = NextGenEvents.getContextScope( context , event.depth ) ;
-	}
-	else {
-		currentNice = Math.max( event.nice , listener.nice ) ;
-	}
-
-
-	if ( listener.once ) {
-		// We should remove the current listener RIGHT NOW because of recursive .emit() issues:
-		// one listener may eventually fire this very same event synchronously during the current loop.
-		self.__ngev.listeners[ event.name ] = self.__ngev.listeners[ event.name ].filter(
-			NextGenEvents.filterOutCallback.bind( undefined , listener )
-		) ;
-
-		if ( removedListeners ) { removedListeners.push( listener ) ; }
-		else { emitRemoveListener = true ; }
-	}
-
-	if ( context && ( context.status === NextGenEvents.CONTEXT_QUEUED || ! contextScope.ready ) ) {
-		// Almost all works should be done by .emit(), and little few should be done by .processScopeQueue()
-		contextScope.queue.push( { event: event , listener: listener , nice: currentNice } ) ;
-	}
-	else {
-		try {
-			if ( currentNice < 0 ) {
-				if ( globalData.recursions >= -currentNice ) {
-					self.__ngev.desync( NextGenEvents.listenerWrapper.bind( self , listener , event , contextScope , serial ) ) ;
-				}
-				else {
-					NextGenEvents.listenerWrapper.call( self , listener , event , contextScope , serial ) ;
-				}
-			}
-			else {
-				setTimeout( NextGenEvents.listenerWrapper.bind( self , listener , event , contextScope , serial ) , currentNice ) ;
-			}
-		}
-		catch ( error ) {
-			// Catch error, just to decrement globalData.recursions, re-throw after that...
-			globalData.recursions -- ;
-			throw error ;
-		}
-	}
-
-	// Emit 'removeListener' after calling the listener
-	if ( emitRemoveListener && self.__ngev.listeners.removeListener.length ) {
-		self.emit( 'removeListener' , [ listener ] ) ;
-	}
-} ;
-
-
-
-NextGenEvents.emitCallback = function emitCallback( event ) {
-	var callback = event.callback ;
-	delete event.callback ;
-
-	if ( event.sync && event.emitter.__ngev.nice !== NextGenEvents.SYNC ) {
-		// Force desync if global nice value is not SYNC
-		event.emitter.__ngev.desync( () => {
-			event.emitter.__ngev.depth -- ;
-			callback( event.interrupt , event ) ;
-		} ) ;
-	}
-	else {
-		event.emitter.__ngev.depth -- ;
-		callback( event.interrupt , event ) ;
-	}
-} ;
-
-
-
-NextGenEvents.prototype.listeners = function listeners( eventName ) {
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listeners(): argument #0 should be a non-empty string" ) ; }
-
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-
-	// Do not return the array, shallow copy it
-	return this.__ngev.listeners[ eventName ].slice() ;
-} ;
-
-
-
-NextGenEvents.listenerCount = function( emitter , eventName ) {
-	if ( ! emitter || ! ( emitter instanceof NextGenEvents ) ) { throw new TypeError( ".listenerCount(): argument #0 should be an instance of NextGenEvents" ) ; }
-	return emitter.listenerCount( eventName ) ;
-} ;
-
-
-
-NextGenEvents.prototype.listenerCount = function( eventName ) {
-	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listenerCount(): argument #1 should be a non-empty string" ) ; }
-
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! this.__ngev.listeners[ eventName ] ) { this.__ngev.listeners[ eventName ] = [] ; }
-
-	return this.__ngev.listeners[ eventName ].length ;
-} ;
-
-
-
-NextGenEvents.prototype.setNice = function setNice( nice ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
-
-	this.__ngev.nice = Math.floor( + nice || 0 ) ;
-} ;
-
-
-
-NextGenEvents.prototype.desyncUseNextTick = function desyncUseNextTick( useNextTick ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
-
-	this.__ngev.desync = useNextTick ? nextTick : setImmediate ;
-} ;
-
-
-
-NextGenEvents.prototype.setInterruptible = function setInterruptible( isInterruptible ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
-
-	this.__ngev.interruptible = !! isInterruptible ;
-} ;
-
-
-
-// Make two objects share the same event bus
-NextGenEvents.share = function( source , target ) {
-	if ( ! ( source instanceof NextGenEvents ) || ! ( target instanceof NextGenEvents ) ) {
-		throw new TypeError( 'NextGenEvents.share() arguments should be instances of NextGenEvents' ) ;
-	}
-
-	if ( ! source.__ngev ) { NextGenEvents.init.call( source ) ; }
-
-	Object.defineProperty( target , '__ngev' , {
-		configurable: true ,
-		value: source.__ngev
-	} ) ;
-} ;
-
-
-
-NextGenEvents.reset = function reset( emitter ) {
-	Object.defineProperty( emitter , '__ngev' , {
-		configurable: true ,
-		value: null
-	} ) ;
-} ;
-
-
-
-// There is no such thing in NextGenEvents, however, we need to be compatible with node.js events at best
-NextGenEvents.prototype.setMaxListeners = function() {} ;
-
-// Sometime useful as a no-op callback...
-NextGenEvents.noop = function() {} ;
-
-
-
-
-
-/* Next Gen feature: states! */
-
-
-
-// .defineStates( exclusiveState1 , [exclusiveState2] , [exclusiveState3] , ... )
-NextGenEvents.prototype.defineStates = function defineStates( ... states ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-
-	states.forEach( ( state ) => {
-		this.__ngev.states[ state ] = null ;
-		this.__ngev.stateGroups[ state ] = states ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.prototype.hasState = function hasState( state ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	return !! this.__ngev.states[ state ] ;
-} ;
-
-
-
-NextGenEvents.prototype.getAllStates = function getAllStates() {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	return Object.keys( this.__ngev.states ).filter( e => this.__ngev.states[ e ] ) ;
-} ;
-
-
-
-
-
-/* Next Gen feature: groups! */
-
-
-
-NextGenEvents.groupAddListener = function groupAddListener( emitters , eventName , fn , options ) {
-	// Manage arguments
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	fn = fn || options.fn ;
-	delete options.fn ;
-
-	// Preserve the listener ID, so groupRemoveListener() will work as expected
-	options.id = options.id || fn ;
-
-	emitters.forEach( ( emitter ) => {
-		emitter.addListener( eventName , fn.bind( undefined , emitter ) , options ) ;
-	} ) ;
-} ;
-
-NextGenEvents.groupOn = NextGenEvents.groupAddListener ;
-
-
-
-// Once per emitter
-NextGenEvents.groupOnce = function groupOnce( emitters , eventName , fn , options ) {
-	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
-	else if ( options && typeof options === 'object' ) { options.once = true ; }
-	else { options = { once: true } ; }
-
-	return this.groupAddListener( emitters , eventName , fn , options ) ;
-} ;
-
-
-
-// Globally once, only one event could be emitted, by the first emitter to emit
-NextGenEvents.groupGlobalOnce = function groupGlobalOnce( emitters , eventName , fn , options ) {
-	var fnWrapper , triggered = false ;
-
-	// Manage arguments
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	fn = fn || options.fn ;
-	delete options.fn ;
-
-	// Preserve the listener ID, so groupRemoveListener() will work as expected
-	options.id = options.id || fn ;
-
-	fnWrapper = ( ... args ) => {
-		if ( triggered ) { return ; }
-		triggered = true ;
-		NextGenEvents.groupRemoveListener( emitters , eventName , options.id ) ;
-		fn( ... args ) ;
-	} ;
-
-	emitters.forEach( ( emitter ) => {
-		emitter.once( eventName , fnWrapper.bind( undefined , emitter ) , options ) ;
-	} ) ;
-} ;
-
-
-
-// Globally once, only one event could be emitted, by the last emitter to emit
-NextGenEvents.groupGlobalOnceAll = function groupGlobalOnceAll( emitters , eventName , fn , options ) {
-	var fnWrapper , triggered = false , count = emitters.length ;
-
-	// Manage arguments
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	fn = fn || options.fn ;
-	delete options.fn ;
-
-	// Preserve the listener ID, so groupRemoveListener() will work as expected
-	options.id = options.id || fn ;
-
-	fnWrapper = ( ... args ) => {
-		if ( triggered ) { return ; }
-		if ( -- count ) { return ; }
-
-		// So this is the last emitter...
-
-		triggered = true ;
-		// No need to remove listeners: there are already removed anyway
-		//NextGenEvents.groupRemoveListener( emitters , eventName , options.id ) ;
-		fn( ... args ) ;
-	} ;
-
-	emitters.forEach( ( emitter ) => {
-		emitter.once( eventName , fnWrapper.bind( undefined , emitter ) , options ) ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.groupRemoveListener = function groupRemoveListener( emitters , eventName , id ) {
-	emitters.forEach( ( emitter ) => {
-		emitter.removeListener( eventName , id ) ;
-	} ) ;
-} ;
-
-NextGenEvents.groupOff = NextGenEvents.groupRemoveListener ;
-
-
-
-NextGenEvents.groupRemoveAllListeners = function groupRemoveAllListeners( emitters , eventName ) {
-	emitters.forEach( ( emitter ) => {
-		emitter.removeAllListeners( eventName ) ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.groupEmit = function groupEmit( emitters , ... args ) {
-	var eventName , nice , argStart = 1 , argEnd , count = emitters.length ,
-		callback , callbackWrapper , callbackTriggered = false ;
-
-	if ( typeof args[ args.length - 1 ] === 'function' ) {
-		argEnd = -1 ;
-		callback = args[ args.length - 1 ] ;
-
-		callbackWrapper = ( interruption ) => {
-			if ( callbackTriggered ) { return ; }
-
-			if ( interruption ) {
-				callbackTriggered = true ;
-				callback( interruption ) ;
-			}
-			else if ( ! -- count ) {
-				callbackTriggered = true ;
-				callback() ;
-			}
-		} ;
-	}
-
-	if ( typeof args[ 0 ] === 'number' ) {
-		argStart = 2 ;
-		nice = typeof args[ 0 ] ;
-	}
-
-	eventName = args[ argStart - 1 ] ;
-	args = args.slice( argStart , argEnd ) ;
-
-	emitters.forEach( ( emitter ) => {
-		NextGenEvents.emitEvent( {
-			emitter: emitter ,
-			name: eventName ,
-			args: args ,
-			nice: nice ,
-			callback: callbackWrapper
-		} ) ;
-	} ) ;
-} ;
-
-
-
-NextGenEvents.groupDefineStates = function groupDefineStates( emitters , ... args ) {
-	emitters.forEach( ( emitter ) => {
-		emitter.defineStates( ... args ) ;
-	} ) ;
-} ;
-
-
-
-
-
-/* Next Gen feature: contexts! */
-
-
-
-NextGenEvents.CONTEXT_ENABLED = 0 ;
-NextGenEvents.CONTEXT_DISABLED = 1 ;
-NextGenEvents.CONTEXT_QUEUED = 2 ;
-
-
-
-NextGenEvents.prototype.addListenerContext = function addListenerContext( contextName , options ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".addListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	var context = this.__ngev.contexts[ contextName ] ;
-
-	if ( ! context ) {
-		context = this.__ngev.contexts[ contextName ] = {
-			nice: NextGenEvents.SYNC ,
-			ready: true ,
-			status: NextGenEvents.CONTEXT_ENABLED ,
-			serial: false ,
-			scopes: {}
-		} ;
-	}
-
-	if ( options.nice !== undefined ) { context.nice = Math.floor( options.nice ) ; }
-	if ( options.status !== undefined ) { context.status = options.status ; }
-	if ( options.serial !== undefined ) { context.serial = !! options.serial ; }
-
-	return this ;
-} ;
-
-
-
-NextGenEvents.getContextScope = function getContextScope( context , scopeName ) {
-	var scope = context.scopes[ scopeName ] ;
-
-	if ( ! scope ) {
-		scope = context.scopes[ scopeName ] = {
-			ready: true ,
-			queue: []
-		} ;
-	}
-
-	return scope ;
-} ;
-
-
-
-NextGenEvents.prototype.disableListenerContext = function disableListenerContext( contextName ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".disableListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-
-	this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_DISABLED ;
-
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.enableListenerContext = function enableListenerContext( contextName ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".enableListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-
-	var context = this.__ngev.contexts[ contextName ] ;
-
-	context.status = NextGenEvents.CONTEXT_ENABLED ;
-
-	Object.values( context.scopes ).forEach( contextScope => {
-		if ( contextScope.queue.length > 0 ) { NextGenEvents.processScopeQueue( this , contextScope , context.serial ) ; }
-	} ) ;
-
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.queueListenerContext = function queueListenerContext( contextName ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".queueListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-
-	this.__ngev.contexts[ contextName ].status = NextGenEvents.CONTEXT_QUEUED ;
-
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.serializeListenerContext = function serializeListenerContext( contextName , value ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".serializeListenerContext(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-
-	this.__ngev.contexts[ contextName ].serial = value === undefined ? true : !! value ;
-
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.setListenerContextNice = function setListenerContextNice( contextName , nice ) {
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".setListenerContextNice(): argument #0 should be a non-empty string" ) ; }
-	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
-
-	this.__ngev.contexts[ contextName ].nice = Math.floor( nice ) ;
-
-	return this ;
-} ;
-
-
-
-NextGenEvents.prototype.destroyListenerContext = function destroyListenerContext( contextName ) {
-	var i , length , eventName , newListeners , removedListeners = [] ;
-
-	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".disableListenerContext(): argument #0 should be a non-empty string" ) ; }
-
-	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
-
-	// We don't care if a context actually exists, all listeners tied to that contextName will be removed
-
-	for ( eventName in this.__ngev.listeners ) {
-		newListeners = null ;
-		length = this.__ngev.listeners[ eventName ].length ;
-
-		for ( i = 0 ; i < length ; i ++ ) {
-			if ( this.__ngev.listeners[ eventName ][ i ].context === contextName ) {
-				newListeners = [] ;
-				removedListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
-			}
-			else if ( newListeners ) {
-				newListeners.push( this.__ngev.listeners[ eventName ][ i ] ) ;
-			}
-		}
-
-		if ( newListeners ) { this.__ngev.listeners[ eventName ] = newListeners ; }
-	}
-
-	if ( this.__ngev.contexts[ contextName ] ) { delete this.__ngev.contexts[ contextName ] ; }
-
-	if ( removedListeners.length && this.__ngev.listeners.removeListener.length ) {
-		this.emit( 'removeListener' , removedListeners ) ;
-	}
-
-	return this ;
-} ;
-
-
-
-NextGenEvents.processScopeQueue = function processScopeQueue( self , contextScope , serial , isCompletionCallback ) {
-	var job ;
-
-	if ( isCompletionCallback ) { contextScope.ready = true ; }
-
-	// Increment recursion
-	globalData.recursions ++ ;
-
-	while ( contextScope.ready && contextScope.queue.length ) {
-		job = contextScope.queue.shift() ;
-
-		// This event has been interrupted, drop it now!
-		if ( job.event.interrupt ) { continue ; }
-
-		try {
-			if ( job.nice < 0 ) {
-				if ( globalData.recursions >= -job.nice ) {
-					self.__ngev.desync( NextGenEvents.listenerWrapper.bind( self , job.listener , job.event , contextScope , serial ) ) ;
-				}
-				else {
-					NextGenEvents.listenerWrapper.call( self , job.listener , job.event , contextScope , serial ) ;
-				}
-			}
-			else {
-				setTimeout( NextGenEvents.listenerWrapper.bind( self , job.listener , job.event , contextScope , serial ) , job.nice ) ;
-			}
-		}
-		catch ( error ) {
-			// Catch error, just to decrement globalData.recursions, re-throw after that...
-			globalData.recursions -- ;
-			throw error ;
-		}
-	}
-
-	// Decrement recursion
-	globalData.recursions -- ;
-} ;
-
-
-
-// Backup for the AsyncTryCatch
-NextGenEvents.on = NextGenEvents.prototype.on ;
-NextGenEvents.once = NextGenEvents.prototype.once ;
-NextGenEvents.off = NextGenEvents.prototype.off ;
-
-
-
-if ( global.AsyncTryCatch ) {
-	NextGenEvents.prototype.asyncTryCatchId = global.AsyncTryCatch.NextGenEvents.length ;
-	global.AsyncTryCatch.NextGenEvents.push( NextGenEvents ) ;
-
-	if ( global.AsyncTryCatch.substituted ) {
-		global.AsyncTryCatch.substitute() ;
-	}
-}
-
-
-
-// Load Proxy AT THE END (circular require)
-NextGenEvents.Proxy = require( './Proxy.js' ) ;
-
-
-}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":34,"./Proxy.js":33,"_process":69}],33:[function(require,module,exports){
-/*
-	Next-Gen Events
-
-	Copyright (c) 2015 - 2018 Cédric Ronvel
-
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-function Proxy() {
-	this.localServices = {} ;
-	this.remoteServices = {} ;
-	this.nextAckId = 1 ;
-}
-
-module.exports = Proxy ;
-
-var NextGenEvents = require( './NextGenEvents.js' ) ;
-var MESSAGE_TYPE = 'NextGenEvents/message' ;
-
-function noop() {}
-
-
-
-// Backward compatibility
-Proxy.create = ( ... args ) => new Proxy( ... args ) ;
-
-
-
-// Add a local service accessible remotely
-Proxy.prototype.addLocalService = function addLocalService( id , emitter , options ) {
-	this.localServices[ id ] = LocalService.create( this , id , emitter , options ) ;
-	return this.localServices[ id ] ;
-} ;
-
-
-
-// Add a remote service accessible locally
-Proxy.prototype.addRemoteService = function addRemoteService( id ) {
-	this.remoteServices[ id ] = RemoteService.create( this , id ) ;
-	return this.remoteServices[ id ] ;
-} ;
-
-
-
-// Destroy the proxy
-Proxy.prototype.destroy = function destroy() {
-	Object.keys( this.localServices ).forEach( ( id ) => {
-		this.localServices[ id ].destroy() ;
-		delete this.localServices[ id ] ;
-	} ) ;
-
-	Object.keys( this.remoteServices ).forEach( ( id ) => {
-		this.remoteServices[ id ].destroy() ;
-		delete this.remoteServices[ id ] ;
-	} ) ;
-
-	this.receive = this.send = noop ;
-} ;
-
-
-
-// Push an event message.
-Proxy.prototype.push = function push( message ) {
-	if (
-		message.__type !== MESSAGE_TYPE ||
-		! message.service || typeof message.service !== 'string' ||
-		! message.event || typeof message.event !== 'string' ||
-		! message.method
-	) {
-		return ;
-	}
-
-	switch ( message.method ) {
-		// Those methods target a remote service
-		case 'event' :
-			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveEvent( message ) ;
-		case 'ackEmit' :
-			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveAckEmit( message ) ;
-
-		// Those methods target a local service
-		case 'emit' :
-			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveEmit( message ) ;
-		case 'listen' :
-			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveListen( message ) ;
-		case 'ignore' :
-			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveIgnore( message ) ;
-		case 'ackEvent' :
-			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveAckEvent( message ) ;
-
-		default :
-			return ;
-	}
-} ;
-
-
-
-// This is the method to receive and decode data from the other side of the communication channel, most of time another proxy.
-// In most case, this should be overwritten.
-Proxy.prototype.receive = function receive( raw ) {
-	this.push( raw ) ;
-} ;
-
-
-
-// This is the method used to send data to the other side of the communication channel, most of time another proxy.
-// This MUST be overwritten in any case.
-Proxy.prototype.send = function send() {
-	throw new Error( 'The send() method of the Proxy MUST be extended/overwritten' ) ;
-} ;
-
-
-
-/* Local Service */
-
-
-
-function LocalService( proxy , id , emitter , options ) { return LocalService.create( proxy , id , emitter , options ) ; }
-Proxy.LocalService = LocalService ;
-
-
-
-LocalService.create = function create( proxy , id , emitter , options ) {
-	var self = Object.create( LocalService.prototype , {
-		proxy: { value: proxy , enumerable: true } ,
-		id: { value: id , enumerable: true } ,
-		emitter: { value: emitter , writable: true , enumerable: true } ,
-		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
-		events: { value: {} , enumerable: true } ,
-		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
-		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
-		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
-		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
-		destroyed: { value: false , writable: true , enumerable: true }
-	} ) ;
-
-	return self ;
-} ;
-
-
-
-// Destroy a service
-LocalService.prototype.destroy = function destroy() {
-	Object.keys( this.events ).forEach( ( eventName ) => {
-		this.emitter.off( eventName , this.events[ eventName ] ) ;
-		delete this.events[ eventName ] ;
-	} ) ;
-
-	this.emitter = null ;
-	this.destroyed = true ;
-} ;
-
-
-
-// Remote want to emit on the local service
-LocalService.prototype.receiveEmit = function receiveEmit( message ) {
-	if ( this.destroyed || ! this.canEmit || ( message.ack && ! this.canAck ) ) { return ; }
-
-	var event = {
-		emitter: this.emitter ,
-		name: message.event ,
-		args: message.args || []
-	} ;
-
-	if ( message.ack ) {
-		event.callback = ( interruption ) => {
-
-			this.proxy.send( {
-				__type: MESSAGE_TYPE ,
-				service: this.id ,
-				method: 'ackEmit' ,
-				ack: message.ack ,
-				event: message.event ,
-				interruption: interruption
-			} ) ;
-		} ;
-	}
-
-	NextGenEvents.emitEvent( event ) ;
-} ;
-
-
-
-// Remote want to listen to an event of the local service
-LocalService.prototype.receiveListen = function receiveListen( message ) {
-	if ( this.destroyed || ! this.canListen || ( message.ack && ! this.canAck ) ) { return ; }
-
-	if ( message.ack ) {
-		if ( this.events[ message.event ] ) {
-			if ( this.events[ message.event ].ack ) { return ; }
-
-			// There is already an event, but not featuring ack, remove that listener now
-			this.emitter.off( message.event , this.events[ message.event ] ) ;
-		}
-
-		this.events[ message.event ] = LocalService.forwardWithAck.bind( this ) ;
-		this.events[ message.event ].ack = true ;
-		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true , async: true } ) ;
-	}
-	else {
-		if ( this.events[ message.event ] ) {
-			if ( ! this.events[ message.event ].ack ) { return ; }
-
-			// Remote want to downgrade:
-			// there is already an event, but featuring ack so we remove that listener now
-			this.emitter.off( message.event , this.events[ message.event ] ) ;
-		}
-
-		this.events[ message.event ] = LocalService.forward.bind( this ) ;
-		this.events[ message.event ].ack = false ;
-		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true } ) ;
-	}
-} ;
-
-
-
-// Remote do not want to listen to that event of the local service anymore
-LocalService.prototype.receiveIgnore = function receiveIgnore( message ) {
-	if ( this.destroyed || ! this.canListen ) { return ; }
-
-	if ( ! this.events[ message.event ] ) { return ; }
-
-	this.emitter.off( message.event , this.events[ message.event ] ) ;
-	this.events[ message.event ] = null ;
-} ;
-
-
-
-//
-LocalService.prototype.receiveAckEvent = function receiveAckEvent( message ) {
-	if (
-		this.destroyed || ! this.canListen || ! this.canAck || ! message.ack ||
-		! this.events[ message.event ] || ! this.events[ message.event ].ack
-	) {
-		return ;
-	}
-
-	this.internalEvents.emit( 'ack' , message ) ;
-} ;
-
-
-
-// Send an event from the local service to remote
-LocalService.forward = function forward( event ) {
-	if ( this.destroyed ) { return ; }
-
-	this.proxy.send( {
-		__type: MESSAGE_TYPE ,
-		service: this.id ,
-		method: 'event' ,
-		event: event.name ,
-		args: event.args
-	} ) ;
-} ;
-
-LocalService.forward.ack = false ;
-
-
-
-// Send an event from the local service to remote, with ACK
-LocalService.forwardWithAck = function forwardWithAck( event , callback ) {
-	if ( this.destroyed ) { return ; }
-
-	if ( ! event.callback ) {
-		// There is no emit callback, no need to ack this one
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'event' ,
-			event: event.name ,
-			args: event.args
-		} ) ;
-
-		callback() ;
-		return ;
-	}
-
-	var triggered = false ;
-	var ackId = this.proxy.nextAckId ++ ;
-
-	var onAck = ( message ) => {
-		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
-		//if ( message.event !== event ) { return ; }	// Do we care?
-		triggered = true ;
-		this.internalEvents.off( 'ack' , onAck ) ;
-		callback() ;
-	} ;
-
-	this.internalEvents.on( 'ack' , onAck ) ;
-
-	this.proxy.send( {
-		__type: MESSAGE_TYPE ,
-		service: this.id ,
-		method: 'event' ,
-		event: event.name ,
-		ack: ackId ,
-		args: event.args
-	} ) ;
-} ;
-
-LocalService.forwardWithAck.ack = true ;
-
-
-
-/* Remote Service */
-
-
-
-function RemoteService( proxy , id ) { return RemoteService.create( proxy , id ) ; }
-//RemoteService.prototype = Object.create( NextGenEvents.prototype ) ;
-//RemoteService.prototype.constructor = RemoteService ;
-Proxy.RemoteService = RemoteService ;
-
-
-
-var EVENT_NO_ACK = 1 ;
-var EVENT_ACK = 2 ;
-
-
-
-RemoteService.create = function create( proxy , id ) {
-	var self = Object.create( RemoteService.prototype , {
-		proxy: { value: proxy , enumerable: true } ,
-		id: { value: id , enumerable: true } ,
-		// This is the emitter where everything is routed to
-		emitter: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
-		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
-		events: { value: {} , enumerable: true } ,
-		destroyed: { value: false , writable: true , enumerable: true }
-
-		/*	Useless for instance, unless some kind of service capabilities discovery mechanism exists
-		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
-		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
-		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
-		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
-		*/
-	} ) ;
-
-	return self ;
-} ;
-
-
-
-// Destroy a service
-RemoteService.prototype.destroy = function destroy() {
-	this.emitter.removeAllListeners() ;
-	this.emitter = null ;
-	Object.keys( this.events ).forEach( ( eventName ) => { delete this.events[ eventName ] ; } ) ;
-	this.destroyed = true ;
-} ;
-
-
-
-// Local code want to emit to remote service
-RemoteService.prototype.emit = function emit( eventName , ... args ) {
-	if ( this.destroyed ) { return ; }
-
-	var callback , ackId , triggered ;
-
-	if ( typeof eventName === 'number' ) { throw new TypeError( 'Cannot emit with a nice value on a remote service' ) ; }
-
-	if ( typeof args[ args.length - 1 ] !== 'function' ) {
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'emit' ,
-			event: eventName ,
-			args: args
-		} ) ;
-
-		return ;
-	}
-
-	callback = args.pop() ;
-	ackId = this.proxy.nextAckId ++ ;
-	triggered = false ;
-
-	var onAck = ( message ) => {
-		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
-		//if ( message.event !== event ) { return ; }	// Do we care?
-		triggered = true ;
-		this.internalEvents.off( 'ack' , onAck ) ;
-		callback( message.interruption ) ;
-	} ;
-
-	this.internalEvents.on( 'ack' , onAck ) ;
-
-	this.proxy.send( {
-		__type: MESSAGE_TYPE ,
-		service: this.id ,
-		method: 'emit' ,
-		ack: ackId ,
-		event: eventName ,
-		args: args
-	} ) ;
-} ;
-
-
-
-// Local code want to listen to an event of remote service
-RemoteService.prototype.addListener = function addListener( eventName , fn , options ) {
-	if ( this.destroyed ) { return ; }
-
-	// Manage arguments the same way NextGenEvents#addListener() does
-	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-	options.fn = fn || options.fn ;
-
-	this.emitter.addListener( eventName , options ) ;
-
-	// No event was added...
-	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) { return ; }
-
-	// If the event is successfully listened to and was not remotely listened...
-	if ( options.async && this.events[ eventName ] !== EVENT_ACK ) {
-		// We need to listen to or upgrade this event
-		this.events[ eventName ] = EVENT_ACK ;
-
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'listen' ,
-			ack: true ,
-			event: eventName
-		} ) ;
-	}
-	else if ( ! options.async && ! this.events[ eventName ] ) {
-		// We need to listen to this event
-		this.events[ eventName ] = EVENT_NO_ACK ;
-
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'listen' ,
-			event: eventName
-		} ) ;
-	}
-} ;
-
-RemoteService.prototype.on = RemoteService.prototype.addListener ;
-
-// This is a shortcut to this.addListener()
-RemoteService.prototype.once = NextGenEvents.prototype.once ;
-
-
-
-// Local code want to ignore an event of remote service
-RemoteService.prototype.removeListener = function removeListener( eventName , id ) {
-	if ( this.destroyed ) { return ; }
-
-	this.emitter.removeListener( eventName , id ) ;
-
-	// If no more listener are locally tied to with event and the event was remotely listened...
-	if (
-		( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) &&
-		this.events[ eventName ]
-	) {
-		this.events[ eventName ] = 0 ;
-
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'ignore' ,
-			event: eventName
-		} ) ;
-	}
-} ;
-
-RemoteService.prototype.off = RemoteService.prototype.removeListener ;
-
-
-
-// A remote service sent an event we are listening to, emit on the service representing the remote
-RemoteService.prototype.receiveEvent = function receiveEvent( message ) {
-	if ( this.destroyed || ! this.events[ message.event ] ) { return ; }
-
-	var event = {
-		emitter: this.emitter ,
-		name: message.event ,
-		args: message.args || []
-	} ;
-
-	if ( message.ack ) {
-		event.callback = () => {
-
-			this.proxy.send( {
-				__type: MESSAGE_TYPE ,
-				service: this.id ,
-				method: 'ackEvent' ,
-				ack: message.ack ,
-				event: message.event
-			} ) ;
-		} ;
-	}
-
-	NextGenEvents.emitEvent( event ) ;
-
-	var eventName = event.name ;
-
-	// Here we should catch if the event is still listened to ('once' type listeners)
-	//if ( this.events[ eventName ]	) // not needed, already checked at the begining of the function
-	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) {
-		this.events[ eventName ] = 0 ;
-
-		this.proxy.send( {
-			__type: MESSAGE_TYPE ,
-			service: this.id ,
-			method: 'ignore' ,
-			event: eventName
-		} ) ;
-	}
-} ;
-
-
-
-//
-RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message ) {
-	if ( this.destroyed || ! message.ack || this.events[ message.event ] !== EVENT_ACK ) {
-		return ;
-	}
-
-	this.internalEvents.emit( 'ack' , message ) ;
-} ;
-
-
-
-},{"./NextGenEvents.js":32}],34:[function(require,module,exports){
-module.exports={
-  "_from": "nextgen-events@^0.14.5",
-  "_id": "nextgen-events@0.14.6",
-  "_inBundle": false,
-  "_integrity": "sha512-Ln9d5Midoah7RCxFk8z9tAAcRW/VkB4wZ61Nnw8aqM1/lb/WfPAnlzpLGYRghEjwZdXQNQedTfD/gclYMeI0eQ==",
-  "_location": "/async-kit/nextgen-events",
-  "_phantomChildren": {},
-  "_requested": {
-    "type": "range",
-    "registry": true,
-    "raw": "nextgen-events@^0.14.5",
-    "name": "nextgen-events",
-    "escapedName": "nextgen-events",
-    "rawSpec": "^0.14.5",
-    "saveSpec": null,
-    "fetchSpec": "^0.14.5"
-  },
-  "_requiredBy": [
-    "/async-kit"
-  ],
-  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-0.14.6.tgz",
-  "_shasum": "945b3fc75951fe8c945f8455c35bf644a3a2c8b1",
-  "_spec": "nextgen-events@^0.14.5",
-  "_where": "/home/cedric/inside/github/tea-time/node_modules/async-kit",
-  "author": {
-    "name": "Cédric Ronvel"
-  },
-  "bugs": {
-    "url": "https://github.com/cronvel/nextgen-events/issues"
-  },
-  "bundleDependencies": false,
-  "config": {
-    "tea-time": {
-      "coverDir": [
-        "lib"
-      ]
-    }
-  },
-  "copyright": {
-    "title": "Next-Gen Events",
-    "years": [
-      2015,
-      2018
-    ],
-    "owner": "Cédric Ronvel"
-  },
-  "dependencies": {},
-  "deprecated": false,
-  "description": "The next generation of events handling for javascript! New: abstract away the network!",
-  "devDependencies": {
-    "browserify": "^16.2.2",
-    "uglify-js-es6": "^2.8.9",
-    "ws": "^5.1.1"
-  },
-  "directories": {
-    "test": "test"
-  },
-  "engines": {
-    "node": ">=6.0.0"
-  },
-  "homepage": "https://github.com/cronvel/nextgen-events#readme",
-  "keywords": [
-    "events",
-    "async",
-    "emit",
-    "listener",
-    "context",
-    "series",
-    "serialize",
-    "namespace",
-    "proxy",
-    "network"
-  ],
-  "license": "MIT",
-  "main": "lib/NextGenEvents.js",
-  "name": "nextgen-events",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/cronvel/nextgen-events.git"
-  },
-  "scripts": {
-    "test": "tea-time -R dot"
-  },
-  "version": "0.14.6"
-}
-
-},{}],35:[function(require,module,exports){
 (function (process,global){
 /*
 	Async Try-Catch
@@ -11340,7 +7194,7 @@ AsyncTryCatch.restore = function restore() {
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":36,"_process":69,"events":56}],36:[function(require,module,exports){
+},{"../package.json":28,"_process":61,"events":48}],28:[function(require,module,exports){
 module.exports={
   "_from": "async-try-catch@^0.3.7",
   "_id": "async-try-catch@0.3.7",
@@ -11412,7 +7266,7 @@ module.exports={
   "version": "0.3.7"
 }
 
-},{}],37:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 'use strict'
 
 exports.byteLength = byteLength
@@ -11565,9 +7419,9 @@ function fromByteArray (uint8) {
   return parts.join('')
 }
 
-},{}],38:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 
-},{}],39:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -13305,7 +9159,7 @@ function numberIsNaN (obj) {
   return obj !== obj // eslint-disable-line no-self-compare
 }
 
-},{"base64-js":37,"ieee754":61}],40:[function(require,module,exports){
+},{"base64-js":29,"ieee754":53}],32:[function(require,module,exports){
 /*!
 
  diff v3.5.0
@@ -15149,7 +11003,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ ])
 });
 ;
-},{}],41:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 (function (process){
 /*
 	Dom Kit
@@ -15710,7 +11564,7 @@ domKit.html = function html_( $element , html ) { $element.innerHTML = html ; } 
 
 
 }).call(this,require('_process'))
-},{"@cronvel/xmldom":9,"_process":69}],42:[function(require,module,exports){
+},{"@cronvel/xmldom":9,"_process":61}],34:[function(require,module,exports){
 /*
 	Doormen
 
@@ -15763,7 +11617,7 @@ AssertionError.prototype.constructor = AssertionError ;
 AssertionError.prototype.name = 'AssertionError' ;
 
 
-},{}],43:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /*
 	Doormen
 
@@ -15808,7 +11662,7 @@ SchemaError.prototype.constructor = SchemaError ;
 SchemaError.prototype.name = 'SchemaError' ;
 
 
-},{}],44:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 /*
 	Doormen
 
@@ -15855,7 +11709,7 @@ ValidatorError.prototype.constructor = ValidatorError ;
 ValidatorError.prototype.name = 'ValidatorError' ;
 
 
-},{}],45:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 /*
 	Doormen
 
@@ -17303,7 +13157,7 @@ assert.fail.inspect = true ;
 assert.fail.none = true ;
 
 
-},{"./AssertionError.js":42,"./isEqual.js":49,"./typeChecker.js":55,"string-kit/lib/inspect.js":76}],46:[function(require,module,exports){
+},{"./AssertionError.js":34,"./isEqual.js":41,"./typeChecker.js":47,"string-kit/lib/inspect.js":77}],38:[function(require,module,exports){
 (function (global){
 /*
 	Doormen
@@ -18161,7 +14015,7 @@ doormen.not.alike = function notAlike( left , right ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./AssertionError.js":42,"./SchemaError.js":43,"./ValidatorError.js":44,"./assert.js":45,"./expect.js":47,"./filter.js":48,"./isEqual.js":49,"./keywords.js":50,"./mask.js":51,"./sanitizer.js":52,"./schemaSchema.js":53,"./sentence.js":54,"./typeChecker.js":55,"tree-kit/lib/clone.js":80}],47:[function(require,module,exports){
+},{"./AssertionError.js":34,"./SchemaError.js":35,"./ValidatorError.js":36,"./assert.js":37,"./expect.js":39,"./filter.js":40,"./isEqual.js":41,"./keywords.js":42,"./mask.js":43,"./sanitizer.js":44,"./schemaSchema.js":45,"./sentence.js":46,"./typeChecker.js":47,"tree-kit/lib/clone.js":81}],39:[function(require,module,exports){
 /*
 	Doormen
 
@@ -18380,7 +14234,7 @@ var handler = {
 } ;
 
 
-},{"./assert.js":45}],48:[function(require,module,exports){
+},{"./assert.js":37}],40:[function(require,module,exports){
 (function (global){
 /*
 	Doormen
@@ -18603,7 +14457,7 @@ filter.notIn = function notIn( data , params , element ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./doormen.js":46}],49:[function(require,module,exports){
+},{"./doormen.js":38}],41:[function(require,module,exports){
 (function (Buffer){
 /*
 	Doormen
@@ -18763,7 +14617,7 @@ module.exports = isEqual ;
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")})
-},{"../../is-buffer/index.js":62}],50:[function(require,module,exports){
+},{"../../is-buffer/index.js":54}],42:[function(require,module,exports){
 /*
 	Doormen
 
@@ -18856,7 +14710,7 @@ module.exports = {
 	of: { expected: 'typeOrClass' , toChild: 'of' }
 } ;
 
-},{}],51:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 /*
 	Doormen
 
@@ -19030,7 +14884,7 @@ mask.check = function maskCheck( schema ) {
 
 
 
-},{}],52:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 (function (global){
 /*
 	Doormen
@@ -19301,7 +15155,7 @@ sanitizer.mongoId = function mongoId( data ) {
 } ;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./doormen.js":46,"mongodb":38,"string-kit/lib/latinize.js":78,"string-kit/lib/toTitleCase.js":79}],53:[function(require,module,exports){
+},{"./doormen.js":38,"mongodb":30,"string-kit/lib/latinize.js":79,"string-kit/lib/toTitleCase.js":80}],45:[function(require,module,exports){
 /*
 	Doormen
 
@@ -19442,7 +15296,7 @@ module.exports = schemaSchema ;
 
 
 
-},{}],54:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 /*
 	Doormen
 
@@ -19645,7 +15499,7 @@ module.exports = sentence ;
 
 
 
-},{"./doormen.js":46}],55:[function(require,module,exports){
+},{"./doormen.js":38}],47:[function(require,module,exports){
 (function (global,Buffer){
 /*
 	Doormen
@@ -19939,7 +15793,7 @@ typeChecker.mongoId = data => {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"./doormen":46,"buffer":39}],56:[function(require,module,exports){
+},{"./doormen":38,"buffer":31}],48:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -20460,7 +16314,7 @@ function functionBindPolyfill(context) {
   };
 }
 
-},{}],57:[function(require,module,exports){
+},{}],49:[function(require,module,exports){
 var parse = require('acorn').parse;
 var isArray = require('isarray');
 var objectKeys = require('object-keys');
@@ -20541,7 +16395,7 @@ function insertHelpers (node, parent, chunks) {
     }
 }
 
-},{"acorn":58,"foreach":60,"isarray":59,"object-keys":67}],58:[function(require,module,exports){
+},{"acorn":50,"foreach":52,"isarray":51,"object-keys":59}],50:[function(require,module,exports){
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
   typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -24148,12 +20002,12 @@ exports.nonASCIIwhitespace = nonASCIIwhitespace;
 Object.defineProperty(exports, '__esModule', { value: true });
 
 })));
-},{}],59:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 module.exports = Array.isArray || function (arr) {
   return Object.prototype.toString.call(arr) == '[object Array]';
 };
 
-},{}],60:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 
 var hasOwn = Object.prototype.hasOwnProperty;
 var toString = Object.prototype.toString;
@@ -24177,7 +20031,7 @@ module.exports = function forEach (obj, fn, ctx) {
 };
 
 
-},{}],61:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = (nBytes * 8) - mLen - 1
@@ -24263,7 +20117,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],62:[function(require,module,exports){
+},{}],54:[function(require,module,exports){
 /*!
  * Determine if an object is a Buffer
  *
@@ -24286,7 +20140,7 @@ function isSlowBuffer (obj) {
   return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
 }
 
-},{}],63:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 (function (process,global){
 /*
 	Next-Gen Events
@@ -25555,9 +21409,555 @@ NextGenEvents.Proxy = require( './Proxy.js' ) ;
 
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../package.json":65,"./Proxy.js":64,"_process":69}],64:[function(require,module,exports){
-arguments[4][33][0].apply(exports,arguments)
-},{"./NextGenEvents.js":63,"dup":33}],65:[function(require,module,exports){
+},{"../package.json":57,"./Proxy.js":56,"_process":61}],56:[function(require,module,exports){
+/*
+	Next-Gen Events
+
+	Copyright (c) 2015 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+function Proxy() {
+	this.localServices = {} ;
+	this.remoteServices = {} ;
+	this.nextAckId = 1 ;
+}
+
+module.exports = Proxy ;
+
+var NextGenEvents = require( './NextGenEvents.js' ) ;
+var MESSAGE_TYPE = 'NextGenEvents/message' ;
+
+function noop() {}
+
+
+
+// Backward compatibility
+Proxy.create = ( ... args ) => new Proxy( ... args ) ;
+
+
+
+// Add a local service accessible remotely
+Proxy.prototype.addLocalService = function addLocalService( id , emitter , options ) {
+	this.localServices[ id ] = LocalService.create( this , id , emitter , options ) ;
+	return this.localServices[ id ] ;
+} ;
+
+
+
+// Add a remote service accessible locally
+Proxy.prototype.addRemoteService = function addRemoteService( id ) {
+	this.remoteServices[ id ] = RemoteService.create( this , id ) ;
+	return this.remoteServices[ id ] ;
+} ;
+
+
+
+// Destroy the proxy
+Proxy.prototype.destroy = function destroy() {
+	Object.keys( this.localServices ).forEach( ( id ) => {
+		this.localServices[ id ].destroy() ;
+		delete this.localServices[ id ] ;
+	} ) ;
+
+	Object.keys( this.remoteServices ).forEach( ( id ) => {
+		this.remoteServices[ id ].destroy() ;
+		delete this.remoteServices[ id ] ;
+	} ) ;
+
+	this.receive = this.send = noop ;
+} ;
+
+
+
+// Push an event message.
+Proxy.prototype.push = function push( message ) {
+	if (
+		message.__type !== MESSAGE_TYPE ||
+		! message.service || typeof message.service !== 'string' ||
+		! message.event || typeof message.event !== 'string' ||
+		! message.method
+	) {
+		return ;
+	}
+
+	switch ( message.method ) {
+		// Those methods target a remote service
+		case 'event' :
+			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveEvent( message ) ;
+		case 'ackEmit' :
+			return this.remoteServices[ message.service ] && this.remoteServices[ message.service ].receiveAckEmit( message ) ;
+
+		// Those methods target a local service
+		case 'emit' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveEmit( message ) ;
+		case 'listen' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveListen( message ) ;
+		case 'ignore' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveIgnore( message ) ;
+		case 'ackEvent' :
+			return this.localServices[ message.service ] && this.localServices[ message.service ].receiveAckEvent( message ) ;
+
+		default :
+			return ;
+	}
+} ;
+
+
+
+// This is the method to receive and decode data from the other side of the communication channel, most of time another proxy.
+// In most case, this should be overwritten.
+Proxy.prototype.receive = function receive( raw ) {
+	this.push( raw ) ;
+} ;
+
+
+
+// This is the method used to send data to the other side of the communication channel, most of time another proxy.
+// This MUST be overwritten in any case.
+Proxy.prototype.send = function send() {
+	throw new Error( 'The send() method of the Proxy MUST be extended/overwritten' ) ;
+} ;
+
+
+
+/* Local Service */
+
+
+
+function LocalService( proxy , id , emitter , options ) { return LocalService.create( proxy , id , emitter , options ) ; }
+Proxy.LocalService = LocalService ;
+
+
+
+LocalService.create = function create( proxy , id , emitter , options ) {
+	var self = Object.create( LocalService.prototype , {
+		proxy: { value: proxy , enumerable: true } ,
+		id: { value: id , enumerable: true } ,
+		emitter: { value: emitter , writable: true , enumerable: true } ,
+		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		events: { value: {} , enumerable: true } ,
+		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
+		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
+		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
+		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
+		destroyed: { value: false , writable: true , enumerable: true }
+	} ) ;
+
+	return self ;
+} ;
+
+
+
+// Destroy a service
+LocalService.prototype.destroy = function destroy() {
+	Object.keys( this.events ).forEach( ( eventName ) => {
+		this.emitter.off( eventName , this.events[ eventName ] ) ;
+		delete this.events[ eventName ] ;
+	} ) ;
+
+	this.emitter = null ;
+	this.destroyed = true ;
+} ;
+
+
+
+// Remote want to emit on the local service
+LocalService.prototype.receiveEmit = function receiveEmit( message ) {
+	if ( this.destroyed || ! this.canEmit || ( message.ack && ! this.canAck ) ) { return ; }
+
+	var event = {
+		emitter: this.emitter ,
+		name: message.event ,
+		args: message.args || []
+	} ;
+
+	if ( message.ack ) {
+		event.callback = ( interruption ) => {
+
+			this.proxy.send( {
+				__type: MESSAGE_TYPE ,
+				service: this.id ,
+				method: 'ackEmit' ,
+				ack: message.ack ,
+				event: message.event ,
+				interruption: interruption
+			} ) ;
+		} ;
+	}
+
+	NextGenEvents.emitEvent( event ) ;
+} ;
+
+
+
+// Remote want to listen to an event of the local service
+LocalService.prototype.receiveListen = function receiveListen( message ) {
+	if ( this.destroyed || ! this.canListen || ( message.ack && ! this.canAck ) ) { return ; }
+
+	if ( message.ack ) {
+		if ( this.events[ message.event ] ) {
+			if ( this.events[ message.event ].ack ) { return ; }
+
+			// There is already an event, but not featuring ack, remove that listener now
+			this.emitter.off( message.event , this.events[ message.event ] ) ;
+		}
+
+		this.events[ message.event ] = LocalService.forwardWithAck.bind( this ) ;
+		this.events[ message.event ].ack = true ;
+		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true , async: true } ) ;
+	}
+	else {
+		if ( this.events[ message.event ] ) {
+			if ( ! this.events[ message.event ].ack ) { return ; }
+
+			// Remote want to downgrade:
+			// there is already an event, but featuring ack so we remove that listener now
+			this.emitter.off( message.event , this.events[ message.event ] ) ;
+		}
+
+		this.events[ message.event ] = LocalService.forward.bind( this ) ;
+		this.events[ message.event ].ack = false ;
+		this.emitter.on( message.event , this.events[ message.event ] , { eventObject: true } ) ;
+	}
+} ;
+
+
+
+// Remote do not want to listen to that event of the local service anymore
+LocalService.prototype.receiveIgnore = function receiveIgnore( message ) {
+	if ( this.destroyed || ! this.canListen ) { return ; }
+
+	if ( ! this.events[ message.event ] ) { return ; }
+
+	this.emitter.off( message.event , this.events[ message.event ] ) ;
+	this.events[ message.event ] = null ;
+} ;
+
+
+
+//
+LocalService.prototype.receiveAckEvent = function receiveAckEvent( message ) {
+	if (
+		this.destroyed || ! this.canListen || ! this.canAck || ! message.ack ||
+		! this.events[ message.event ] || ! this.events[ message.event ].ack
+	) {
+		return ;
+	}
+
+	this.internalEvents.emit( 'ack' , message ) ;
+} ;
+
+
+
+// Send an event from the local service to remote
+LocalService.forward = function forward( event ) {
+	if ( this.destroyed ) { return ; }
+
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'event' ,
+		event: event.name ,
+		args: event.args
+	} ) ;
+} ;
+
+LocalService.forward.ack = false ;
+
+
+
+// Send an event from the local service to remote, with ACK
+LocalService.forwardWithAck = function forwardWithAck( event , callback ) {
+	if ( this.destroyed ) { return ; }
+
+	if ( ! event.callback ) {
+		// There is no emit callback, no need to ack this one
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'event' ,
+			event: event.name ,
+			args: event.args
+		} ) ;
+
+		callback() ;
+		return ;
+	}
+
+	var triggered = false ;
+	var ackId = this.proxy.nextAckId ++ ;
+
+	var onAck = ( message ) => {
+		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
+		//if ( message.event !== event ) { return ; }	// Do we care?
+		triggered = true ;
+		this.internalEvents.off( 'ack' , onAck ) ;
+		callback() ;
+	} ;
+
+	this.internalEvents.on( 'ack' , onAck ) ;
+
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'event' ,
+		event: event.name ,
+		ack: ackId ,
+		args: event.args
+	} ) ;
+} ;
+
+LocalService.forwardWithAck.ack = true ;
+
+
+
+/* Remote Service */
+
+
+
+function RemoteService( proxy , id ) { return RemoteService.create( proxy , id ) ; }
+//RemoteService.prototype = Object.create( NextGenEvents.prototype ) ;
+//RemoteService.prototype.constructor = RemoteService ;
+Proxy.RemoteService = RemoteService ;
+
+
+
+var EVENT_NO_ACK = 1 ;
+var EVENT_ACK = 2 ;
+
+
+
+RemoteService.create = function create( proxy , id ) {
+	var self = Object.create( RemoteService.prototype , {
+		proxy: { value: proxy , enumerable: true } ,
+		id: { value: id , enumerable: true } ,
+		// This is the emitter where everything is routed to
+		emitter: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		internalEvents: { value: Object.create( NextGenEvents.prototype ) , writable: true , enumerable: true } ,
+		events: { value: {} , enumerable: true } ,
+		destroyed: { value: false , writable: true , enumerable: true }
+
+		/*	Useless for instance, unless some kind of service capabilities discovery mechanism exists
+		canListen: { value: !! options.listen , writable: true , enumerable: true } ,
+		canEmit: { value: !! options.emit , writable: true , enumerable: true } ,
+		canAck: { value: !! options.ack , writable: true , enumerable: true } ,
+		canRpc: { value: !! options.rpc , writable: true , enumerable: true } ,
+		*/
+	} ) ;
+
+	return self ;
+} ;
+
+
+
+// Destroy a service
+RemoteService.prototype.destroy = function destroy() {
+	this.emitter.removeAllListeners() ;
+	this.emitter = null ;
+	Object.keys( this.events ).forEach( ( eventName ) => { delete this.events[ eventName ] ; } ) ;
+	this.destroyed = true ;
+} ;
+
+
+
+// Local code want to emit to remote service
+RemoteService.prototype.emit = function emit( eventName , ... args ) {
+	if ( this.destroyed ) { return ; }
+
+	var callback , ackId , triggered ;
+
+	if ( typeof eventName === 'number' ) { throw new TypeError( 'Cannot emit with a nice value on a remote service' ) ; }
+
+	if ( typeof args[ args.length - 1 ] !== 'function' ) {
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'emit' ,
+			event: eventName ,
+			args: args
+		} ) ;
+
+		return ;
+	}
+
+	callback = args.pop() ;
+	ackId = this.proxy.nextAckId ++ ;
+	triggered = false ;
+
+	var onAck = ( message ) => {
+		if ( triggered || message.ack !== ackId ) { return ; }	// Not our ack...
+		//if ( message.event !== event ) { return ; }	// Do we care?
+		triggered = true ;
+		this.internalEvents.off( 'ack' , onAck ) ;
+		callback( message.interruption ) ;
+	} ;
+
+	this.internalEvents.on( 'ack' , onAck ) ;
+
+	this.proxy.send( {
+		__type: MESSAGE_TYPE ,
+		service: this.id ,
+		method: 'emit' ,
+		ack: ackId ,
+		event: eventName ,
+		args: args
+	} ) ;
+} ;
+
+
+
+// Local code want to listen to an event of remote service
+RemoteService.prototype.addListener = function addListener( eventName , fn , options ) {
+	if ( this.destroyed ) { return ; }
+
+	// Manage arguments the same way NextGenEvents#addListener() does
+	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
+	if ( ! options || typeof options !== 'object' ) { options = {} ; }
+	options.fn = fn || options.fn ;
+
+	this.emitter.addListener( eventName , options ) ;
+
+	// No event was added...
+	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) { return ; }
+
+	// If the event is successfully listened to and was not remotely listened...
+	if ( options.async && this.events[ eventName ] !== EVENT_ACK ) {
+		// We need to listen to or upgrade this event
+		this.events[ eventName ] = EVENT_ACK ;
+
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'listen' ,
+			ack: true ,
+			event: eventName
+		} ) ;
+	}
+	else if ( ! options.async && ! this.events[ eventName ] ) {
+		// We need to listen to this event
+		this.events[ eventName ] = EVENT_NO_ACK ;
+
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'listen' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+RemoteService.prototype.on = RemoteService.prototype.addListener ;
+
+// This is a shortcut to this.addListener()
+RemoteService.prototype.once = NextGenEvents.prototype.once ;
+
+
+
+// Local code want to ignore an event of remote service
+RemoteService.prototype.removeListener = function removeListener( eventName , id ) {
+	if ( this.destroyed ) { return ; }
+
+	this.emitter.removeListener( eventName , id ) ;
+
+	// If no more listener are locally tied to with event and the event was remotely listened...
+	if (
+		( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) &&
+		this.events[ eventName ]
+	) {
+		this.events[ eventName ] = 0 ;
+
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'ignore' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+RemoteService.prototype.off = RemoteService.prototype.removeListener ;
+
+
+
+// A remote service sent an event we are listening to, emit on the service representing the remote
+RemoteService.prototype.receiveEvent = function receiveEvent( message ) {
+	if ( this.destroyed || ! this.events[ message.event ] ) { return ; }
+
+	var event = {
+		emitter: this.emitter ,
+		name: message.event ,
+		args: message.args || []
+	} ;
+
+	if ( message.ack ) {
+		event.callback = () => {
+
+			this.proxy.send( {
+				__type: MESSAGE_TYPE ,
+				service: this.id ,
+				method: 'ackEvent' ,
+				ack: message.ack ,
+				event: message.event
+			} ) ;
+		} ;
+	}
+
+	NextGenEvents.emitEvent( event ) ;
+
+	var eventName = event.name ;
+
+	// Here we should catch if the event is still listened to ('once' type listeners)
+	//if ( this.events[ eventName ]	) // not needed, already checked at the begining of the function
+	if ( ! this.emitter.__ngev.listeners[ eventName ] || ! this.emitter.__ngev.listeners[ eventName ].length ) {
+		this.events[ eventName ] = 0 ;
+
+		this.proxy.send( {
+			__type: MESSAGE_TYPE ,
+			service: this.id ,
+			method: 'ignore' ,
+			event: eventName
+		} ) ;
+	}
+} ;
+
+
+
+//
+RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message ) {
+	if ( this.destroyed || ! message.ack || this.events[ message.event ] !== EVENT_ACK ) {
+		return ;
+	}
+
+	this.internalEvents.emit( 'ack' , message ) ;
+} ;
+
+
+
+},{"./NextGenEvents.js":55}],57:[function(require,module,exports){
 module.exports={
   "_from": "nextgen-events@^1.0.0",
   "_id": "nextgen-events@1.1.0",
@@ -25646,7 +22046,7 @@ module.exports={
   "version": "1.1.0"
 }
 
-},{}],66:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 /*
  * Copyright (C) 2007-2018 Diego Perini
  * All rights reserved.
@@ -27424,7 +23824,7 @@ module.exports={
   return Dom;
 });
 
-},{}],67:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 'use strict';
 
 // modified from https://github.com/es-shims/es5-shim
@@ -27566,7 +23966,7 @@ keysShim.shim = function shimObjectKeys() {
 
 module.exports = keysShim;
 
-},{"./isArguments":68}],68:[function(require,module,exports){
+},{"./isArguments":60}],60:[function(require,module,exports){
 'use strict';
 
 var toStr = Object.prototype.toString;
@@ -27585,7 +23985,7 @@ module.exports = function isArguments(value) {
 	return isArgs;
 };
 
-},{}],69:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -27771,7 +24171,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],70:[function(require,module,exports){
+},{}],62:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -28308,7 +24708,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],71:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -28394,7 +24794,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],72:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -28481,15 +24881,2169 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],73:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":71,"./encode":72}],74:[function(require,module,exports){
+},{"./decode":63,"./encode":64}],66:[function(require,module,exports){
+(function (process,global){
+(function (global, undefined) {
+    "use strict";
+
+    if (global.setImmediate) {
+        return;
+    }
+
+    var nextHandle = 1; // Spec says greater than zero
+    var tasksByHandle = {};
+    var currentlyRunningATask = false;
+    var doc = global.document;
+    var registerImmediate;
+
+    function setImmediate(callback) {
+      // Callback can either be a function or a string
+      if (typeof callback !== "function") {
+        callback = new Function("" + callback);
+      }
+      // Copy function arguments
+      var args = new Array(arguments.length - 1);
+      for (var i = 0; i < args.length; i++) {
+          args[i] = arguments[i + 1];
+      }
+      // Store and register the task
+      var task = { callback: callback, args: args };
+      tasksByHandle[nextHandle] = task;
+      registerImmediate(nextHandle);
+      return nextHandle++;
+    }
+
+    function clearImmediate(handle) {
+        delete tasksByHandle[handle];
+    }
+
+    function run(task) {
+        var callback = task.callback;
+        var args = task.args;
+        switch (args.length) {
+        case 0:
+            callback();
+            break;
+        case 1:
+            callback(args[0]);
+            break;
+        case 2:
+            callback(args[0], args[1]);
+            break;
+        case 3:
+            callback(args[0], args[1], args[2]);
+            break;
+        default:
+            callback.apply(undefined, args);
+            break;
+        }
+    }
+
+    function runIfPresent(handle) {
+        // From the spec: "Wait until any invocations of this algorithm started before this one have completed."
+        // So if we're currently running a task, we'll need to delay this invocation.
+        if (currentlyRunningATask) {
+            // Delay by doing a setTimeout. setImmediate was tried instead, but in Firefox 7 it generated a
+            // "too much recursion" error.
+            setTimeout(runIfPresent, 0, handle);
+        } else {
+            var task = tasksByHandle[handle];
+            if (task) {
+                currentlyRunningATask = true;
+                try {
+                    run(task);
+                } finally {
+                    clearImmediate(handle);
+                    currentlyRunningATask = false;
+                }
+            }
+        }
+    }
+
+    function installNextTickImplementation() {
+        registerImmediate = function(handle) {
+            process.nextTick(function () { runIfPresent(handle); });
+        };
+    }
+
+    function canUsePostMessage() {
+        // The test against `importScripts` prevents this implementation from being installed inside a web worker,
+        // where `global.postMessage` means something completely different and can't be used for this purpose.
+        if (global.postMessage && !global.importScripts) {
+            var postMessageIsAsynchronous = true;
+            var oldOnMessage = global.onmessage;
+            global.onmessage = function() {
+                postMessageIsAsynchronous = false;
+            };
+            global.postMessage("", "*");
+            global.onmessage = oldOnMessage;
+            return postMessageIsAsynchronous;
+        }
+    }
+
+    function installPostMessageImplementation() {
+        // Installs an event handler on `global` for the `message` event: see
+        // * https://developer.mozilla.org/en/DOM/window.postMessage
+        // * http://www.whatwg.org/specs/web-apps/current-work/multipage/comms.html#crossDocumentMessages
+
+        var messagePrefix = "setImmediate$" + Math.random() + "$";
+        var onGlobalMessage = function(event) {
+            if (event.source === global &&
+                typeof event.data === "string" &&
+                event.data.indexOf(messagePrefix) === 0) {
+                runIfPresent(+event.data.slice(messagePrefix.length));
+            }
+        };
+
+        if (global.addEventListener) {
+            global.addEventListener("message", onGlobalMessage, false);
+        } else {
+            global.attachEvent("onmessage", onGlobalMessage);
+        }
+
+        registerImmediate = function(handle) {
+            global.postMessage(messagePrefix + handle, "*");
+        };
+    }
+
+    function installMessageChannelImplementation() {
+        var channel = new MessageChannel();
+        channel.port1.onmessage = function(event) {
+            var handle = event.data;
+            runIfPresent(handle);
+        };
+
+        registerImmediate = function(handle) {
+            channel.port2.postMessage(handle);
+        };
+    }
+
+    function installReadyStateChangeImplementation() {
+        var html = doc.documentElement;
+        registerImmediate = function(handle) {
+            // Create a <script> element; its readystatechange event will be fired asynchronously once it is inserted
+            // into the document. Do so, thus queuing up the task. Remember to clean up once it's been called.
+            var script = doc.createElement("script");
+            script.onreadystatechange = function () {
+                runIfPresent(handle);
+                script.onreadystatechange = null;
+                html.removeChild(script);
+                script = null;
+            };
+            html.appendChild(script);
+        };
+    }
+
+    function installSetTimeoutImplementation() {
+        registerImmediate = function(handle) {
+            setTimeout(runIfPresent, 0, handle);
+        };
+    }
+
+    // If supported, we should attach to the prototype of global, since that is where setTimeout et al. live.
+    var attachTo = Object.getPrototypeOf && Object.getPrototypeOf(global);
+    attachTo = attachTo && attachTo.setTimeout ? attachTo : global;
+
+    // Don't get fooled by e.g. browserify environments.
+    if ({}.toString.call(global.process) === "[object process]") {
+        // For Node.js before 0.9
+        installNextTickImplementation();
+
+    } else if (canUsePostMessage()) {
+        // For non-IE10 modern browsers
+        installPostMessageImplementation();
+
+    } else if (global.MessageChannel) {
+        // For web workers, where supported
+        installMessageChannelImplementation();
+
+    } else if (doc && "onreadystatechange" in doc.createElement("script")) {
+        // For IE 6–8
+        installReadyStateChangeImplementation();
+
+    } else {
+        // For older browsers
+        installSetTimeoutImplementation();
+    }
+
+    attachTo.setImmediate = setImmediate;
+    attachTo.clearImmediate = clearImmediate;
+}(typeof self === "undefined" ? typeof global === "undefined" ? this : global : self));
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"_process":61}],67:[function(require,module,exports){
+/*
+	Seventh
+
+	Copyright (c) 2017 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var Promise = require( './seventh.js' ) ;
+
+
+
+Promise.promisifyNodeApi = ( api , suffix , multiSuffix , filter , anything ) => {
+	var keys ;
+
+	suffix = suffix || 'Async' ;
+	multiSuffix = multiSuffix || 'AsyncAll' ;
+	filter = filter || ( key => key[ 0 ] !== '_' && ! key.endsWith( 'Sync' ) ) ;
+
+	if ( anything ) {
+		keys = [] ;
+
+		for ( let key in api ) {
+			if ( typeof api[ key ] === 'function' ) { keys.push( key ) ; }
+		}
+	}
+	else {
+		keys = Object.keys( api ) ;
+	}
+
+	keys.filter( key => {
+		if ( typeof api[ key ] !== 'function' ) { return false ; }
+
+		// If it has any enumerable properties on its prototype, it's a constructor
+		for ( let trash in api[ key ].prototype ) { return false ; }
+
+		return filter( key , api ) ;
+	} )
+	.forEach( key => {
+		const targetKey = key + suffix ;
+		const multiTargetKey = key + multiSuffix ;
+
+		// Do nothing if it already exists
+		if ( ! api[ targetKey ] ) {
+			api[ targetKey ] = Promise.promisify( api[ key ] , api ) ;
+		}
+
+		if ( ! api[ multiTargetKey ] ) {
+			api[ multiTargetKey ] = Promise.promisifyAll( api[ key ] , api ) ;
+		}
+	} ) ;
+} ;
+
+
+
+Promise.promisifyAnyNodeApi = ( api , suffix , multiSuffix , filter ) => {
+	Promise.promisifyNodeApi( api , suffix , multiSuffix , filter , true ) ;
+} ;
+
+
+
+},{"./seventh.js":73}],68:[function(require,module,exports){
+/*
+	Seventh
+
+	Copyright (c) 2017 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var Promise = require( './seventh.js' ) ;
+
+
+
+// This object is used as a special unique value for array hole (see Promise.filter())
+const HOLE = {} ;
+
+function noop() {}
+
+
+
+Promise.all = function all( iterable ) {
+	var index = -1 , settled = false ,
+		count = 0 , length = Infinity ,
+		value , values = [] ,
+		allPromise = new Promise() ;
+
+	for ( value of iterable ) {
+		if ( settled ) { break ; }
+
+		index ++ ;
+
+		// Create a scope to keep track of the promise's own index
+		( () => {
+			const promiseIndex = index ;
+
+			Promise.resolve( value )
+			.then(
+				value_ => {
+					if ( settled ) { return ; }
+
+					values[ promiseIndex ] = value_ ;
+					count ++ ;
+
+					if ( count >= length ) {
+						settled = true ;
+						allPromise._resolveValue( values ) ;
+					}
+				} ,
+				error => {
+					if ( settled ) { return ; }
+					settled = true ;
+					allPromise.reject( error ) ;
+				}
+			) ;
+		} )() ;
+	}
+
+	length = index + 1 ;
+
+	if ( ! length ) {
+		allPromise._resolveValue( values ) ;
+	}
+
+	return allPromise ;
+} ;
+
+
+
+// Maybe faster, but can't find any reasonable grounds for that ATM
+//Promise.all =
+Promise._allArray = function _allArray( iterable ) {
+	var length = iterable.length ;
+
+	if ( ! length ) { Promise._resolveValue( [] ) ; }
+
+	var index ,
+		runtime = {
+			settled: false ,
+			count: 0 ,
+			length: length ,
+			values: [] ,
+			allPromise: new Promise()
+		} ;
+
+	for ( index = 0 ; ! runtime.settled && index < length ; index ++ ) {
+		Promise._allArrayOne( iterable[ index ] , index , runtime ) ;
+	}
+
+	return runtime.allPromise ;
+} ;
+
+
+
+// internal for allArray
+Promise._allArrayOne = function _allArrayOne( value , index , runtime ) {
+	Promise._bareThen( value ,
+		value_ => {
+			if ( runtime.settled ) { return ; }
+
+			runtime.values[ index ] = value_ ;
+			runtime.count ++ ;
+
+			if ( runtime.count >= runtime.length ) {
+				runtime.settled = true ;
+				runtime.allPromise._resolveValue( runtime.values ) ;
+			}
+		} ,
+		error => {
+			if ( runtime.settled ) { return ; }
+			runtime.settled = true ;
+			runtime.allPromise.reject( error ) ;
+		}
+	) ;
+} ;
+
+
+// Promise.all() with an iterator
+Promise.every =
+Promise.map = function map( iterable , iterator ) {
+	var index = -1 , settled = false ,
+		count = 0 , length = Infinity ,
+		value , values = [] ,
+		allPromise = new Promise() ;
+
+	for ( value of iterable ) {
+		if ( settled ) { break ; }
+
+		index ++ ;
+
+		// Create a scope to keep track of the promise's own index
+		( () => {
+			const promiseIndex = index ;
+
+			Promise.resolve( value )
+			.then( value_ => {
+				if ( settled ) { return ; }
+				return iterator( value_ , promiseIndex ) ;
+			} )
+			.then(
+				value_ => {
+					if ( settled ) { return ; }
+
+					values[ promiseIndex ] = value_ ;
+					count ++ ;
+
+					if ( count >= length ) {
+						settled = true ;
+						allPromise._resolveValue( values ) ;
+					}
+				} ,
+				error => {
+					if ( settled ) { return ; }
+					settled = true ;
+					allPromise.reject( error ) ;
+				}
+			) ;
+		} )() ;
+	}
+
+	length = index + 1 ;
+
+	if ( ! length ) {
+		allPromise._resolveValue( values ) ;
+	}
+
+	return allPromise ;
+} ;
+
+
+
+/*
+	It works symmetrically with Promise.all(), the resolve and reject logic are switched.
+	Therefore, it resolves to the first resolving promise OR reject if all promises are rejected
+	with, as a reason, the array of all promise rejection reasons.
+*/
+Promise.any = function any( iterable ) {
+	var index = -1 , settled = false ,
+		count = 0 , length = Infinity ,
+		value ,
+		errors = [] ,
+		anyPromise = new Promise() ;
+
+	for ( value of iterable ) {
+		if ( settled ) { break ; }
+
+		index ++ ;
+
+		// Create a scope to keep track of the promise's own index
+		( () => {
+			const promiseIndex = index ;
+
+			Promise.resolve( value )
+			.then(
+				value_ => {
+					if ( settled ) { return ; }
+
+					settled = true ;
+					anyPromise._resolveValue( value_ ) ;
+				} ,
+				error => {
+					if ( settled ) { return ; }
+
+					errors[ promiseIndex ] = error ;
+					count ++ ;
+
+					if ( count >= length ) {
+						settled = true ;
+						anyPromise.reject( errors ) ;
+					}
+				}
+			) ;
+		} )() ;
+	}
+
+	length = index + 1 ;
+
+	if ( ! length ) {
+		anyPromise.reject( new RangeError( 'Promise.any(): empty array' ) ) ;
+	}
+
+	return anyPromise ;
+} ;
+
+
+
+// Like Promise.any() but with an iterator
+Promise.some = function some( iterable , iterator ) {
+	var index = -1 , settled = false ,
+		count = 0 , length = Infinity ,
+		value ,
+		errors = [] ,
+		anyPromise = new Promise() ;
+
+	for ( value of iterable ) {
+		if ( settled ) { break ; }
+
+		index ++ ;
+
+		// Create a scope to keep track of the promise's own index
+		( () => {
+			const promiseIndex = index ;
+
+			Promise.resolve( value )
+			.then( value_ => {
+				if ( settled ) { return ; }
+				return iterator( value_ , promiseIndex ) ;
+			} )
+			.then(
+				value_ => {
+					if ( settled ) { return ; }
+
+					settled = true ;
+					anyPromise._resolveValue( value_ ) ;
+				} ,
+				error => {
+					if ( settled ) { return ; }
+
+					errors[ promiseIndex ] = error ;
+					count ++ ;
+
+					if ( count >= length ) {
+						settled = true ;
+						anyPromise.reject( errors ) ;
+					}
+				}
+			) ;
+		} )() ;
+	}
+
+	length = index + 1 ;
+
+	if ( ! length ) {
+		anyPromise.reject( new RangeError( 'Promise.any(): empty array' ) ) ;
+	}
+
+	return anyPromise ;
+} ;
+
+
+
+/*
+	More closed to Array#filter().
+	The iterator should return truthy if the array element should be kept,
+	or falsy if the element should be filtered out.
+	Any rejection reject the whole promise.
+*/
+Promise.filter = function filter( iterable , iterator ) {
+	var index = -1 , settled = false ,
+		count = 0 , length = Infinity ,
+		value , values = [] ,
+		filterPromise = new Promise() ;
+
+	for ( value of iterable ) {
+		if ( settled ) { break ; }
+
+		index ++ ;
+
+		// Create a scope to keep track of the promise's own index
+		( () => {
+			const promiseIndex = index ;
+
+			Promise.resolve( value )
+			.then( value_ => {
+				if ( settled ) { return ; }
+				values[ promiseIndex ] = value_ ;
+				return iterator( value_ , promiseIndex ) ;
+			} )
+			.then(
+				iteratorValue => {
+					if ( settled ) { return ; }
+
+					count ++ ;
+
+					if ( ! iteratorValue ) { values[ promiseIndex ] = HOLE ; }
+
+					if ( count >= length ) {
+						settled = true ;
+						values = values.filter( e => e !== HOLE ) ;
+						filterPromise._resolveValue( values ) ;
+					}
+				} ,
+				error => {
+					if ( settled ) { return ; }
+					settled = true ;
+					filterPromise.reject( error ) ;
+				}
+			) ;
+		} )() ;
+	}
+
+	length = index + 1 ;
+
+	if ( ! length ) {
+		filterPromise._resolveValue( values ) ;
+	}
+	else if ( count >= length ) {
+		settled = true ;
+		values = values.filter( e => e !== HOLE ) ;
+		filterPromise._resolveValue( values ) ;
+	}
+
+	return filterPromise ;
+} ;
+
+
+
+// forEach performs reduce as well, if a third argument is supplied
+Promise.foreach =
+Promise.forEach = function forEach( iterable , iterator , accumulator ) {
+	var index = -1 ,
+		isReduce = arguments.length >= 3 ,
+		it = iterable[Symbol.iterator]() ,
+		forEachPromise = new Promise() ,
+		lastPromise = Promise.resolve( accumulator ) ;
+
+	// The array-like may contains promises that could be rejected before being handled
+	if ( Promise.warnUnhandledRejection ) { Promise._handleAll( iterable ) ; }
+
+	var nextElement = () => {
+		lastPromise.then(
+			accumulator_ => {
+				let { value , done } = it.next() ;
+				index ++ ;
+
+				if ( done ) {
+					forEachPromise.resolve( accumulator_ ) ;
+				}
+				else {
+					lastPromise = Promise.resolve( value ).then(
+						isReduce ?
+							value_ => iterator( accumulator_ , value_ , index ) :
+							value_ => iterator( value_ , index )
+					) ;
+
+					nextElement() ;
+				}
+			} ,
+			error => {
+				forEachPromise.reject( error ) ;
+
+				// We have to eat all remaining promise errors
+				for ( ;; ) {
+					let { value , done } = it.next() ;
+					if ( done ) { break ; }
+
+					//if ( ( value instanceof Promise ) || ( value instanceof NativePromise ) )
+					if ( Promise.isThenable( value ) ) {
+						value.then( noop , noop ) ;
+					}
+				}
+			}
+		) ;
+	} ;
+
+	nextElement() ;
+
+	return forEachPromise ;
+} ;
+
+
+
+Promise.reduce = function reduce( iterable , iterator , accumulator ) {
+	// Force 3 arguments
+	return Promise.forEach( iterable , iterator , accumulator ) ;
+} ;
+
+
+
+/*
+	Same than map, but iterate over an object and produce an object.
+	Think of it as a kind of Object#map() (which of course does not exist).
+*/
+Promise.mapObject = function mapObject( inputObject , iterator ) {
+	var settled = false ,
+		count = 0 ,
+		i , key , keys = Object.keys( inputObject ) ,
+		length = keys.length ,
+		value , outputObject = {} ,
+		mapPromise = new Promise() ;
+
+	for ( i = 0 ; ! settled && i < length ; i ++ ) {
+		key = keys[ i ] ;
+		value = inputObject[ key ] ;
+
+		// Create a scope to keep track of the promise's own key
+		( () => {
+			const promiseKey = key ;
+
+			Promise.resolve( value )
+			.then( value_ => {
+				if ( settled ) { return ; }
+				return iterator( value_ , promiseKey ) ;
+			} )
+			.then(
+				value_ => {
+					if ( settled ) { return ; }
+
+					outputObject[ promiseKey ] = value_ ;
+					count ++ ;
+
+					if ( count >= length ) {
+						settled = true ;
+						mapPromise._resolveValue( outputObject ) ;
+					}
+				} ,
+				error => {
+					if ( settled ) { return ; }
+					settled = true ;
+					mapPromise.reject( error ) ;
+				}
+			) ;
+		} )() ;
+	}
+
+	if ( ! length ) {
+		mapPromise._resolveValue( outputObject ) ;
+	}
+
+	return mapPromise ;
+} ;
+
+
+
+// Like map, but with a concurrency limit
+Promise.concurrent = function concurrent( limit , iterable , iterator ) {
+	var index = -1 , settled = false ,
+		running = 0 ,
+		count = 0 , length = Infinity ,
+		value , done = false ,
+		values = [] ,
+		it = iterable[Symbol.iterator]() ,
+		concurrentPromise = new Promise() ;
+
+	// The array-like may contains promises that could be rejected before being handled
+	if ( Promise.warnUnhandledRejection ) { Promise._handleAll( iterable ) ; }
+
+	limit = limit || 1 ;
+
+	const runBatch = () => {
+		while ( ! done && running < limit ) {
+
+			//console.log( "Pre" , index ) ;
+			( { value , done } = it.next() ) ;
+
+			if ( done ) {
+				length = index + 1 ;
+
+				if ( count >= length ) {
+					settled = true ;
+					concurrentPromise._resolveValue( values ) ;
+					return ;
+				}
+				break ;
+			}
+
+			if ( settled ) { break ; }
+
+			index ++ ;
+
+			// Create a scope to keep track of the promise's own index
+			( () => {
+				const promiseIndex = index ;
+
+				running ++ ;
+				//console.log( "Launch" , promiseIndex ) ;
+
+				Promise.resolve( value )
+				.then( value_ => {
+					if ( settled ) { return ; }
+					return iterator( value_ , promiseIndex ) ;
+				} )
+				.then(
+					value_ => {
+						//console.log( "Done" , promiseIndex , value_ ) ;
+						if ( settled ) { return ; }
+
+						values[ promiseIndex ] = value_ ;
+						count ++ ;
+						running -- ;
+
+						//console.log( "count/length" , count , length ) ;
+						if ( count >= length ) {
+							settled = true ;
+							concurrentPromise._resolveValue( values ) ;
+							return ;
+						}
+
+						if ( running < limit ) {
+							runBatch() ;
+							return ;
+						}
+					} ,
+					error => {
+						if ( settled ) { return ; }
+						settled = true ;
+						concurrentPromise.reject( error ) ;
+					}
+				) ;
+			} )() ;
+		}
+	} ;
+
+	runBatch() ;
+
+	if ( index < 0 ) {
+		concurrentPromise._resolveValue( values ) ;
+	}
+
+	return concurrentPromise ;
+} ;
+
+
+
+/*
+	The standard method is totally stoOpid, since it rejects if the first settled promise rejects,
+	it also hang forever on empty array.
+	The standard guys should have been drunk.
+	I don't want to code such a brain-fucking method.
+
+	Use Promise.any() or Promise.filter()
+*/
+Promise.race = Promise.Native.race.bind( Promise.Native ) ;
+
+
+
+},{"./seventh.js":73}],69:[function(require,module,exports){
+(function (process,global){
+/*
+	Seventh
+
+	Copyright (c) 2017 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+/*
+	Prerequisite.
+*/
+
+
+
+const NativePromise = global.Promise ;
+
+// Cross-platform next tick function
+var nextTick ;
+
+if ( ! process.browser ) {
+	nextTick = process.nextTick ;
+}
+else {
+	// Browsers suck, they don't have setImmediate() except IE/Edge.
+	// A module is needed to emulate it.
+	require( 'setimmediate' ) ;
+	nextTick = setImmediate ;
+}
+
+
+
+/*
+	Constructor.
+*/
+
+
+
+function Promise( fn ) {
+	this.fn = fn ;
+	this._then = Promise._dormantThen ;
+	this.value = null ;
+	this.thenHandlers = null ;
+	this.handledRejection = null ;
+
+	if ( this.fn ) {
+		this._exec() ;
+	}
+}
+
+module.exports = Promise ;
+
+
+
+Promise.Native = NativePromise ;
+Promise.warnUnhandledRejection = true ;
+
+
+
+Promise.prototype._exec = function _exec() {
+	this._then = Promise._pendingThen ;
+
+	try {
+		this.fn(
+			// Don't return anything, it would create nasty bugs! E.g.:
+			// bad: error => this.reject( error_ )
+			// good: error_ => { this.reject( error_ ) ; }
+			result_ => { this.resolve( result_ ) ; } ,
+			error_ => { this.reject( error_ ) ; }
+		) ;
+	}
+	catch ( error ) {
+		this.reject( error ) ;
+	}
+} ;
+
+
+
+/*
+	Resolve/reject and then-handlers management.
+*/
+
+
+
+Promise.prototype.resolve = Promise.prototype.fulfill = function resolve( value ) {
+	// Throw an error?
+	if ( this._then.settled ) { return this ; }
+
+	if ( Promise.isThenable( value ) ) {
+		this._execThenPromise( value ) ;
+		return this ;
+	}
+
+	return this._resolveValue( value ) ;
+} ;
+
+
+
+Promise.prototype._resolveValue = function _resolveValue( value ) {
+	this._then = Promise._fulfilledThen ;
+	this.value = value ;
+	if ( this.thenHandlers && this.thenHandlers.length ) { this._execFulfillHandlers() ; }
+
+	return this ;
+} ;
+
+
+
+// Faster on node v8.x
+Promise.prototype._execThenPromise = function _execThenPromise( thenPromise ) {
+	try {
+		thenPromise.then(
+			result_ => { this.resolve( result_ ) ; } ,
+			error_ => { this.reject( error_ ) ; }
+		) ;
+	}
+	catch ( error ) {
+		this.reject( error ) ;
+	}
+} ;
+
+
+
+Promise.prototype.reject = function reject( error ) {
+	// Throw an error?
+	if ( this._then.settled ) { return this ; }
+
+	this._then = Promise._rejectedThen ;
+	this.value = error ;
+
+	if ( this.thenHandlers && this.thenHandlers.length ) {
+		this._execRejectionHandlers() ;
+	}
+	else if ( Promise.warnUnhandledRejection && ! this.handledRejection ) {
+		this._unhandledRejection() ;
+	}
+
+	return this ;
+} ;
+
+
+
+Promise.prototype._execFulfillHandlers = function _execFulfillHandlers() {
+	var i ,
+		length = this.thenHandlers.length ;
+
+	// Do cache the length, if a handler is synchronously added, it will be called on next tick
+	for ( i = 0 ; i < length ; i += 3 ) {
+		if ( this.thenHandlers[ i + 1 ] ) {
+			this._execOneFulfillHandler( this.thenHandlers[ i ] , this.thenHandlers[ i + 1 ] ) ;
+		}
+		else {
+			this.thenHandlers[ i ].resolve( this.value ) ;
+		}
+	}
+} ;
+
+
+
+// Faster on node v8.x?
+//*
+Promise.prototype._execOneFulfillHandler = function _execOneFulfillHandler( promise , onFulfill ) {
+	try {
+		promise.resolve( onFulfill( this.value ) ) ;
+	}
+	catch ( error_ ) {
+		promise.reject( error_ ) ;
+	}
+} ;
+//*/
+
+
+
+Promise.prototype._execRejectionHandlers = function _execRejectionHandlers() {
+	var i ,
+		length = this.thenHandlers.length ;
+
+	// Do cache the length, if a handler is synchronously added, it will be called on next tick
+	for ( i = 0 ; i < length ; i += 3 ) {
+		if ( this.thenHandlers[ i + 2 ] ) {
+			this._execOneRejectHandler( this.thenHandlers[ i ] , this.thenHandlers[ i + 2 ] ) ;
+		}
+		else {
+			this.thenHandlers[ i ].reject( this.value ) ;
+		}
+	}
+} ;
+
+
+
+// Faster on node v8.x?
+//*
+Promise.prototype._execOneRejectHandler = function _execOneRejectHandler( promise , onReject ) {
+	try {
+		promise.resolve( onReject( this.value ) ) ;
+	}
+	catch ( error_ ) {
+		promise.reject( error_ ) ;
+	}
+} ;
+//*/
+
+
+
+Promise.prototype.resolveTimeout = Promise.prototype.fulfillTimeout = function resolveTimeout( time , result ) {
+	setTimeout( () => this.resolve( result ) , time ) ;
+} ;
+
+
+
+Promise.prototype.rejectTimeout = function rejectTimeout( time , error ) {
+	setTimeout( () => this.reject( error ) , time ) ;
+} ;
+
+
+
+/*
+	.then() variants depending on the state
+*/
+
+
+
+// .then() variant when the promise is dormant
+Promise._dormantThen = function _dormantThen( onFulfill , onReject ) {
+	if ( this.fn ) {
+		// If this is a dormant promise, wake it up now!
+		this._exec() ;
+
+		// Return now, some sync stuff can change the status
+		return this._then( onFulfill , onReject ) ;
+	}
+
+	var promise = new Promise() ;
+
+	if ( ! this.thenHandlers ) {
+		this.thenHandlers = [ promise , onFulfill , onReject ] ;
+	}
+	else {
+		//this.thenHandlers.push( onFulfill ) ;
+		this.thenHandlers[ this.thenHandlers.length ] = promise ;
+		this.thenHandlers[ this.thenHandlers.length ] = onFulfill ;
+		this.thenHandlers[ this.thenHandlers.length ] = onReject ;
+	}
+
+	return promise ;
+} ;
+
+Promise._dormantThen.settled = false ;
+
+
+
+// .then() variant when the promise is pending
+Promise._pendingThen = function _pendingThen( onFulfill , onReject ) {
+	var promise = new Promise() ;
+
+	if ( ! this.thenHandlers ) {
+		this.thenHandlers = [ promise , onFulfill , onReject ] ;
+	}
+	else {
+		//this.thenHandlers.push( onFulfill ) ;
+		this.thenHandlers[ this.thenHandlers.length ] = promise ;
+		this.thenHandlers[ this.thenHandlers.length ] = onFulfill ;
+		this.thenHandlers[ this.thenHandlers.length ] = onReject ;
+	}
+
+	return promise ;
+} ;
+
+Promise._pendingThen.settled = false ;
+
+
+
+// .then() variant when the promise is fulfilled
+Promise._fulfilledThen = function _fulfilledThen( onFulfill ) {
+	if ( ! onFulfill ) { return this ; }
+
+	var promise = new Promise() ;
+
+	// This handler should not fire in this code sync flow
+	nextTick( () => {
+		try {
+			promise.resolve( onFulfill( this.value ) ) ;
+		}
+		catch ( error ) {
+			promise.reject( error ) ;
+		}
+	} ) ;
+
+	return promise ;
+} ;
+
+Promise._fulfilledThen.settled = true ;
+
+
+
+// .then() variant when the promise is rejected
+Promise._rejectedThen = function _rejectedThen( onFulfill , onReject ) {
+	if ( ! onReject ) { return this ; }
+
+	this.handledRejection = true ;
+	var promise = new Promise() ;
+
+	// This handler should not fire in this code sync flow
+	nextTick( () => {
+		try {
+			promise.resolve( onReject( this.value ) ) ;
+		}
+		catch ( error ) {
+			promise.reject( error ) ;
+		}
+	} ) ;
+
+	return promise ;
+} ;
+
+Promise._rejectedThen.settled = true ;
+
+
+
+/*
+	.then() and short-hands.
+*/
+
+
+
+Promise.prototype.then = function then( onFulfill , onReject ) {
+	return this._then( onFulfill , onReject ) ;
+} ;
+
+
+
+Promise.prototype.catch = function _catch( onReject ) {
+	return this._then( undefined , onReject ) ;
+} ;
+
+
+
+Promise.prototype.tap = function tap( onFulfill ) {
+	this._then( onFulfill , undefined ) ;
+	return this ;
+} ;
+
+
+
+Promise.prototype.tapCatch = function tapCatch( onReject ) {
+	this._then( undefined , onReject ) ;
+	return this ;
+} ;
+
+
+
+Promise.prototype.finally = function _finally( onSettled ) {
+	this._then( onSettled , onSettled ) ;
+	// Return this or this._then() ?
+	return this ;
+} ;
+
+
+
+// Any unhandled error throw ASAP
+Promise.prototype.fatal = function fatal() {
+	this._then( undefined , error => {
+		// Throw async, otherwise it would be catched by .then()
+		nextTick( () => { throw error ; } ) ;
+	} ) ;
+} ;
+
+
+
+Promise.prototype.done = function done( onFulfill , onReject ) {
+	this._then( onFulfill , onReject ).fatal() ;
+	return this ;
+} ;
+
+
+
+Promise.prototype.callback = function callback( cb ) {
+	this._then(
+		value => { cb( undefined , value ) ; } ,
+		error => { cb( error ) ; }
+	).fatal() ;
+
+	return this ;
+} ;
+
+
+
+Promise.prototype.callbackAll = function callbackAll( cb ) {
+	this._then(
+		values => {
+			if ( Array.isArray( values ) ) { cb( undefined , ... values ) ; }
+			else { cb( undefined , values ) ; }
+		} ,
+		error => { cb( error ) ; }
+	).fatal() ;
+
+	return this ;
+} ;
+
+
+
+Promise.prototype.toPromise = function toPromise( promise ) {
+	this._then(
+		value => { promise.resolve( value ) ; } ,
+		error => { promise.reject( error ) ; }
+	) ;
+
+	return this ;
+} ;
+
+
+
+
+
+/*
+	Static factories.
+*/
+
+
+
+Promise.resolve = Promise.fulfill = function resolve( value ) {
+	if ( Promise.isThenable( value ) ) { return Promise.fromThenable( value ) ; }
+	return Promise._resolveValue( value ) ;
+} ;
+
+
+
+Promise._resolveValue = function _resolveValue( value ) {
+	var promise = new Promise() ;
+	promise._then = Promise._fulfilledThen ;
+	promise.value = value ;
+	return promise ;
+} ;
+
+
+
+Promise.reject = function reject( error ) {
+	//return new Promise().reject( error ) ;
+	var promise = new Promise() ;
+	promise._then = Promise._rejectedThen ;
+	promise.value = error ;
+	return promise ;
+} ;
+
+
+
+Promise.resolveTimeout = Promise.fulfillTimeout = function resolveTimeout( timeout , value ) {
+	return new Promise( resolve => setTimeout( () => resolve( value ) , timeout ) ) ;
+} ;
+
+
+
+Promise.rejectTimeout = function rejectTimeout( timeout , error ) {
+	return new Promise( ( resolve , reject ) => setTimeout( () => reject( error ) , timeout ) ) ;
+} ;
+
+
+
+// A dormant promise is activated the first time a then handler is assigned
+Promise.dormant = function dormant( fn ) {
+	var promise = new Promise() ;
+	promise.fn = fn ;
+	return promise ;
+} ;
+
+
+
+// Try-catched Promise.resolve( fn() )
+Promise.try = function try_( fn ) {
+	try {
+		return Promise.resolve( fn() ) ;
+	}
+	catch ( error ) {
+		return Promise.reject( error ) ;
+	}
+} ;
+
+
+
+/*
+	Thenables.
+*/
+
+
+
+Promise.isThenable = function isThenable( value ) {
+	return value && typeof value === 'object' && typeof value.then === 'function' ;
+} ;
+
+
+
+// We assume a thenable object here
+Promise.fromThenable = function fromThenable( thenable ) {
+	if ( thenable instanceof Promise ) { return thenable ; }
+
+	return new Promise( ( resolve , reject ) => {
+		thenable.then(
+			value => { resolve( value ) ; } ,
+			error => { reject( error ) ; }
+		) ;
+	} ) ;
+} ;
+
+
+
+// When you just want a fast then() function out of anything, without any desync and unchainable
+Promise._bareThen = function _bareThen( value , onFulfill , onReject ) {
+	//if ( Promise.isThenable( value ) )
+	if( value && typeof value === 'object' ) {
+		if ( value instanceof Promise ) {
+			if ( value._then === Promise._fulfilledThen ) { onFulfill( value.value ) ; }
+			else if ( value._then === Promise._rejectedThen ) { onReject( value.value ) ; }
+			else { value._then( onFulfill , onReject ) ; }
+		}
+		else if ( typeof value.then === 'function' ) {
+			value.then( onFulfill , onReject ) ;
+		}
+		else {
+			onFulfill( value ) ;
+		}
+	}
+	else {
+		onFulfill( value ) ;
+	}
+} ;
+
+
+
+/*
+	Misc.
+*/
+
+
+
+// Internal usage, mark all promises as handled ahead of time, useful for series,
+// because a warning would be displayed for unhandled rejection for promises that are not yet processed.
+Promise._handleAll = function _handleAll( iterable ) {
+	var value ;
+
+	for ( value of iterable ) {
+		//if ( ( value instanceof Promise ) || ( value instanceof NativePromise ) )
+		if ( Promise.isThenable( value ) ) {
+			value.handledRejection = true ;
+		}
+	}
+} ;
+
+
+
+Promise.prototype._unhandledRejection = function _unhandledRejection() {
+	// This promise is currently unhandled
+	// If still unhandled at the end of the synchronous block of code,
+	// output an error message.
+
+	this.handledRejection = false ;
+
+	// Don't know what is the correct way to inform node.js about that.
+	// There is no doc about that, and emitting unhandledRejection,
+	// does not produce what is expected.
+
+	//process.emit( 'unhandledRejection' , this.value , this ) ;
+
+	/*
+	nextTick( () => {
+		if ( this.handledRejection === false )
+		{
+			process.emit( 'unhandledRejection' , this.value , this ) ;
+		}
+	} ) ;
+	*/
+
+	// It looks like 'await' inside a 'try-catch' does not handle the promise soon enough -_-'
+	//const nextTick_ = nextTick ;
+	const nextTick_ = cb => setTimeout( cb , 0 ) ;
+
+	//*
+	if ( this.value instanceof Error ) {
+		nextTick_( () => {
+			if ( this.handledRejection === false ) {
+				this.value.message = 'Unhandled promise rejection: ' + this.value.message ;
+				console.error( this.value ) ;
+			}
+		} ) ;
+	}
+	else {
+		// Avoid starting the stack trace in the nextTick()...
+		let error_ = new Error( 'Unhandled promise rejection' ) ;
+		nextTick_( () => {
+			if ( this.handledRejection === false ) {
+				console.error( error_ ) ;
+				console.error( 'Rejection reason:' , this.value ) ;
+			}
+		} ) ;
+	}
+	//*/
+} ;
+
+
+
+Promise.prototype.getStatus = function getStatus() {
+	switch ( this._then ) {
+		case Promise._dormantThen :
+			return 'dormant' ;
+		case Promise._pendingThen :
+			return 'pending' ;
+		case Promise._fulfilledThen :
+			return 'fulfilled' ;
+		case Promise._rejectedThen :
+			return 'rejected' ;
+	}
+} ;
+
+
+
+Promise.prototype.inspect = function inspect() {
+	switch ( this._then ) {
+		case Promise._dormantThen :
+			return 'Promise { <DORMANT> }' ;
+		case Promise._pendingThen :
+			return 'Promise { <PENDING> }' ;
+		case Promise._fulfilledThen :
+			return 'Promise { <FULFILLED> ' + this.value + ' }' ;
+		case Promise._rejectedThen :
+			return 'Promise { <REJECTED> ' + this.value + ' }' ;
+	}
+} ;
+
+
+
+// A shared dummy promise, when you just want to return an immediately thenable
+Promise.resolved = Promise.dummy = Promise.resolve() ;
+
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"_process":61,"setimmediate":66}],70:[function(require,module,exports){
+/*
+	Seventh
+
+	Copyright (c) 2017 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var Promise = require( './seventh.js' ) ;
+
+
+
+Promise.promisifyAll = ( nodeAsyncFn , thisBinding ) => {
+
+	if ( thisBinding === undefined ) {
+		return function( ... args ) {
+			return new Promise( ( resolve , reject ) => {
+				nodeAsyncFn.call( this , ... args , ( error , ... cbArgs ) => {
+					return error ? reject( error ) : resolve( cbArgs ) ;
+				} ) ;
+			} ) ;
+		} ;
+	}
+
+	return ( ... args ) => {
+		return new Promise( ( resolve , reject ) => {
+			nodeAsyncFn.call( thisBinding , ... args , ( error , ... cbArgs ) => {
+				return error ? reject( error ) : resolve( cbArgs ) ;
+			} ) ;
+		} ) ;
+	} ;
+
+} ;
+
+
+
+// Same than .promisifyAll() but only return the callback args #1 instead of an array of args from #1 to #n
+Promise.promisify = ( nodeAsyncFn , thisBinding ) => {
+
+	if ( thisBinding === undefined ) {
+		return function( ... args ) {
+			return new Promise( ( resolve , reject ) => {
+				nodeAsyncFn.call( this , ... args , ( error , cbArg ) => {
+					return error ? reject( error ) : resolve( cbArg ) ;
+				} ) ;
+			} ) ;
+		} ;
+	}
+
+	return ( ... args ) => {
+		return new Promise( ( resolve , reject ) => {
+			nodeAsyncFn.call( thisBinding , ... args , ( error , cbArg ) => {
+				return error ? reject( error ) : resolve( cbArg ) ;
+			} ) ;
+		} ) ;
+	} ;
+
+} ;
+
+
+
+/*
+	Pass a function that will be called every time the decoratee return something.
+*/
+Promise.returnValueInterceptor = ( interceptor , asyncFn , thisBinding ) => {
+
+	if ( thisBinding === undefined ) {
+		return function( ... args ) {
+			var returnVal = asyncFn.call( this , ... args ) ;
+			interceptor( returnVal ) ;
+			return returnVal ;
+		} ;
+	}
+
+	return ( ... args ) => {
+		var returnVal = asyncFn.call( thisBinding , ... args ) ;
+		interceptor( returnVal ) ;
+		return returnVal ;
+	} ;
+
+} ;
+
+
+
+/*
+	Run only once, return always the same promise.
+*/
+Promise.once = ( asyncFn , thisBinding ) => {
+
+	var triggered = false ;
+	var result ;
+
+	return ( ... args ) => {
+		if ( ! triggered ) {
+			triggered = true ;
+			result = asyncFn.call( thisBinding , ... args ) ;
+		}
+
+		return result ;
+	} ;
+} ;
+
+
+
+/*
+	It does nothing if the decoratee is still in progress, but return the promise of the action in progress.
+*/
+Promise.debounce = ( asyncFn , thisBinding ) => {
+
+	var inProgress = null ;
+
+	const outWrapper = () => {
+		inProgress = null ;
+	} ;
+
+	return ( ... args ) => {
+		if ( inProgress ) { return inProgress ; }
+
+		inProgress = asyncFn.call( thisBinding , ... args ) ;
+		inProgress.then( outWrapper , outWrapper ) ;
+		return inProgress ;
+	} ;
+} ;
+
+
+
+/*
+	It does nothing if the decoratee is still in progress.
+	Instead, the decoratee is called when finished once and only once, if it was tried one or more time during its progress.
+	In case of multiple calls, the arguments of the last call will be used.
+	The use case is .update()/.refresh()/.redraw() functions.
+*/
+Promise.debounceUpdate = ( asyncFn , thisBinding ) => {
+
+	var inProgress = null ;
+	var nextUpdateWith = null ;
+	var nextUpdatePromise = null ;
+
+	const outWrapper = () => {
+		var args , sharedPromise ;
+
+		inProgress = null ;
+
+		if ( nextUpdateWith ) {
+			args = nextUpdateWith ;
+			nextUpdateWith = null ;
+			sharedPromise = nextUpdatePromise ;
+			nextUpdatePromise = null ;
+
+			// Call the asyncFn again
+			inProgress = asyncFn.call( thisBinding , ... args ) ;
+
+			// Forward the result to the pending promise
+			inProgress.then( ( value ) => sharedPromise.resolve( value ) , ( error ) => sharedPromise.reject( error ) ) ;
+
+			// BTW, trigger again the outWrapper
+			inProgress.then( outWrapper , outWrapper ) ;
+
+			return inProgress ;
+		}
+	} ;
+
+	const inWrapper = ( ... args ) => {
+		if ( inProgress ) {
+			if ( ! nextUpdatePromise ) { nextUpdatePromise = new Promise() ; }
+			nextUpdateWith = args ;
+			return nextUpdatePromise ;
+		}
+
+		inProgress = asyncFn.call( thisBinding , ... args ) ;
+		inProgress.then( outWrapper , outWrapper ) ;
+		return inProgress ;
+	} ;
+
+	return inWrapper ;
+} ;
+
+
+
+/*
+	The decoratee execution does not overlap, multiple calls are serialized.
+*/
+Promise.serialize = ( asyncFn , thisBinding ) => {
+
+	var lastPromise = new Promise.resolve() ;
+
+	return ( ... args ) => {
+
+		var promise = new Promise() ;
+
+		lastPromise.finally( () => {
+			asyncFn.call( thisBinding , ... args )
+			.then( ( value ) => promise.resolve( value ) , ( error ) => promise.reject( error ) ) ;
+		} ) ;
+
+		lastPromise = promise ;
+
+		return promise ;
+	} ;
+} ;
+
+
+
+Promise.timeout = ( timeout , asyncFn , thisBinding ) => {
+	if ( thisBinding === undefined ) {
+		return function( ... args ) {
+			var promise = asyncFn.call( this , ... args ) ;
+			// Careful: not my promise, so cannot retrieve its status
+			setTimeout( () => promise.reject( new Error( 'Timeout' ) ) , timeout ) ;
+			return promise ;
+		} ;
+	}
+
+	return ( ... args ) => {
+		var promise = asyncFn.call( thisBinding , ... args ) ;
+		// Careful: not my promise, so cannot retrieve its status
+		setTimeout( () => promise.reject( new Error( 'Timeout' ) ) , timeout ) ;
+		return promise ;
+	} ;
+
+} ;
+
+
+
+// Like .timeout(), but here the timeout value is not passed at creation, but as the first arg of each call
+Promise.variableTimeout = ( asyncFn , thisBinding ) => {
+	if ( thisBinding === undefined ) {
+		return function( timeout , ... args ) {
+			var promise = asyncFn.call( this , ... args ) ;
+			// Careful: not my promise, so cannot retrieve its status
+			setTimeout( () => promise.reject( new Error( 'Timeout' ) ) , timeout ) ;
+			return promise ;
+		} ;
+	}
+
+	return ( timeout , ... args ) => {
+		var promise = asyncFn.call( thisBinding , ... args ) ;
+		// Careful: not my promise, so cannot retrieve its status
+		setTimeout( () => promise.reject( new Error( 'Timeout' ) ) , timeout ) ;
+		return promise ;
+	} ;
+
+} ;
+
+
+
+/*
+Promise.retry = ( retryCount , retryTimeout , timeoutMultiplier , asyncFn , thisBinding ) => {
+
+	return ( ... args ) => {
+
+		var lastError ,
+			count = retryCount ,
+			timeout = retryTimeout ,
+			globalPromise = new Promise() ;
+
+		const callAgain = () => {
+			if ( count -- < 0 ) {
+				globalPromise.reject( lastError ) ;
+				return ;
+			}
+
+			var promise = asyncFn.call( thisBinding , ... args ) ;
+
+			promise.then(
+				//( value ) => globalPromise.resolve( value ) ,
+				( value ) => {
+					globalPromise.resolve( value ) ;
+				} ,
+				( error ) => {
+					lastError = error ;
+					setTimeout( callAgain , timeout ) ;
+					timeout *= timeoutMultiplier ;
+				}
+			) ;
+		} ;
+
+		callAgain() ;
+
+		return globalPromise ;
+	} ;
+} ;
+
+
+
+Promise.variableRetry = ( asyncFn , thisBinding ) => {
+
+	return ( retryCount , retryTimeout , timeoutMultiplier , ... args ) => {
+
+		var lastError ,
+			count = retryCount ,
+			timeout = retryTimeout ,
+			globalPromise = new Promise() ;
+
+		const callAgain = () => {
+			if ( count -- < 0 ) {
+				globalPromise.reject( lastError ) ;
+				return ;
+			}
+
+			var promise = asyncFn.call( thisBinding , ... args ) ;
+
+			promise.then(
+				( value ) => globalPromise.resolve( value ) ,
+				( error ) => {
+					lastError = error ;
+					setTimeout( callAgain , timeout ) ;
+					timeout *= timeoutMultiplier ;
+				}
+			) ;
+		} ;
+
+		callAgain() ;
+
+		return globalPromise ;
+	} ;
+} ;
+*/
+
+
+},{"./seventh.js":73}],71:[function(require,module,exports){
+(function (process){
+/*
+	Seventh
+
+	Copyright (c) 2017 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var Promise = require( './seventh.js' ) ;
+
+
+
+/*
+	Asynchronously exit.
+
+	Wait for all listeners of the 'asyncExit' event (on the 'process' object) to have called their callback.
+	The listeners receive the exit code about to be produced and a completion callback.
+*/
+
+var exitInProgress = false ;
+
+Promise.asyncExit = function asyncExit( exitCode , timeout ) {
+	// Already exiting? no need to call it twice!
+	if ( exitInProgress ) { return ; }
+
+	exitInProgress = true ;
+
+	var listeners = process.listeners( 'asyncExit' ) ;
+
+	if ( ! listeners.length ) { process.exit( exitCode ) ; return ; }
+
+	if ( timeout === undefined ) { timeout = 1000 ; }
+
+	const callListener = listener => {
+
+		if ( listener.length < 3 ) {
+			// This listener does not have a callback, it is interested in the event but does not need to perform critical stuff.
+			// E.g. a server will not accept connection or data anymore, but doesn't need cleanup.
+			listener( exitCode , timeout ) ;
+			return Promise.dummy ;
+		}
+
+		// This listener have a callback, it probably has critical stuff to perform before exiting.
+		// E.g. a server that needs to gracefully exit will not accept connection or data anymore,
+		// but still want to deliver request in progress.
+		return new Promise( resolve => {
+			listener( exitCode , timeout , () => { resolve() ; } ) ;
+		} ) ;
+
+	} ;
+
+	// We don't care about errors here... We are exiting!
+	Promise.map( listeners , callListener )
+	.finally( () => process.exit( exitCode ) ) ;
+
+	// Quit anyway if it's too long
+	setTimeout( () => process.exit( exitCode ) , timeout ) ;
+} ;
+
+
+
+// A timeout that ensure a task get the time to perform its action (when there are CPU-bound tasks)
+Promise.resolveSafeTimeout = function resolveSafeTimeout( timeout , value ) {
+	return new Promise( resolve => {
+		setTimeout( () => {
+			setTimeout( () => {
+				setTimeout( () => {
+					setTimeout( () => resolve( value ) , 0 ) ;
+				} , timeout / 2 ) ;
+			} , timeout / 2 ) ;
+		} , 0 ) ;
+	} ) ;
+} ;
+
+
+}).call(this,require('_process'))
+},{"./seventh.js":73,"_process":61}],72:[function(require,module,exports){
+/*
+	Seventh
+
+	Copyright (c) 2017 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var Promise = require( './seventh.js' ) ;
+
+
+
+/*
+	This parasite the native promise, bringing some of seventh features into them.
+*/
+
+Promise.parasite = () => {
+
+	var compatibleProtoFn = [
+		'tap' , 'tapCatch' , 'finally' ,
+		'fatal' , 'done' ,
+		'callback' , 'callbackAll'
+	] ;
+
+	compatibleProtoFn.forEach( fn => Promise.Native.prototype[ fn ] = Promise.prototype[ fn ] ) ;
+	Promise.Native.prototype._then = Promise.Native.prototype.then ;
+} ;
+
+
+},{"./seventh.js":73}],73:[function(require,module,exports){
+/*
+	Seventh
+
+	Copyright (c) 2017 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+const seventh = require( './core.js' ) ;
+module.exports = seventh ;
+
+// The order matters
+require( './batch.js' ) ;
+require( './wrapper.js' ) ;
+require( './decorators.js' ) ;
+require( './api.js' ) ;
+require( './parasite.js' ) ;
+require( './misc.js' ) ;
+
+
+},{"./api.js":67,"./batch.js":68,"./core.js":69,"./decorators.js":70,"./misc.js":71,"./parasite.js":72,"./wrapper.js":74}],74:[function(require,module,exports){
+/*
+	Seventh
+
+	Copyright (c) 2017 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+var Promise = require( './seventh.js' ) ;
+
+
+
+Promise.timeLimit = ( timeout , asyncFnOrPromise ) => {
+	return new Promise( ( resolve , reject ) => {
+		if ( typeof asyncFnOrPromise === 'function' ) { asyncFnOrPromise = asyncFnOrPromise() ; }
+		Promise.resolve( asyncFnOrPromise ).then( resolve , reject ) ;
+		setTimeout( () => reject( new Error( "Timeout" ) ) , timeout ) ;
+	} ) ;
+} ;
+
+
+
+/*
+	options:
+		retries: number of retry
+		coolDown: time before retrying
+		raiseFactor: time multiplier for each successive cool down
+		maxCoolDown: maximum cool-down, the raising time is capped to this value
+		timeout: time before assuming it has failed, 0 = no time limit
+		catch: `function` (optional) if absent, the function is always retried until it reaches the limit,
+			if present, that catch-function is used like a normal promise catch block, the function is retry
+			only if the catch-function does not throw or return a rejecting promise
+*/
+Promise.retry = ( options , asyncFn ) => {
+	var count = options.retries || 1 ,
+		coolDown = options.coolDown || 0 ,
+		raiseFactor = options.raiseFactor || 1 ,
+		maxCoolDown = options.maxCoolDown || Infinity ,
+		timeout = options.timeout || 0 ,
+		catchFn = options.catch || null ;
+
+	const oneTry = () => {
+		return ( timeout ? Promise.timeLimit( timeout , asyncFn ) : asyncFn() ).catch( error => {
+			if ( ! count -- ) { throw error ; }
+
+			var currentCoolDown = coolDown ;
+			coolDown = Math.min( coolDown * raiseFactor , maxCoolDown ) ;
+
+			if ( catchFn ) {
+				// Call the custom catch function
+				// Let it crash, if it throw we are already in a .catch() block
+				return Promise.resolve( catchFn( error ) ).then( () => Promise.resolveTimeout( currentCoolDown ).then( oneTry ) ) ;
+			}
+
+			return Promise.resolveTimeout( currentCoolDown ).then( oneTry ) ;
+		} ) ;
+	} ;
+
+	return oneTry() ;
+} ;
+
+
+
+Promise.onceEvent = ( emitter , eventName ) => {
+	return new Promise( resolve => emitter.once( eventName , arg => resolve( arg ) ) ) ;
+} ;
+
+
+
+Promise.onceEventAll = ( emitter , eventName ) => {
+	return new Promise( resolve => emitter.once( eventName , ( ... args ) => resolve( args ) ) ) ;
+} ;
+
+
+
+},{"./seventh.js":73}],75:[function(require,module,exports){
 arguments[4][12][0].apply(exports,arguments)
-},{"dup":12}],75:[function(require,module,exports){
+},{"dup":12}],76:[function(require,module,exports){
 /*
 	String Kit
 
@@ -28604,7 +27158,7 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 } ;
 
 
-},{}],76:[function(require,module,exports){
+},{}],77:[function(require,module,exports){
 (function (Buffer,process){
 /*
 	String Kit
@@ -29249,13 +27803,13 @@ inspectStyle.html = Object.assign( {} , inspectStyle.none , {
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")},require('_process'))
-},{"../../is-buffer/index.js":62,"./ansi.js":74,"./escape.js":75,"_process":69}],77:[function(require,module,exports){
+},{"../../is-buffer/index.js":54,"./ansi.js":75,"./escape.js":76,"_process":61}],78:[function(require,module,exports){
 arguments[4][17][0].apply(exports,arguments)
-},{"dup":17}],78:[function(require,module,exports){
+},{"dup":17}],79:[function(require,module,exports){
 arguments[4][18][0].apply(exports,arguments)
-},{"./latinize-map.json":77,"dup":18}],79:[function(require,module,exports){
+},{"./latinize-map.json":78,"dup":18}],80:[function(require,module,exports){
 arguments[4][23][0].apply(exports,arguments)
-},{"dup":23}],80:[function(require,module,exports){
+},{"dup":23}],81:[function(require,module,exports){
 /*
 	Tree Kit
 
@@ -29341,309 +27895,6 @@ module.exports = function clone( originalObject , circular ) {
 
 	return cloneObject ;
 } ;
-
-},{}],81:[function(require,module,exports){
-/*
-	Tree Kit
-
-	Copyright (c) 2014 - 2018 Cédric Ronvel
-
-	The MIT License (MIT)
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software and associated documentation files (the "Software"), to deal
-	in the Software without restriction, including without limitation the rights
-	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the Software is
-	furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all
-	copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
-*/
-
-"use strict" ;
-
-
-
-/*
-	== Extend function ==
-*/
-
-/*
-	options:
-		* own: only copy own properties that are enumerable
-		* nonEnum: copy non-enumerable properties as well, works only with own:true
-		* descriptor: preserve property's descriptor
-		* deep: perform a deep (recursive) extend
-		* maxDepth: used in conjunction with deep, when max depth is reached an exception is raised, default to 100 when
-			the 'circular' option is off, or default to null if 'circular' is on
-		* circular: circular references reconnection
-		* move: move properties to target (delete properties from the sources)
-		* preserve: existing properties in the target object are not overwritten
-		* nofunc: skip functions
-		* deepFunc: in conjunction with 'deep', this will process sources functions like objects rather than
-			copying/referencing them directly into the source, thus, the result will not be a function, it forces 'deep'
-		* proto: try to clone objects with the right prototype, using Object.create() or mutating it with Object.setPrototypeOf(),
-			it forces option 'own'.
-		* inherit: rather than mutating target prototype for source prototype like the 'proto' option does, here it is
-			the source itself that IS the prototype for the target. Force option 'own' and disable 'proto'.
-		* skipRoot: the prototype of the target root object is NOT mutated only if this option is set.
-		* flat: extend into the target top-level only, compose name with the path of the source, force 'deep',
-			disable 'unflat', 'proto', 'inherit'
-		* unflat: assume sources are in the 'flat' format, expand all properties deeply into the target, disable 'flat'
-		* deepFilter
-			* blacklist: list of black-listed prototype: the recursiveness of the 'deep' option will be disabled
-				for object whose prototype is listed
-			* whitelist: the opposite of blacklist
-*/
-function extend( options , target , ... sources ) {
-	//console.log( "\nextend():\n" , arguments ) ;
-	var i , source , newTarget = false , length = sources.length ;
-
-	if ( ! length ) { return target ; }
-
-	if ( ! options || typeof options !== 'object' ) { options = {} ; }
-
-	var runtime = { depth: 0 , prefix: '' } ;
-
-	if ( ! options.maxDepth && options.deep && ! options.circular ) { options.maxDepth = 100 ; }
-
-	if ( options.deepFunc ) { options.deep = true ; }
-
-	if ( options.deepFilter && typeof options.deepFilter === 'object' ) {
-		if ( options.deepFilter.whitelist && ( ! Array.isArray( options.deepFilter.whitelist ) || ! options.deepFilter.whitelist.length ) ) { delete options.deepFilter.whitelist ; }
-		if ( options.deepFilter.blacklist && ( ! Array.isArray( options.deepFilter.blacklist ) || ! options.deepFilter.blacklist.length ) ) { delete options.deepFilter.blacklist ; }
-		if ( ! options.deepFilter.whitelist && ! options.deepFilter.blacklist ) { delete options.deepFilter ; }
-	}
-
-	// 'flat' option force 'deep'
-	if ( options.flat ) {
-		options.deep = true ;
-		options.proto = false ;
-		options.inherit = false ;
-		options.unflat = false ;
-		if ( typeof options.flat !== 'string' ) { options.flat = '.' ; }
-	}
-
-	if ( options.unflat ) {
-		options.deep = false ;
-		options.proto = false ;
-		options.inherit = false ;
-		options.flat = false ;
-		if ( typeof options.unflat !== 'string' ) { options.unflat = '.' ; }
-	}
-
-	// If the prototype is applied, only owned properties should be copied
-	if ( options.inherit ) { options.own = true ; options.proto = false ; }
-	else if ( options.proto ) { options.own = true ; }
-
-	if ( ! target || ( typeof target !== 'object' && typeof target !== 'function' ) ) {
-		newTarget = true ;
-	}
-
-	if ( ! options.skipRoot && ( options.inherit || options.proto ) ) {
-		for ( i = length - 1 ; i >= 0 ; i -- ) {
-			source = sources[ i ] ;
-			if ( source && ( typeof source === 'object' || typeof source === 'function' ) ) {
-				if ( options.inherit ) {
-					if ( newTarget ) { target = Object.create( source ) ; }
-					else { Object.setPrototypeOf( target , source ) ; }
-				}
-				else if ( options.proto ) {
-					if ( newTarget ) { target = Object.create( Object.getPrototypeOf( source ) ) ; }
-					else { Object.setPrototypeOf( target , Object.getPrototypeOf( source ) ) ; }
-				}
-
-				break ;
-			}
-		}
-	}
-	else if ( newTarget ) {
-		target = {} ;
-	}
-
-	runtime.references = { sources: [] , targets: [] } ;
-
-	for ( i = 0 ; i < length ; i ++ ) {
-		source = sources[ i ] ;
-		if ( ! source || ( typeof source !== 'object' && typeof source !== 'function' ) ) { continue ; }
-		extendOne( runtime , options , target , source ) ;
-	}
-
-	return target ;
-}
-
-module.exports = extend ;
-
-
-
-function extendOne( runtime , options , target , source ) {
-	//console.log( "\nextendOne():\n" , arguments ) ;
-	//process.exit() ;
-
-	var j , jmax , sourceKeys , sourceKey , sourceValue , sourceValueProto ,
-		value , sourceDescriptor , targetKey , targetPointer , path ,
-		indexOfSource = -1 ;
-
-	// Max depth check
-	if ( options.maxDepth && runtime.depth > options.maxDepth ) {
-		throw new Error( '[tree] extend(): max depth reached(' + options.maxDepth + ')' ) ;
-	}
-
-
-	if ( options.circular ) {
-		runtime.references.sources.push( source ) ;
-		runtime.references.targets.push( target ) ;
-	}
-
-	if ( options.own ) {
-		if ( options.nonEnum ) { sourceKeys = Object.getOwnPropertyNames( source ) ; }
-		else { sourceKeys = Object.keys( source ) ; }
-	}
-	else { sourceKeys = source ; }
-
-	for ( sourceKey in sourceKeys ) {
-		if ( options.own ) { sourceKey = sourceKeys[ sourceKey ] ; }
-
-		// OMG, this DEPRECATED __proto__ shit is still alive and can be used to hack anything ><
-		if ( sourceKey === '__proto__' ) { continue ; }
-
-		// If descriptor is on, get it now
-		if ( options.descriptor ) {
-			sourceDescriptor = Object.getOwnPropertyDescriptor( source , sourceKey ) ;
-			sourceValue = sourceDescriptor.value ;
-		}
-		else {
-			// We have to trigger an eventual getter only once
-			sourceValue = source[ sourceKey ] ;
-		}
-
-		targetPointer = target ;
-		targetKey = runtime.prefix + sourceKey ;
-
-		// Do not copy if property is a function and we don't want them
-		if ( options.nofunc && typeof sourceValue === 'function' ) { continue ; }
-
-		// 'unflat' mode computing
-		if ( options.unflat && runtime.depth === 0 ) {
-			path = sourceKey.split( options.unflat ) ;
-			jmax = path.length - 1 ;
-
-			if ( jmax ) {
-				for ( j = 0 ; j < jmax ; j ++ ) {
-					if ( ! targetPointer[ path[ j ] ] ||
-						( typeof targetPointer[ path[ j ] ] !== 'object' &&
-							typeof targetPointer[ path[ j ] ] !== 'function' ) ) {
-						targetPointer[ path[ j ] ] = {} ;
-					}
-
-					targetPointer = targetPointer[ path[ j ] ] ;
-				}
-
-				targetKey = runtime.prefix + path[ jmax ] ;
-			}
-		}
-
-
-		if ( options.deep &&	// eslint-disable-line no-constant-condition
-			sourceValue &&
-			( typeof sourceValue === 'object' || ( options.deepFunc && typeof sourceValue === 'function' ) ) &&
-			( ! options.descriptor || ! sourceDescriptor.get ) &&
-			// not a condition we just cache sourceValueProto now... ok it's trashy ><
-			( ( sourceValueProto = Object.getPrototypeOf( sourceValue ) ) || true ) &&
-			( ! options.deepFilter ||
-				( ( ! options.deepFilter.whitelist || options.deepFilter.whitelist.indexOf( sourceValueProto ) !== -1 ) &&
-					( ! options.deepFilter.blacklist || options.deepFilter.blacklist.indexOf( sourceValueProto ) === -1 ) ) ) ) {
-			if ( options.circular ) {
-				indexOfSource = runtime.references.sources.indexOf( sourceValue ) ;
-			}
-
-			if ( options.flat ) {
-				// No circular references reconnection when in 'flat' mode
-				if ( indexOfSource >= 0 ) { continue ; }
-
-				extendOne(
-					{ depth: runtime.depth + 1 , prefix: runtime.prefix + sourceKey + options.flat , references: runtime.references } ,
-					options , targetPointer , sourceValue
-				) ;
-			}
-			else {
-				if ( indexOfSource >= 0 ) {
-					// Circular references reconnection...
-					if ( options.descriptor ) {
-						Object.defineProperty( targetPointer , targetKey , {
-							value: runtime.references.targets[ indexOfSource ] ,
-							enumerable: sourceDescriptor.enumerable ,
-							writable: sourceDescriptor.writable ,
-							configurable: sourceDescriptor.configurable
-						} ) ;
-					}
-					else {
-						targetPointer[ targetKey ] = runtime.references.targets[ indexOfSource ] ;
-					}
-
-					continue ;
-				}
-
-				if ( ! targetPointer[ targetKey ] || ! targetPointer.hasOwnProperty( targetKey ) || ( typeof targetPointer[ targetKey ] !== 'object' && typeof targetPointer[ targetKey ] !== 'function' ) ) {
-					if ( Array.isArray( sourceValue ) ) { value = [] ; }
-					else if ( options.proto ) { value = Object.create( sourceValueProto ) ; }	// jshint ignore:line
-					else if ( options.inherit ) { value = Object.create( sourceValue ) ; }
-					else { value = {} ; }
-
-					if ( options.descriptor ) {
-						Object.defineProperty( targetPointer , targetKey , {
-							value: value ,
-							enumerable: sourceDescriptor.enumerable ,
-							writable: sourceDescriptor.writable ,
-							configurable: sourceDescriptor.configurable
-						} ) ;
-					}
-					else {
-						targetPointer[ targetKey ] = value ;
-					}
-				}
-				else if ( options.proto && Object.getPrototypeOf( targetPointer[ targetKey ] ) !== sourceValueProto ) {
-					Object.setPrototypeOf( targetPointer[ targetKey ] , sourceValueProto ) ;
-				}
-				else if ( options.inherit && Object.getPrototypeOf( targetPointer[ targetKey ] ) !== sourceValue ) {
-					Object.setPrototypeOf( targetPointer[ targetKey ] , sourceValue ) ;
-				}
-
-				if ( options.circular ) {
-					runtime.references.sources.push( sourceValue ) ;
-					runtime.references.targets.push( targetPointer[ targetKey ] ) ;
-				}
-
-				// Recursively extends sub-object
-				extendOne(
-					{ depth: runtime.depth + 1 , prefix: '' , references: runtime.references } ,
-					options , targetPointer[ targetKey ] , sourceValue
-				) ;
-			}
-		}
-		else if ( options.preserve && targetPointer[ targetKey ] !== undefined ) {
-			// Do not overwrite, and so do not delete source's properties that were not moved
-			continue ;
-		}
-		else if ( ! options.inherit ) {
-			if ( options.descriptor ) { Object.defineProperty( targetPointer , targetKey , sourceDescriptor ) ; }
-			else { targetPointer[ targetKey ] = sourceValue ; }
-		}
-
-		// Delete owned property of the source object
-		if ( options.move ) { delete source[ sourceKey ] ; }
-	}
-}
-
 
 },{}],82:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
@@ -30379,7 +28630,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":83,"punycode":70,"querystring":73}],83:[function(require,module,exports){
+},{"./util":83,"punycode":62,"querystring":65}],83:[function(require,module,exports){
 'use strict';
 
 module.exports = {
