@@ -26,6 +26,7 @@
     "string-kit": "^0.8.11",
     "terminal-kit": "^1.26.2",
     "tree-kit": "^0.5.27",
+    "utterminal": "^0.5.10",
     "ws": "^6.0.0"
   },
   "optionalDependencies": {
