@@ -33,9 +33,9 @@
 // Browser is not supported ATM, because of the require.extensions['.js'] trick
 if ( process.browser ) { return ; }
 
-var falafel = require( 'falafel' ) ;
-var fs = require( 'fs' ) ;
-//var escape = require( 'string-kit/lib/escape.js' ) ;
+const falafel = require( 'falafel' ) ;
+const fs = require( 'fs' ) ;
+//const escape = require( 'string-kit/lib/escape.js' ) ;
 
 
 
@@ -533,14 +533,14 @@ Cover.prototype.getCoverage = function getCoverage() {
 
 // It should load before anything else,
 // so nothing can get a timer function without it being patched
-var NGEvents = require( 'nextgen-events' ) ;
-var asyncTryCatch = require( 'async-try-catch' ) ;
+const NGEvents = require( 'nextgen-events' ) ;
+const asyncTryCatch = require( 'async-try-catch' ) ;
 asyncTryCatch.substitute() ;
-var asyncTry = asyncTryCatch.try ;
+const asyncTry = asyncTryCatch.try ;
 
-var Promise = require( 'seventh' ) ;
+const Promise = require( 'seventh' ) ;
 
-var Cover = require( './Cover.js' ) ;
+const Cover = require( './Cover.js' ) ;
 
 
 
@@ -574,6 +574,7 @@ function TeaTime( options ) {
 	this.offUncaughtException = options.offUncaughtException ;
 
 	this.registerStack = [ this.suite ] ;
+	this.cliManager = options.cliManager || null ;
 }
 
 TeaTime.prototype = Object.create( NGEvents.prototype ) ;
@@ -608,7 +609,7 @@ TeaTime.reporterAliases = {
 TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , args ) {
 	var i , iMax , v ;
 
-	options.cover = args.cover || args.C ;
+	options.cover = args.cover ;
 
 	if ( ! options.reporters ) {
 		if ( options.cover ) { options.reporters = [ 'classic' , 'coverage-report' , 'warning-comments-summary' ] ; }
@@ -618,39 +619,19 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	if ( ! options.clientReporters ) { options.clientReporters = [ 'classic' ] ; }
 
 	if ( args.console !== undefined ) { options.allowConsole = args.console ; }
-	else if ( args.c !== undefined ) { options.allowConsole = args.c ; }
-
-	if ( args.b || args.bail ) { options.bail = true ; }
-
-	if ( args['skip-optional'] || args.O ) { options.skipOptional = true ; }
-
+	if ( args.bail ) { options.bail = true ; }
+	if ( args.skipOptional ) { options.skipOptional = true ; }
 	if ( args.timeout && ( v = parseInt( args.timeout , 10 ) ) ) { options.timeout = v ; }
-	else if ( args.t && ( v = parseInt( args.t , 10 ) ) ) { options.timeout = v ; }
-
 	if ( args.slow && ( v = parseInt( args.slow , 10 ) ) ) { options.slowTime = v ; }
-	else if ( args.s && ( v = parseInt( args.s , 10 ) ) ) { options.slowTime = v ; }
-
 
 	if ( args.reporter ) {
-		if ( ! Array.isArray( args.reporter ) ) { args.reporter = [ args.reporter ] ; }
 		options.reporters = args.reporter ;
-
-		if ( args.R ) {
-			if ( ! Array.isArray( args.R ) ) { args.R = [ args.R ] ; }
-			options.reporters = args.reporter.concat( args.R ) ;
-		}
-	}
-	else if ( args.R ) {
-		if ( ! Array.isArray( args.R ) ) { args.R = [ args.R ] ; }
-		options.reporters = args.R ;
 	}
 
 	// Manage reporter aliases
 	options.reporters = options.reporters.map( ( r ) => { return TeaTime.reporterAliases[ r ] || r ; } ) ;
 
-
 	if ( args.clientReporter ) {
-		if ( ! Array.isArray( args.clientReporter ) ) { args.clientReporter = [ args.clientReporter ] ; }
 		options.clientReporters = args.clientReporter ;
 	}
 
@@ -660,9 +641,6 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	options.sourceGrep = [] ;
 
 	if ( ! args.grep ) { args.grep = [] ; }
-	else if ( args.grep && ! Array.isArray( args.grep ) ) { args.grep = [ args.grep ] ; }
-
-	if ( args.g ) { args.grep = args.grep.concat( args.g ) ; }
 
 	for ( i = 0 , iMax = args.grep.length ; i < iMax ; i ++ ) {
 		options.grep.push( new RegExp( args.grep[ i ] , 'i' ) ) ;
@@ -675,9 +653,6 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	options.sourceIGrep = [] ;
 
 	if ( ! args.igrep ) { args.igrep = [] ; }
-	else if ( args.igrep && ! Array.isArray( args.igrep ) ) { args.igrep = [ args.igrep ] ; }
-
-	if ( args.G ) { args.igrep = args.igrep.concat( args.G ) ; }
 
 	for ( i = 0 , iMax = args.igrep.length ; i < iMax ; i ++ ) {
 		options.igrep.push( new RegExp( args.igrep[ i ] , 'i' ) ) ;
@@ -996,6 +971,8 @@ TeaTime.prototype.runTest = async function runTest( suite , depth , testFn ) {
 			this.fail ++ ;
 			this.emit( 'fail' , data ) ;
 		}
+
+		if ( this.bail ) { throw error ; }
 	} ;
 
 	var testOk = () => {
@@ -1460,8 +1437,8 @@ TeaTime.prototype.patchError = function patchError( error ) {
 
 
 
-//var Report = require( './report.js' ) ;
-//var ErrorReport = require( './error-report.js' ) ;
+//const Report = require( './report.js' ) ;
+//const ErrorReport = require( './error-report.js' ) ;
 
 
 function Reporter( teaTime , self ) {
@@ -1508,23 +1485,23 @@ function indentStyle( depth ) {
 
 
 
-var durationStyle = "color:grey;" ;
-var passingStyle = "color:green;" ;
-var failingStyle = "color:red;" ;
-var optionalFailingStyle = "color:brown;" ;
-var pendingStyle = "color:blue;" ;
-var coverageStyle = "color:magenta;" ;
+const durationStyle = "color:grey;" ;
+const passingStyle = "color:green;" ;
+const failingStyle = "color:red;" ;
+const optionalFailingStyle = "color:brown;" ;
+const pendingStyle = "color:blue;" ;
+const coverageStyle = "color:magenta;" ;
 
-var fastStyle = "color:grey;" ;
-var slowStyle = "color:yellow;" ;
-var slowerStyle = "color:red;" ;
+const fastStyle = "color:grey;" ;
+const slowStyle = "color:yellow;" ;
+const slowerStyle = "color:red;" ;
 
-var optionalErrorStyle = "color:brown;font-weight:bold;" ;
-var errorStyle = "color:red;font-weight:bold;" ;
-var hookErrorStyle = "background-color:red;color:white;font-weight:bold;" ;
+const optionalErrorStyle = "color:brown;font-weight:bold;" ;
+const errorStyle = "color:red;font-weight:bold;" ;
+const hookErrorStyle = "background-color:red;color:white;font-weight:bold;" ;
 
-var expectedStyle = "background-color:green;color:white;font-weight:bold;" ;
-var actualStyle = "background-color:red;color:white;font-weight:bold;" ;
+const expectedStyle = "background-color:green;color:white;font-weight:bold;" ;
+const actualStyle = "background-color:red;color:white;font-weight:bold;" ;
 
 
 
@@ -1657,7 +1634,7 @@ Reporter.errorReport = function errorReport( errors ) {
 
 		if ( error.error.uncaught ) { content += '<span style="' + hookErrorStyle + '">UNCAUGHT EXCEPTION</span> ' ; }
 
-		content += error.name ;
+		content += error.title ;
 		content += '</p>' ;
 		content += this.reportOneError( error.error ) ;
 	}
@@ -1915,12 +1892,12 @@ Reporter.exit = function exit( callback ) {
 
 
 
-var TeaTime = require( './TeaTime.js' ) ;
-var diff = require( './diff.js' ) ;
-var htmlColorDiff = require( './htmlColorDiff.js' ) ;
-var inspect = require( 'string-kit/lib/inspect.js' ) ;
-var dom = require( 'dom-kit' ) ;
-var url = require( 'url' ) ;
+const TeaTime = require( './TeaTime.js' ) ;
+const diff = require( './diff.js' ) ;
+const htmlColorDiff = require( './htmlColorDiff.js' ) ;
+const inspect = require( 'string-kit/lib/inspect.js' ) ;
+const dom = require( 'dom-kit' ) ;
+const url = require( 'url' ) ;
 
 
 
@@ -2059,12 +2036,12 @@ dom.ready( () => {
 
 
 
-var inspect = require( 'string-kit/lib/inspect.js' ) ;
-var jsdiff = require( 'diff' ) ;
+const inspect = require( 'string-kit/lib/inspect.js' ) ;
+const jsdiff = require( 'diff' ) ;
 
 
 
-var inspectOptions = { minimal: true , depth: 10 , sort: true } ;
+const inspectOptions = { minimal: true , depth: 10 , sort: true } ;
 
 
 
@@ -2147,7 +2124,7 @@ textDiff.raw = function rawDiff( oldValue , newValue , noCharMode ) {
 
 
 
-var rawDiff = require( './diff.js' ).raw ;
+const rawDiff = require( './diff.js' ).raw ;
 
 
 
