@@ -12722,7 +12722,7 @@ assert.onlyOwnKeys = function ownKeys( from , actual , ... keys ) {
 	}
 
 	// First, check if the number of keys match
-	if ( Object.keys( actual ).length !== keys.length ) {
+	if ( Object.getOwnPropertyNames( actual ).length !== keys.length ) {
 		throw assertionError( from , actual , 'to only have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 	}
 
@@ -27383,7 +27383,7 @@ function inspect_( runtime , options , variable ) {
 		}
 		else if ( specialObject !== undefined ) {
 			if ( typeof specialObject === 'string' ) {
-				str += '=> ' + specialObject ;
+				str += '=> ' + specialObject + options.style.newline ;
 			}
 			else {
 				str += '=> ' + inspect_( {
