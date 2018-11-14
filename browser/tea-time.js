@@ -2064,7 +2064,9 @@ const jsdiff = require( 'diff' ) ;
 
 
 
-const inspectOptions = { minimal: true , depth: 10 , sort: true } ;
+const inspectOptions = {
+	minimal: true , depth: 10 , maxLength: 1000 , outputMaxLength: 10000 , sort: true
+} ;
 
 
 
