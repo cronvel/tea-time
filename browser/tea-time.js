@@ -553,6 +553,7 @@ function TeaTime( options ) {
 	this.allowConsole = !! options.allowConsole ;
 	this.huntConsole = !! options.huntConsole ;
 	this.bail = !! options.bail ;
+	this.showDiff = options.showDiff !== false ;
 	this.skipOptional = !! options.skipOptional ;
 	this.cover = options.cover && Cover.create( options.cover ) ;
 
@@ -611,6 +612,7 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	var i , iMax , v ;
 
 	options.cover = args.cover ;
+	options.showDiff = args.diff !== false ;
 
 	if ( ! options.reporters ) {
 		if ( options.cover ) { options.reporters = [ 'classic' , 'coverage-report' , 'warning-comments-summary' ] ; }
@@ -2028,7 +2030,7 @@ dom.ready( () => {
 
 
 
-},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":33,"string-kit/lib/inspect.js":77,"url":83}],7:[function(require,module,exports){
+},{"./TeaTime.js":2,"./browser-reporters/classic.js":3,"./browser-reporters/console.js":4,"./browser-reporters/websocket.js":5,"./diff.js":7,"./htmlColorDiff.js":8,"dom-kit":33,"string-kit/lib/inspect.js":77,"url":84}],7:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -11362,7 +11364,7 @@ domKit.html = function html_( $element , html ) { $element.innerHTML = html ; } 
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -11415,7 +11417,7 @@ AssertionError.prototype.name = 'AssertionError' ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -11460,7 +11462,7 @@ SchemaError.prototype.name = 'SchemaError' ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -11507,7 +11509,7 @@ ValidatorError.prototype.name = 'ValidatorError' ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -13077,7 +13079,7 @@ assert.fail.none = true ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -13553,7 +13555,7 @@ function check( schema , data_ , element , isPatch ) {
 
 
 
-var clone_ = require( 'tree-kit/lib/clone.js' ) ;
+const clone_ = require( 'tree-kit/lib/clone.js' ) ;
 
 function clone( value ) {
 	if ( value && typeof value === 'object' ) { return clone_( value ) ; }
@@ -13704,7 +13706,9 @@ function checkOnePatchPathByTags( schema , path , allowedTags , element ) {
 	Validate the 'patch' format
 */
 doormen.patch = function schemaPatch( ... args ) {
-	var patch , schema , options , context , sanitized , path , subSchema ;
+	var patch , path , value ,
+		schema , subSchema ,
+		sanitized , options , context , patchCommandName ;
 
 
 	// Share a lot of code with the doormen() function
@@ -13749,15 +13753,52 @@ doormen.patch = function schemaPatch( ... args ) {
 	} ;
 
 	for ( path in patch ) {
-		// Don't try-catch! Let it throw!
-		if ( context.checkAllowed ) { context.checkAllowed( schema , path , context.allowedTags , patch[ path ] ) ; }
-		subSchema = doormen.path( schema , path ) ;
+		value = patch[ path ] ;
 
-		//sanitized[ path ] = doormen( options , subSchema , patch[ path ] ) ;
-		sanitized[ path ] = context.check( subSchema , patch[ path ] , {
-			path: 'patch.' + path ,
-			key: path
-		} , true ) ;
+		// Don't try-catch! Let it throw!
+		if ( context.checkAllowed ) { context.checkAllowed( schema , path , context.allowedTags , value ) ; }
+
+		if ( ( patchCommandName = isPatchCommand( value ) ) ) {
+			value = value[ patchCommandName ] ;
+
+			if ( patchCommands[ patchCommandName ].getValue ) {
+				value = patchCommands[ patchCommandName ].getValue( value ) ;
+			}
+
+			if ( patchCommands[ patchCommandName ].applyToChildren ) {
+				subSchema = doormen.path( schema , path ).of || {} ;
+			}
+			else {
+				subSchema = doormen.path( schema , path ) ;
+			}
+
+			if ( patchCommands[ patchCommandName ].sanitize ) {
+				sanitized[ path ][ patchCommandName ] = patchCommands[ patchCommandName ].sanitize( value ) ;
+				context.check( subSchema , value , {
+					displayPath: 'patch.' + path ,
+					path: path ,
+					key: path
+				} , true ) ;
+			}
+			else {
+				sanitized[ path ][ patchCommandName ] = context.check( subSchema , value , {
+					displayPath: 'patch.' + path ,
+					path: path ,
+					key: path
+				} , true ) ;
+			}
+		}
+		else {
+			subSchema = doormen.path( schema , path ) ;
+
+			//sanitized[ path ] = doormen( options , subSchema , value ) ;
+			sanitized[ path ] = context.check( subSchema , value , {
+				displayPath: 'patch.' + path ,
+				path: path ,
+				key: path
+			} , true ) ;
+		}
+
 	}
 
 	if ( context.report ) {
@@ -13778,6 +13819,56 @@ doormen.patch.report = doormen.patch.bind( doormen , { report: true } ) ;
 doormen.patch.export = doormen.patch.bind( doormen , { export: true } ) ;
 
 
+
+const dotPath = require( 'tree-kit/lib/dotPath.js' ) ;
+
+doormen.applyPatch = function( data , patch ) {
+	var path , parts , value , patchCommandName ;
+
+	if ( ! patch || typeof patch !== 'object' ) { throw new Error( 'The patch should be an object' ) ; }
+
+	for ( path in patch ) {
+		value = patch[ path ] ;
+
+		if ( ( patchCommandName = isPatchCommand( value ) ) ) {
+			patchCommands[ patchCommandName ]( data , path , value[ patchCommandName ] ) ;
+		}
+		else {
+			dotPath.set( data , path , value ) ;
+		}
+	}
+
+	return data ;
+} ;
+
+
+
+function isPatchCommand( value ) {
+	var key ;
+
+	if ( ! value || typeof value !== 'object' ) { return false ; }
+
+	for ( key in value ) {
+		if ( key[ 0 ] !== '$' ) { return false ; }
+
+		if ( ! patchCommands[ key ] ) {
+			throw new Error( "Bad command '" + key + "'" ) ;
+		}
+
+		return key ;
+	}
+}
+
+const patchCommands = {} ;
+
+patchCommands.$set = ( data , path , value ) => dotPath.set( data , path , value ) ;
+
+patchCommands.$delete = patchCommands.$unset = ( data , path ) => dotPath.delete( data , path ) ;
+patchCommands.$delete.getValue = () => undefined ;
+patchCommands.$delete.sanitize = () => true ;
+
+patchCommands.$push = ( data , path , value ) => dotPath.append( data , path , value ) ;
+patchCommands.$push.applyToChildren = true ;
 
 
 
@@ -13984,11 +14075,11 @@ doormen.not.alike = function notAlike( left , right ) {
 
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./AssertionError.js":34,"./SchemaError.js":35,"./ValidatorError.js":36,"./assert.js":37,"./expect.js":39,"./filter.js":40,"./isEqual.js":41,"./keywords.js":42,"./mask.js":43,"./sanitizer.js":44,"./schemaSchema.js":45,"./sentence.js":46,"./typeChecker.js":47,"tree-kit/lib/clone.js":82}],39:[function(require,module,exports){
+},{"./AssertionError.js":34,"./SchemaError.js":35,"./ValidatorError.js":36,"./assert.js":37,"./expect.js":39,"./filter.js":40,"./isEqual.js":41,"./keywords.js":42,"./mask.js":43,"./sanitizer.js":44,"./schemaSchema.js":45,"./sentence.js":46,"./typeChecker.js":47,"tree-kit/lib/clone.js":82,"tree-kit/lib/dotPath.js":83}],39:[function(require,module,exports){
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -14208,7 +14299,7 @@ var handler = {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -14431,7 +14522,7 @@ filter.notIn = function notIn( data , params , element ) {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -14590,7 +14681,7 @@ module.exports = isEqual ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -14683,7 +14774,7 @@ module.exports = {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -14896,7 +14987,7 @@ function checkTags( schema ) {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -15166,7 +15257,7 @@ sanitizer.mongoId = function mongoId( data ) {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -15309,7 +15400,7 @@ module.exports = schemaSchema ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -15513,7 +15604,7 @@ module.exports = sentence ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -20134,7 +20225,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
 /*!
  * Determine if an object is a Buffer
  *
- * @author   Feross Aboukhadijeh <https://feross.org>
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
  * @license  MIT
  */
 
@@ -20158,7 +20249,7 @@ function isSlowBuffer (obj) {
 /*
 	Next-Gen Events
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -20220,7 +20311,7 @@ NextGenEvents.defaultMaxListeners = Infinity ;
 
 // Not part of the prototype, because it should not pollute userland's prototype.
 // It has an eventEmitter as 'this' anyway (always called using call()).
-NextGenEvents.init = function init() {
+NextGenEvents.init = function() {
 	Object.defineProperty( this , '__ngev' , {
 		configurable: true ,
 		value: new NextGenEvents.Internal()
@@ -20229,7 +20320,7 @@ NextGenEvents.init = function init() {
 
 
 
-NextGenEvents.Internal = function Internal( from ) {
+NextGenEvents.Internal = function( from ) {
 	this.nice = NextGenEvents.SYNC ;
 	this.interruptible = false ;
 	this.contexts = {} ;
@@ -20279,7 +20370,7 @@ NextGenEvents.Internal = function Internal( from ) {
 
 
 
-NextGenEvents.initFrom = function initFrom( from ) {
+NextGenEvents.initFrom = function( from ) {
 	if ( ! from.__ngev ) { NextGenEvents.init.call( from ) ; }
 
 	Object.defineProperty( this , '__ngev' , {
@@ -20297,7 +20388,7 @@ NextGenEvents.initFrom = function initFrom( from ) {
 
 	Not sure if it will ever go public, it was a very specific use-case (Spellcast).
 */
-NextGenEvents.mergeListeners = function mergeListeners( foreigners ) {
+NextGenEvents.mergeListeners = function( foreigners ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 
 	// Backup the current listeners...
@@ -20360,7 +20451,7 @@ NextGenEvents.filterOutCallback = function( what , currentElement ) { return wha
 
 
 // .addListener( eventName , [fn] , [options] )
-NextGenEvents.prototype.addListener = function addListener( eventName , fn , options ) {
+NextGenEvents.prototype.addListener = function( eventName , fn , options ) {
 	var listener = {} , newListenerListeners ;
 
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
@@ -20448,7 +20539,7 @@ NextGenEvents.prototype.on = NextGenEvents.prototype.addListener ;
 
 // Short-hand
 // .once( eventName , [fn] , [options] )
-NextGenEvents.prototype.once = function once( eventName , fn , options ) {
+NextGenEvents.prototype.once = function( eventName , fn , options ) {
 	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
 	else if ( options && typeof options === 'object' ) { options.once = true ; }
 	else { options = { once: true } ; }
@@ -20460,7 +20551,7 @@ NextGenEvents.prototype.once = function once( eventName , fn , options ) {
 
 // .waitFor( eventName )
 // A Promise-returning .once() variant, only the first arg is returned
-NextGenEvents.prototype.waitFor = function waitFor( eventName ) {
+NextGenEvents.prototype.waitFor = function( eventName ) {
 	return new Promise( resolve => {
 		this.addListener( eventName , ( firstArg ) => resolve( firstArg ) , { once: true } ) ;
 	} ) ;
@@ -20470,7 +20561,7 @@ NextGenEvents.prototype.waitFor = function waitFor( eventName ) {
 
 // .waitForAll( eventName )
 // A Promise-returning .once() variant, all args are returned as an array
-NextGenEvents.prototype.waitForAll = function waitForAll( eventName ) {
+NextGenEvents.prototype.waitForAll = function( eventName ) {
 	return new Promise( resolve => {
 		this.addListener( eventName , ( ... args ) => resolve( args ) , { once: true } ) ;
 	} ) ;
@@ -20478,7 +20569,7 @@ NextGenEvents.prototype.waitForAll = function waitForAll( eventName ) {
 
 
 
-NextGenEvents.prototype.removeListener = function removeListener( eventName , id ) {
+NextGenEvents.prototype.removeListener = function( eventName , id ) {
 	var i , length , newListeners = [] , removedListeners = [] ;
 
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".removeListener(): argument #0 should be a non-empty string" ) ; }
@@ -20511,7 +20602,7 @@ NextGenEvents.prototype.off = NextGenEvents.prototype.removeListener ;
 
 
 
-NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventName ) {
+NextGenEvents.prototype.removeAllListeners = function( eventName ) {
 	var removedListeners ;
 
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
@@ -20547,7 +20638,7 @@ NextGenEvents.prototype.removeAllListeners = function removeAllListeners( eventN
 
 
 
-NextGenEvents.listenerWrapper = function listenerWrapper( listener , event , contextScope , serial ) {
+NextGenEvents.listenerWrapper = function( listener , event , contextScope , serial ) {
 	var returnValue , listenerCallback ;
 
 	if ( event.interrupt ) { return ; }
@@ -20611,7 +20702,7 @@ var nextEventId = 0 ;
 /*
 	emit( [nice] , eventName , [arg1] , [arg2] , [...] , [emitCallback] )
 */
-NextGenEvents.prototype.emit = function emit( ... args ) {
+NextGenEvents.prototype.emit = function( ... args ) {
 	var event ;
 
 	event = {
@@ -20659,7 +20750,7 @@ NextGenEvents.prototype.emit = function emit( ... args ) {
 
 
 
-NextGenEvents.prototype.waitForEmit = function waitForEmit( ... args ) {
+NextGenEvents.prototype.waitForEmit = function( ... args ) {
 	return new Promise( resolve => {
 		this.emit( ... args , ( interrupt ) => resolve( interrupt ) ) ;
 	} ) ;
@@ -20676,7 +20767,7 @@ NextGenEvents.prototype.waitForEmit = function waitForEmit( ... args ) {
 		* callback: (optional) a callback for emit
 		* listeners: (optional) override the listeners array stored in __ngev
 */
-NextGenEvents.emitEvent = function emitEvent( event ) {
+NextGenEvents.emitEvent = function( event ) {
 	var self = event.emitter ,
 		i , iMax , count = 0 , state , removedListeners ;
 
@@ -20753,7 +20844,7 @@ NextGenEvents.emitEvent = function emitEvent( event ) {
 
 // If removedListeners is not given, then one-time listener emit the 'removeListener' event,
 // if given: that's the caller business to do it
-NextGenEvents.emitToOneListener = function emitToOneListener( event , listener , removedListeners ) {
+NextGenEvents.emitToOneListener = function( event , listener , removedListeners ) {
 	var self = event.emitter ,
 		context , contextScope , serial , currentNice , emitRemoveListener = false ;
 
@@ -20817,7 +20908,7 @@ NextGenEvents.emitToOneListener = function emitToOneListener( event , listener ,
 
 
 
-NextGenEvents.emitCallback = function emitCallback( event ) {
+NextGenEvents.emitCallback = function( event ) {
 	var callback = event.callback ;
 	delete event.callback ;
 
@@ -20836,7 +20927,7 @@ NextGenEvents.emitCallback = function emitCallback( event ) {
 
 
 
-NextGenEvents.prototype.listeners = function listeners( eventName ) {
+NextGenEvents.prototype.listeners = function( eventName ) {
 	if ( ! eventName || typeof eventName !== 'string' ) { throw new TypeError( ".listeners(): argument #0 should be a non-empty string" ) ; }
 
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
@@ -20866,7 +20957,7 @@ NextGenEvents.prototype.listenerCount = function( eventName ) {
 
 
 
-NextGenEvents.prototype.setNice = function setNice( nice ) {
+NextGenEvents.prototype.setNice = function( nice ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
 
@@ -20875,7 +20966,7 @@ NextGenEvents.prototype.setNice = function setNice( nice ) {
 
 
 
-NextGenEvents.prototype.desyncUseNextTick = function desyncUseNextTick( useNextTick ) {
+NextGenEvents.prototype.desyncUseNextTick = function( useNextTick ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
 
@@ -20884,7 +20975,7 @@ NextGenEvents.prototype.desyncUseNextTick = function desyncUseNextTick( useNextT
 
 
 
-NextGenEvents.prototype.setInterruptible = function setInterruptible( isInterruptible ) {
+NextGenEvents.prototype.setInterruptible = function( isInterruptible ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	//if ( typeof nice !== 'number' ) { throw new TypeError( ".setNice(): argument #0 should be a number" ) ; }
 
@@ -20909,7 +21000,7 @@ NextGenEvents.share = function( source , target ) {
 
 
 
-NextGenEvents.reset = function reset( emitter ) {
+NextGenEvents.reset = function( emitter ) {
 	Object.defineProperty( emitter , '__ngev' , {
 		configurable: true ,
 		value: null
@@ -20934,7 +21025,7 @@ NextGenEvents.prototype.setMaxListeners = function( n ) {
 
 
 // Sometime useful as a no-op callback...
-NextGenEvents.noop = function() {} ;
+NextGenEvents.noop = () => undefined ;
 
 
 
@@ -20945,7 +21036,7 @@ NextGenEvents.noop = function() {} ;
 
 
 // .defineStates( exclusiveState1 , [exclusiveState2] , [exclusiveState3] , ... )
-NextGenEvents.prototype.defineStates = function defineStates( ... states ) {
+NextGenEvents.prototype.defineStates = function( ... states ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 
 	states.forEach( ( state ) => {
@@ -20956,14 +21047,14 @@ NextGenEvents.prototype.defineStates = function defineStates( ... states ) {
 
 
 
-NextGenEvents.prototype.hasState = function hasState( state ) {
+NextGenEvents.prototype.hasState = function( state ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	return !! this.__ngev.states[ state ] ;
 } ;
 
 
 
-NextGenEvents.prototype.getAllStates = function getAllStates() {
+NextGenEvents.prototype.getAllStates = function() {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	return Object.keys( this.__ngev.states ).filter( e => this.__ngev.states[ e ] ) ;
 } ;
@@ -20976,7 +21067,7 @@ NextGenEvents.prototype.getAllStates = function getAllStates() {
 
 
 
-NextGenEvents.groupAddListener = function groupAddListener( emitters , eventName , fn , options ) {
+NextGenEvents.groupAddListener = function( emitters , eventName , fn , options ) {
 	// Manage arguments
 	if ( typeof fn !== 'function' ) { options = fn ; fn = undefined ; }
 	if ( ! options || typeof options !== 'object' ) { options = {} ; }
@@ -20997,7 +21088,7 @@ NextGenEvents.groupOn = NextGenEvents.groupAddListener ;
 
 
 // Once per emitter
-NextGenEvents.groupOnce = function groupOnce( emitters , eventName , fn , options ) {
+NextGenEvents.groupOnce = function( emitters , eventName , fn , options ) {
 	if ( fn && typeof fn === 'object' ) { fn.once = true ; }
 	else if ( options && typeof options === 'object' ) { options.once = true ; }
 	else { options = { once: true } ; }
@@ -21008,21 +21099,21 @@ NextGenEvents.groupOnce = function groupOnce( emitters , eventName , fn , option
 
 
 // A Promise-returning .groupOnce() variant, it returns an array with only the first arg for each emitter's event
-NextGenEvents.groupWaitFor = function groupWaitFor( emitters , eventName ) {
+NextGenEvents.groupWaitFor = function( emitters , eventName ) {
 	return Promise.all( emitters.map( emitter => emitter.waitFor( eventName ) ) ) ;
 } ;
 
 
 
 // A Promise-returning .groupOnce() variant, it returns an array of array for each emitter's event
-NextGenEvents.groupWaitForAll = function groupWaitForAll( emitters , eventName ) {
+NextGenEvents.groupWaitForAll = function( emitters , eventName ) {
 	return Promise.all( emitters.map( emitter => emitter.waitForAll( eventName ) ) ) ;
 } ;
 
 
 
 // Globally once, only one event could be emitted, by the first emitter to emit
-NextGenEvents.groupOnceFirst = function groupOnceFirst( emitters , eventName , fn , options ) {
+NextGenEvents.groupOnceFirst = function( emitters , eventName , fn , options ) {
 	var fnWrapper , triggered = false ;
 
 	// Manage arguments
@@ -21050,7 +21141,7 @@ NextGenEvents.groupOnceFirst = function groupOnceFirst( emitters , eventName , f
 
 
 // A Promise-returning .groupOnceFirst() variant, only the first arg is returned
-NextGenEvents.groupWaitForFirst = function groupWaitForFirst( emitters , eventName ) {
+NextGenEvents.groupWaitForFirst = function( emitters , eventName ) {
 	return new Promise( resolve => {
 		NextGenEvents.groupOnceFirst( emitters , eventName , ( firstArg ) => resolve( firstArg ) ) ;
 	} ) ;
@@ -21059,7 +21150,7 @@ NextGenEvents.groupWaitForFirst = function groupWaitForFirst( emitters , eventNa
 
 
 // A Promise-returning .groupOnceFirst() variant, all args are returned as an array
-NextGenEvents.groupWaitForFirstAll = function groupWaitForFirstAll( emitters , eventName ) {
+NextGenEvents.groupWaitForFirstAll = function( emitters , eventName ) {
 	return new Promise( resolve => {
 		NextGenEvents.groupOnceFirst( emitters , eventName , ( ... args ) => resolve( args ) ) ;
 	} ) ;
@@ -21068,7 +21159,7 @@ NextGenEvents.groupWaitForFirstAll = function groupWaitForFirstAll( emitters , e
 
 
 // Globally once, only one event could be emitted, by the last emitter to emit
-NextGenEvents.groupOnceLast = function groupOnceLast( emitters , eventName , fn , options ) {
+NextGenEvents.groupOnceLast = function( emitters , eventName , fn , options ) {
 	var fnWrapper , triggered = false , count = emitters.length ;
 
 	// Manage arguments
@@ -21101,7 +21192,7 @@ NextGenEvents.groupOnceLast = function groupOnceLast( emitters , eventName , fn 
 
 
 // A Promise-returning .groupGlobalWaitFor() variant, only the first arg is returned
-NextGenEvents.groupWaitForLast = function groupWaitForLast( emitters , eventName ) {
+NextGenEvents.groupWaitForLast = function( emitters , eventName ) {
 	return new Promise( resolve => {
 		NextGenEvents.groupOnceLast( emitters , eventName , ( firstArg ) => resolve( firstArg ) ) ;
 	} ) ;
@@ -21110,7 +21201,7 @@ NextGenEvents.groupWaitForLast = function groupWaitForLast( emitters , eventName
 
 
 // A Promise-returning .groupGlobalWaitFor() variant, all args are returned as an array
-NextGenEvents.groupWaitForLastAll = function groupWaitForLastAll( emitters , eventName ) {
+NextGenEvents.groupWaitForLastAll = function( emitters , eventName ) {
 	return new Promise( resolve => {
 		NextGenEvents.groupOnceLast( emitters , eventName , ( ... args ) => resolve( args ) ) ;
 	} ) ;
@@ -21118,7 +21209,7 @@ NextGenEvents.groupWaitForLastAll = function groupWaitForLastAll( emitters , eve
 
 
 
-NextGenEvents.groupRemoveListener = function groupRemoveListener( emitters , eventName , id ) {
+NextGenEvents.groupRemoveListener = function( emitters , eventName , id ) {
 	emitters.forEach( ( emitter ) => {
 		emitter.removeListener( eventName , id ) ;
 	} ) ;
@@ -21128,7 +21219,7 @@ NextGenEvents.groupOff = NextGenEvents.groupRemoveListener ;
 
 
 
-NextGenEvents.groupRemoveAllListeners = function groupRemoveAllListeners( emitters , eventName ) {
+NextGenEvents.groupRemoveAllListeners = function( emitters , eventName ) {
 	emitters.forEach( ( emitter ) => {
 		emitter.removeAllListeners( eventName ) ;
 	} ) ;
@@ -21136,7 +21227,7 @@ NextGenEvents.groupRemoveAllListeners = function groupRemoveAllListeners( emitte
 
 
 
-NextGenEvents.groupEmit = function groupEmit( emitters , ... args ) {
+NextGenEvents.groupEmit = function( emitters , ... args ) {
 	var eventName , nice , argStart = 1 , argEnd , count = emitters.length ,
 		callback , callbackWrapper , callbackTriggered = false ;
 
@@ -21179,7 +21270,7 @@ NextGenEvents.groupEmit = function groupEmit( emitters , ... args ) {
 
 
 
-NextGenEvents.groupWaitForEmit = function groupWaitForEmit( emitters , ... args ) {
+NextGenEvents.groupWaitForEmit = function( emitters , ... args ) {
 	return new Promise( resolve => {
 		NextGenEvents.groupEmit( emitters , ... args , ( interrupt ) => resolve( interrupt ) ) ;
 	} ) ;
@@ -21187,7 +21278,7 @@ NextGenEvents.groupWaitForEmit = function groupWaitForEmit( emitters , ... args 
 
 
 
-NextGenEvents.groupDefineStates = function groupDefineStates( emitters , ... args ) {
+NextGenEvents.groupDefineStates = function( emitters , ... args ) {
 	emitters.forEach( ( emitter ) => {
 		emitter.defineStates( ... args ) ;
 	} ) ;
@@ -21214,7 +21305,7 @@ NextGenEvents.CONTEXT_QUEUED = 2 ;
 
 
 
-NextGenEvents.prototype.addListenerContext = function addListenerContext( contextName , options ) {
+NextGenEvents.prototype.addListenerContext = function( contextName , options ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".addListenerContext(): argument #0 should be a non-empty string" ) ; }
@@ -21241,7 +21332,7 @@ NextGenEvents.prototype.addListenerContext = function addListenerContext( contex
 
 
 
-NextGenEvents.getContextScope = function getContextScope( context , scopeName ) {
+NextGenEvents.getContextScope = function( context , scopeName ) {
 	var scope = context.scopes[ scopeName ] ;
 
 	if ( ! scope ) {
@@ -21256,7 +21347,7 @@ NextGenEvents.getContextScope = function getContextScope( context , scopeName ) 
 
 
 
-NextGenEvents.prototype.disableListenerContext = function disableListenerContext( contextName ) {
+NextGenEvents.prototype.disableListenerContext = function( contextName ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".disableListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
@@ -21268,7 +21359,7 @@ NextGenEvents.prototype.disableListenerContext = function disableListenerContext
 
 
 
-NextGenEvents.prototype.enableListenerContext = function enableListenerContext( contextName ) {
+NextGenEvents.prototype.enableListenerContext = function( contextName ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".enableListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
@@ -21286,7 +21377,7 @@ NextGenEvents.prototype.enableListenerContext = function enableListenerContext( 
 
 
 
-NextGenEvents.prototype.queueListenerContext = function queueListenerContext( contextName ) {
+NextGenEvents.prototype.queueListenerContext = function( contextName ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".queueListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
@@ -21298,7 +21389,7 @@ NextGenEvents.prototype.queueListenerContext = function queueListenerContext( co
 
 
 
-NextGenEvents.prototype.serializeListenerContext = function serializeListenerContext( contextName , value ) {
+NextGenEvents.prototype.serializeListenerContext = function( contextName , value ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".serializeListenerContext(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
@@ -21310,7 +21401,7 @@ NextGenEvents.prototype.serializeListenerContext = function serializeListenerCon
 
 
 
-NextGenEvents.prototype.setListenerContextNice = function setListenerContextNice( contextName , nice ) {
+NextGenEvents.prototype.setListenerContextNice = function( contextName , nice ) {
 	if ( ! this.__ngev ) { NextGenEvents.init.call( this ) ; }
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".setListenerContextNice(): argument #0 should be a non-empty string" ) ; }
 	if ( ! this.__ngev.contexts[ contextName ] ) { this.addListenerContext( contextName ) ; }
@@ -21322,7 +21413,7 @@ NextGenEvents.prototype.setListenerContextNice = function setListenerContextNice
 
 
 
-NextGenEvents.prototype.destroyListenerContext = function destroyListenerContext( contextName ) {
+NextGenEvents.prototype.destroyListenerContext = function( contextName ) {
 	var i , length , eventName , newListeners , removedListeners = [] ;
 
 	if ( ! contextName || typeof contextName !== 'string' ) { throw new TypeError( ".disableListenerContext(): argument #0 should be a non-empty string" ) ; }
@@ -21359,7 +21450,7 @@ NextGenEvents.prototype.destroyListenerContext = function destroyListenerContext
 
 
 
-NextGenEvents.processScopeQueue = function processScopeQueue( self , contextScope , serial , isCompletionCallback ) {
+NextGenEvents.processScopeQueue = function( self , contextScope , serial , isCompletionCallback ) {
 	var job ;
 
 	if ( isCompletionCallback ) { contextScope.ready = true ; }
@@ -21426,7 +21517,7 @@ NextGenEvents.Proxy = require( './Proxy.js' ) ;
 /*
 	Next-Gen Events
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -21474,7 +21565,7 @@ Proxy.create = ( ... args ) => new Proxy( ... args ) ;
 
 
 // Add a local service accessible remotely
-Proxy.prototype.addLocalService = function addLocalService( id , emitter , options ) {
+Proxy.prototype.addLocalService = function( id , emitter , options ) {
 	this.localServices[ id ] = LocalService.create( this , id , emitter , options ) ;
 	return this.localServices[ id ] ;
 } ;
@@ -21482,7 +21573,7 @@ Proxy.prototype.addLocalService = function addLocalService( id , emitter , optio
 
 
 // Add a remote service accessible locally
-Proxy.prototype.addRemoteService = function addRemoteService( id ) {
+Proxy.prototype.addRemoteService = function( id ) {
 	this.remoteServices[ id ] = RemoteService.create( this , id ) ;
 	return this.remoteServices[ id ] ;
 } ;
@@ -21490,7 +21581,7 @@ Proxy.prototype.addRemoteService = function addRemoteService( id ) {
 
 
 // Destroy the proxy
-Proxy.prototype.destroy = function destroy() {
+Proxy.prototype.destroy = function() {
 	Object.keys( this.localServices ).forEach( ( id ) => {
 		this.localServices[ id ].destroy() ;
 		delete this.localServices[ id ] ;
@@ -21507,7 +21598,7 @@ Proxy.prototype.destroy = function destroy() {
 
 
 // Push an event message.
-Proxy.prototype.push = function push( message ) {
+Proxy.prototype.push = function( message ) {
 	if (
 		message.__type !== MESSAGE_TYPE ||
 		! message.service || typeof message.service !== 'string' ||
@@ -21543,7 +21634,7 @@ Proxy.prototype.push = function push( message ) {
 
 // This is the method to receive and decode data from the other side of the communication channel, most of time another proxy.
 // In most case, this should be overwritten.
-Proxy.prototype.receive = function receive( raw ) {
+Proxy.prototype.receive = function( raw ) {
 	this.push( raw ) ;
 } ;
 
@@ -21551,7 +21642,7 @@ Proxy.prototype.receive = function receive( raw ) {
 
 // This is the method used to send data to the other side of the communication channel, most of time another proxy.
 // This MUST be overwritten in any case.
-Proxy.prototype.send = function send() {
+Proxy.prototype.send = function() {
 	throw new Error( 'The send() method of the Proxy MUST be extended/overwritten' ) ;
 } ;
 
@@ -21566,7 +21657,7 @@ Proxy.LocalService = LocalService ;
 
 
 
-LocalService.create = function create( proxy , id , emitter , options ) {
+LocalService.create = function( proxy , id , emitter , options ) {
 	var self = Object.create( LocalService.prototype , {
 		proxy: { value: proxy , enumerable: true } ,
 		id: { value: id , enumerable: true } ,
@@ -21586,7 +21677,7 @@ LocalService.create = function create( proxy , id , emitter , options ) {
 
 
 // Destroy a service
-LocalService.prototype.destroy = function destroy() {
+LocalService.prototype.destroy = function() {
 	Object.keys( this.events ).forEach( ( eventName ) => {
 		this.emitter.off( eventName , this.events[ eventName ] ) ;
 		delete this.events[ eventName ] ;
@@ -21599,7 +21690,7 @@ LocalService.prototype.destroy = function destroy() {
 
 
 // Remote want to emit on the local service
-LocalService.prototype.receiveEmit = function receiveEmit( message ) {
+LocalService.prototype.receiveEmit = function( message ) {
 	if ( this.destroyed || ! this.canEmit || ( message.ack && ! this.canAck ) ) { return ; }
 
 	var event = {
@@ -21628,7 +21719,7 @@ LocalService.prototype.receiveEmit = function receiveEmit( message ) {
 
 
 // Remote want to listen to an event of the local service
-LocalService.prototype.receiveListen = function receiveListen( message ) {
+LocalService.prototype.receiveListen = function( message ) {
 	if ( this.destroyed || ! this.canListen || ( message.ack && ! this.canAck ) ) { return ; }
 
 	if ( message.ack ) {
@@ -21661,7 +21752,7 @@ LocalService.prototype.receiveListen = function receiveListen( message ) {
 
 
 // Remote do not want to listen to that event of the local service anymore
-LocalService.prototype.receiveIgnore = function receiveIgnore( message ) {
+LocalService.prototype.receiveIgnore = function( message ) {
 	if ( this.destroyed || ! this.canListen ) { return ; }
 
 	if ( ! this.events[ message.event ] ) { return ; }
@@ -21673,7 +21764,7 @@ LocalService.prototype.receiveIgnore = function receiveIgnore( message ) {
 
 
 //
-LocalService.prototype.receiveAckEvent = function receiveAckEvent( message ) {
+LocalService.prototype.receiveAckEvent = function( message ) {
 	if (
 		this.destroyed || ! this.canListen || ! this.canAck || ! message.ack ||
 		! this.events[ message.event ] || ! this.events[ message.event ].ack
@@ -21687,7 +21778,7 @@ LocalService.prototype.receiveAckEvent = function receiveAckEvent( message ) {
 
 
 // Send an event from the local service to remote
-LocalService.forward = function forward( event ) {
+LocalService.forward = function( event ) {
 	if ( this.destroyed ) { return ; }
 
 	this.proxy.send( {
@@ -21704,7 +21795,7 @@ LocalService.forward.ack = false ;
 
 
 // Send an event from the local service to remote, with ACK
-LocalService.forwardWithAck = function forwardWithAck( event , callback ) {
+LocalService.forwardWithAck = function( event , callback ) {
 	if ( this.destroyed ) { return ; }
 
 	if ( ! event.callback ) {
@@ -21764,7 +21855,7 @@ var EVENT_ACK = 2 ;
 
 
 
-RemoteService.create = function create( proxy , id ) {
+RemoteService.create = function( proxy , id ) {
 	var self = Object.create( RemoteService.prototype , {
 		proxy: { value: proxy , enumerable: true } ,
 		id: { value: id , enumerable: true } ,
@@ -21788,7 +21879,7 @@ RemoteService.create = function create( proxy , id ) {
 
 
 // Destroy a service
-RemoteService.prototype.destroy = function destroy() {
+RemoteService.prototype.destroy = function() {
 	this.emitter.removeAllListeners() ;
 	this.emitter = null ;
 	Object.keys( this.events ).forEach( ( eventName ) => { delete this.events[ eventName ] ; } ) ;
@@ -21798,7 +21889,7 @@ RemoteService.prototype.destroy = function destroy() {
 
 
 // Local code want to emit to remote service
-RemoteService.prototype.emit = function emit( eventName , ... args ) {
+RemoteService.prototype.emit = function( eventName , ... args ) {
 	if ( this.destroyed ) { return ; }
 
 	var callback , ackId , triggered ;
@@ -21844,7 +21935,7 @@ RemoteService.prototype.emit = function emit( eventName , ... args ) {
 
 
 // Local code want to listen to an event of remote service
-RemoteService.prototype.addListener = function addListener( eventName , fn , options ) {
+RemoteService.prototype.addListener = function( eventName , fn , options ) {
 	if ( this.destroyed ) { return ; }
 
 	// Manage arguments the same way NextGenEvents#addListener() does
@@ -21891,7 +21982,7 @@ RemoteService.prototype.once = NextGenEvents.prototype.once ;
 
 
 // Local code want to ignore an event of remote service
-RemoteService.prototype.removeListener = function removeListener( eventName , id ) {
+RemoteService.prototype.removeListener = function( eventName , id ) {
 	if ( this.destroyed ) { return ; }
 
 	this.emitter.removeListener( eventName , id ) ;
@@ -21917,7 +22008,7 @@ RemoteService.prototype.off = RemoteService.prototype.removeListener ;
 
 
 // A remote service sent an event we are listening to, emit on the service representing the remote
-RemoteService.prototype.receiveEvent = function receiveEvent( message ) {
+RemoteService.prototype.receiveEvent = function( message ) {
 	if ( this.destroyed || ! this.events[ message.event ] ) { return ; }
 
 	var event = {
@@ -21960,7 +22051,7 @@ RemoteService.prototype.receiveEvent = function receiveEvent( message ) {
 
 
 //
-RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message ) {
+RemoteService.prototype.receiveAckEmit = function( message ) {
 	if ( this.destroyed || ! message.ack || this.events[ message.event ] !== EVENT_ACK ) {
 		return ;
 	}
@@ -21969,32 +22060,32 @@ RemoteService.prototype.receiveAckEmit = function receiveAckEmit( message ) {
 } ;
 
 
-
 },{"./NextGenEvents.js":55}],57:[function(require,module,exports){
 module.exports={
-  "_from": "nextgen-events@^1.0.0",
-  "_id": "nextgen-events@1.1.0",
+  "_from": "nextgen-events@^1.1.0",
+  "_id": "nextgen-events@1.1.1",
   "_inBundle": false,
-  "_integrity": "sha512-Emz5rh584fygInd3gtwP+xGyJhEnyxQa0/Xbmw8sbpXVGV/luqDnVPq1cQopYR7qg6KUlPfwWVhxrhZri1wDAw==",
+  "_integrity": "sha512-vnKAjcvttm+ILOpLuNEFUuqYAfMYfvThpTGLLZT8w+mSCMmnRsKt/qWNuNkb3/RgNyon3EqPT6bDy4xSJkbKsA==",
   "_location": "/nextgen-events",
   "_phantomChildren": {},
   "_requested": {
     "type": "range",
     "registry": true,
-    "raw": "nextgen-events@^1.0.0",
+    "raw": "nextgen-events@^1.1.0",
     "name": "nextgen-events",
     "escapedName": "nextgen-events",
-    "rawSpec": "^1.0.0",
+    "rawSpec": "^1.1.0",
     "saveSpec": null,
-    "fetchSpec": "^1.0.0"
+    "fetchSpec": "^1.1.0"
   },
   "_requiredBy": [
+    "#USER",
     "/",
     "/terminal-kit"
   ],
-  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-1.1.0.tgz",
-  "_shasum": "a37dd6244eb222745c57a8fcc596fd78ef429a46",
-  "_spec": "nextgen-events@^1.0.0",
+  "_resolved": "https://registry.npmjs.org/nextgen-events/-/nextgen-events-1.1.1.tgz",
+  "_shasum": "3595ad9405deaf0d982fd8d584747186370ec91f",
+  "_spec": "nextgen-events@^1.1.0",
   "_where": "/home/cedric/inside/github/tea-time",
   "author": {
     "name": "Cédric Ronvel"
@@ -22014,7 +22105,7 @@ module.exports={
     "title": "Next-Gen Events",
     "years": [
       2015,
-      2018
+      2019
     ],
     "owner": "Cédric Ronvel"
   },
@@ -22055,7 +22146,7 @@ module.exports={
   "scripts": {
     "test": "tea-time -R dot"
   },
-  "version": "1.1.0"
+  "version": "1.1.1"
 }
 
 },{}],58:[function(require,module,exports){
@@ -25093,7 +25184,7 @@ exports.encode = exports.stringify = require('./encode');
 /*
 	Seventh
 
-	Copyright (c) 2017 - 2018 Cédric Ronvel
+	Copyright (c) 2017 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -25150,19 +25241,19 @@ Promise.promisifyNodeApi = ( api , suffix , multiSuffix , filter , anything ) =>
 
 		return filter( key , api ) ;
 	} )
-	.forEach( key => {
-		const targetKey = key + suffix ;
-		const multiTargetKey = key + multiSuffix ;
+		.forEach( key => {
+			const targetKey = key + suffix ;
+			const multiTargetKey = key + multiSuffix ;
 
-		// Do nothing if it already exists
-		if ( ! api[ targetKey ] ) {
-			api[ targetKey ] = Promise.promisify( api[ key ] , api ) ;
-		}
+			// Do nothing if it already exists
+			if ( ! api[ targetKey ] ) {
+				api[ targetKey ] = Promise.promisify( api[ key ] , api ) ;
+			}
 
-		if ( ! api[ multiTargetKey ] ) {
-			api[ multiTargetKey ] = Promise.promisifyAll( api[ key ] , api ) ;
-		}
-	} ) ;
+			if ( ! api[ multiTargetKey ] ) {
+				api[ multiTargetKey ] = Promise.promisifyAll( api[ key ] , api ) ;
+			}
+		} ) ;
 } ;
 
 
@@ -25177,7 +25268,7 @@ Promise.promisifyAnyNodeApi = ( api , suffix , multiSuffix , filter ) => {
 /*
 	Seventh
 
-	Copyright (c) 2017 - 2018 Cédric Ronvel
+	Copyright (c) 2017 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -25215,7 +25306,7 @@ function noop() {}
 
 
 
-Promise.all = function all( iterable ) {
+Promise.all = ( iterable ) => {
 	var index = -1 , settled = false ,
 		count = 0 , length = Infinity ,
 		value , values = [] ,
@@ -25231,24 +25322,24 @@ Promise.all = function all( iterable ) {
 			const promiseIndex = index ;
 
 			Promise.resolve( value )
-			.then(
-				value_ => {
-					if ( settled ) { return ; }
+				.then(
+					value_ => {
+						if ( settled ) { return ; }
 
-					values[ promiseIndex ] = value_ ;
-					count ++ ;
+						values[ promiseIndex ] = value_ ;
+						count ++ ;
 
-					if ( count >= length ) {
+						if ( count >= length ) {
+							settled = true ;
+							allPromise._resolveValue( values ) ;
+						}
+					} ,
+					error => {
+						if ( settled ) { return ; }
 						settled = true ;
-						allPromise._resolveValue( values ) ;
+						allPromise.reject( error ) ;
 					}
-				} ,
-				error => {
-					if ( settled ) { return ; }
-					settled = true ;
-					allPromise.reject( error ) ;
-				}
-			) ;
+				) ;
 		} )() ;
 	}
 
@@ -25265,7 +25356,7 @@ Promise.all = function all( iterable ) {
 
 // Maybe faster, but can't find any reasonable grounds for that ATM
 //Promise.all =
-Promise._allArray = function _allArray( iterable ) {
+Promise._allArray = ( iterable ) => {
 	var length = iterable.length ;
 
 	if ( ! length ) { Promise._resolveValue( [] ) ; }
@@ -25289,7 +25380,7 @@ Promise._allArray = function _allArray( iterable ) {
 
 
 // internal for allArray
-Promise._allArrayOne = function _allArrayOne( value , index , runtime ) {
+Promise._allArrayOne = ( value , index , runtime ) => {
 	Promise._bareThen( value ,
 		value_ => {
 			if ( runtime.settled ) { return ; }
@@ -25313,7 +25404,7 @@ Promise._allArrayOne = function _allArrayOne( value , index , runtime ) {
 
 // Promise.all() with an iterator
 Promise.every =
-Promise.map = function map( iterable , iterator ) {
+Promise.map = ( iterable , iterator ) => {
 	var index = -1 , settled = false ,
 		count = 0 , length = Infinity ,
 		value , values = [] ,
@@ -25329,28 +25420,28 @@ Promise.map = function map( iterable , iterator ) {
 			const promiseIndex = index ;
 
 			Promise.resolve( value )
-			.then( value_ => {
-				if ( settled ) { return ; }
-				return iterator( value_ , promiseIndex ) ;
-			} )
-			.then(
-				value_ => {
+				.then( value_ => {
 					if ( settled ) { return ; }
+					return iterator( value_ , promiseIndex ) ;
+				} )
+				.then(
+					value_ => {
+						if ( settled ) { return ; }
 
-					values[ promiseIndex ] = value_ ;
-					count ++ ;
+						values[ promiseIndex ] = value_ ;
+						count ++ ;
 
-					if ( count >= length ) {
+						if ( count >= length ) {
+							settled = true ;
+							allPromise._resolveValue( values ) ;
+						}
+					} ,
+					error => {
+						if ( settled ) { return ; }
 						settled = true ;
-						allPromise._resolveValue( values ) ;
+						allPromise.reject( error ) ;
 					}
-				} ,
-				error => {
-					if ( settled ) { return ; }
-					settled = true ;
-					allPromise.reject( error ) ;
-				}
-			) ;
+				) ;
 		} )() ;
 	}
 
@@ -25370,7 +25461,7 @@ Promise.map = function map( iterable , iterator ) {
 	Therefore, it resolves to the first resolving promise OR reject if all promises are rejected
 	with, as a reason, the array of all promise rejection reasons.
 */
-Promise.any = function any( iterable ) {
+Promise.any = ( iterable ) => {
 	var index = -1 , settled = false ,
 		count = 0 , length = Infinity ,
 		value ,
@@ -25387,25 +25478,25 @@ Promise.any = function any( iterable ) {
 			const promiseIndex = index ;
 
 			Promise.resolve( value )
-			.then(
-				value_ => {
-					if ( settled ) { return ; }
+				.then(
+					value_ => {
+						if ( settled ) { return ; }
 
-					settled = true ;
-					anyPromise._resolveValue( value_ ) ;
-				} ,
-				error => {
-					if ( settled ) { return ; }
-
-					errors[ promiseIndex ] = error ;
-					count ++ ;
-
-					if ( count >= length ) {
 						settled = true ;
-						anyPromise.reject( errors ) ;
+						anyPromise._resolveValue( value_ ) ;
+					} ,
+					error => {
+						if ( settled ) { return ; }
+
+						errors[ promiseIndex ] = error ;
+						count ++ ;
+
+						if ( count >= length ) {
+							settled = true ;
+							anyPromise.reject( errors ) ;
+						}
 					}
-				}
-			) ;
+				) ;
 		} )() ;
 	}
 
@@ -25421,7 +25512,7 @@ Promise.any = function any( iterable ) {
 
 
 // Like Promise.any() but with an iterator
-Promise.some = function some( iterable , iterator ) {
+Promise.some = ( iterable , iterator ) => {
 	var index = -1 , settled = false ,
 		count = 0 , length = Infinity ,
 		value ,
@@ -25438,29 +25529,29 @@ Promise.some = function some( iterable , iterator ) {
 			const promiseIndex = index ;
 
 			Promise.resolve( value )
-			.then( value_ => {
-				if ( settled ) { return ; }
-				return iterator( value_ , promiseIndex ) ;
-			} )
-			.then(
-				value_ => {
+				.then( value_ => {
 					if ( settled ) { return ; }
+					return iterator( value_ , promiseIndex ) ;
+				} )
+				.then(
+					value_ => {
+						if ( settled ) { return ; }
 
-					settled = true ;
-					anyPromise._resolveValue( value_ ) ;
-				} ,
-				error => {
-					if ( settled ) { return ; }
-
-					errors[ promiseIndex ] = error ;
-					count ++ ;
-
-					if ( count >= length ) {
 						settled = true ;
-						anyPromise.reject( errors ) ;
+						anyPromise._resolveValue( value_ ) ;
+					} ,
+					error => {
+						if ( settled ) { return ; }
+
+						errors[ promiseIndex ] = error ;
+						count ++ ;
+
+						if ( count >= length ) {
+							settled = true ;
+							anyPromise.reject( errors ) ;
+						}
 					}
-				}
-			) ;
+				) ;
 		} )() ;
 	}
 
@@ -25481,7 +25572,7 @@ Promise.some = function some( iterable , iterator ) {
 	or falsy if the element should be filtered out.
 	Any rejection reject the whole promise.
 */
-Promise.filter = function filter( iterable , iterator ) {
+Promise.filter = ( iterable , iterator ) => {
 	var index = -1 , settled = false ,
 		count = 0 , length = Infinity ,
 		value , values = [] ,
@@ -25497,31 +25588,31 @@ Promise.filter = function filter( iterable , iterator ) {
 			const promiseIndex = index ;
 
 			Promise.resolve( value )
-			.then( value_ => {
-				if ( settled ) { return ; }
-				values[ promiseIndex ] = value_ ;
-				return iterator( value_ , promiseIndex ) ;
-			} )
-			.then(
-				iteratorValue => {
+				.then( value_ => {
 					if ( settled ) { return ; }
+					values[ promiseIndex ] = value_ ;
+					return iterator( value_ , promiseIndex ) ;
+				} )
+				.then(
+					iteratorValue => {
+						if ( settled ) { return ; }
 
-					count ++ ;
+						count ++ ;
 
-					if ( ! iteratorValue ) { values[ promiseIndex ] = HOLE ; }
+						if ( ! iteratorValue ) { values[ promiseIndex ] = HOLE ; }
 
-					if ( count >= length ) {
+						if ( count >= length ) {
+							settled = true ;
+							values = values.filter( e => e !== HOLE ) ;
+							filterPromise._resolveValue( values ) ;
+						}
+					} ,
+					error => {
+						if ( settled ) { return ; }
 						settled = true ;
-						values = values.filter( e => e !== HOLE ) ;
-						filterPromise._resolveValue( values ) ;
+						filterPromise.reject( error ) ;
 					}
-				} ,
-				error => {
-					if ( settled ) { return ; }
-					settled = true ;
-					filterPromise.reject( error ) ;
-				}
-			) ;
+				) ;
 		} )() ;
 	}
 
@@ -25542,8 +25633,9 @@ Promise.filter = function filter( iterable , iterator ) {
 
 
 // forEach performs reduce as well, if a third argument is supplied
+// Force a function statement because we are using arguments.length, so we can support accumulator equals to undefined
 Promise.foreach =
-Promise.forEach = function forEach( iterable , iterator , accumulator ) {
+Promise.forEach = function( iterable , iterator , accumulator ) {
 	var index = -1 ,
 		isReduce = arguments.length >= 3 ,
 		it = iterable[Symbol.iterator]() ,
@@ -25596,7 +25688,7 @@ Promise.forEach = function forEach( iterable , iterator , accumulator ) {
 
 
 
-Promise.reduce = function reduce( iterable , iterator , accumulator ) {
+Promise.reduce = ( iterable , iterator , accumulator ) => {
 	// Force 3 arguments
 	return Promise.forEach( iterable , iterator , accumulator ) ;
 } ;
@@ -25607,7 +25699,7 @@ Promise.reduce = function reduce( iterable , iterator , accumulator ) {
 	Same than map, but iterate over an object and produce an object.
 	Think of it as a kind of Object#map() (which of course does not exist).
 */
-Promise.mapObject = function mapObject( inputObject , iterator ) {
+Promise.mapObject = ( inputObject , iterator ) => {
 	var settled = false ,
 		count = 0 ,
 		i , key , keys = Object.keys( inputObject ) ,
@@ -25624,28 +25716,28 @@ Promise.mapObject = function mapObject( inputObject , iterator ) {
 			const promiseKey = key ;
 
 			Promise.resolve( value )
-			.then( value_ => {
-				if ( settled ) { return ; }
-				return iterator( value_ , promiseKey ) ;
-			} )
-			.then(
-				value_ => {
+				.then( value_ => {
 					if ( settled ) { return ; }
+					return iterator( value_ , promiseKey ) ;
+				} )
+				.then(
+					value_ => {
+						if ( settled ) { return ; }
 
-					outputObject[ promiseKey ] = value_ ;
-					count ++ ;
+						outputObject[ promiseKey ] = value_ ;
+						count ++ ;
 
-					if ( count >= length ) {
+						if ( count >= length ) {
+							settled = true ;
+							mapPromise._resolveValue( outputObject ) ;
+						}
+					} ,
+					error => {
+						if ( settled ) { return ; }
 						settled = true ;
-						mapPromise._resolveValue( outputObject ) ;
+						mapPromise.reject( error ) ;
 					}
-				} ,
-				error => {
-					if ( settled ) { return ; }
-					settled = true ;
-					mapPromise.reject( error ) ;
-				}
-			) ;
+				) ;
 		} )() ;
 	}
 
@@ -25659,7 +25751,7 @@ Promise.mapObject = function mapObject( inputObject , iterator ) {
 
 
 // Like map, but with a concurrency limit
-Promise.concurrent = function concurrent( limit , iterable , iterator ) {
+Promise.concurrent = ( limit , iterable , iterator ) => {
 	var index = -1 , settled = false ,
 		running = 0 ,
 		count = 0 , length = Infinity ,
@@ -25702,37 +25794,37 @@ Promise.concurrent = function concurrent( limit , iterable , iterator ) {
 				//console.log( "Launch" , promiseIndex ) ;
 
 				Promise.resolve( value )
-				.then( value_ => {
-					if ( settled ) { return ; }
-					return iterator( value_ , promiseIndex ) ;
-				} )
-				.then(
-					value_ => {
+					.then( value_ => {
+						if ( settled ) { return ; }
+						return iterator( value_ , promiseIndex ) ;
+					} )
+					.then(
+						value_ => {
 						//console.log( "Done" , promiseIndex , value_ ) ;
-						if ( settled ) { return ; }
+							if ( settled ) { return ; }
 
-						values[ promiseIndex ] = value_ ;
-						count ++ ;
-						running -- ;
+							values[ promiseIndex ] = value_ ;
+							count ++ ;
+							running -- ;
 
-						//console.log( "count/length" , count , length ) ;
-						if ( count >= length ) {
+							//console.log( "count/length" , count , length ) ;
+							if ( count >= length ) {
+								settled = true ;
+								concurrentPromise._resolveValue( values ) ;
+								return ;
+							}
+
+							if ( running < limit ) {
+								runBatch() ;
+								return ;
+							}
+						} ,
+						error => {
+							if ( settled ) { return ; }
 							settled = true ;
-							concurrentPromise._resolveValue( values ) ;
-							return ;
+							concurrentPromise.reject( error ) ;
 						}
-
-						if ( running < limit ) {
-							runBatch() ;
-							return ;
-						}
-					} ,
-					error => {
-						if ( settled ) { return ; }
-						settled = true ;
-						concurrentPromise.reject( error ) ;
-					}
-				) ;
+					) ;
 			} )() ;
 		}
 	} ;
@@ -25749,15 +25841,36 @@ Promise.concurrent = function concurrent( limit , iterable , iterator ) {
 
 
 /*
-	The standard method is totally stoOpid, since it rejects if the first settled promise rejects,
-	it also hang forever on empty array.
-	The standard guys should have been drunk.
-	I don't want to code such a brain-fucking method.
-
-	Use Promise.any() or Promise.filter()
+	Like native Promise.race(), it is hanging forever if the array is empty.
+	It resolves or rejects to the first resolved/rejected promise.
 */
-Promise.race = Promise.Native.race.bind( Promise.Native ) ;
+Promise.race = ( iterable ) => {
+	var settled = false ,
+		value ,
+		racePromise = new Promise() ;
 
+	for ( value of iterable ) {
+		if ( settled ) { break ; }
+
+		Promise.resolve( value )
+			.then(
+				value_ => {
+					if ( settled ) { return ; }
+
+					settled = true ;
+					racePromise._resolveValue( value_ ) ;
+				} ,
+				error => {
+					if ( settled ) { return ; }
+
+					settled = true ;
+					racePromise.reject( error ) ;
+				}
+			) ;
+	}
+
+	return racePromise ;
+} ;
 
 
 },{"./seventh.js":73}],69:[function(require,module,exports){
@@ -25765,7 +25878,7 @@ Promise.race = Promise.Native.race.bind( Promise.Native ) ;
 /*
 	Seventh
 
-	Copyright (c) 2017 - 2018 Cédric Ronvel
+	Copyright (c) 2017 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -25842,7 +25955,7 @@ Promise.warnUnhandledRejection = true ;
 
 
 
-Promise.prototype._exec = function _exec() {
+Promise.prototype._exec = function() {
 	this._then = Promise._pendingThen ;
 
 	try {
@@ -25867,7 +25980,7 @@ Promise.prototype._exec = function _exec() {
 
 
 
-Promise.prototype.resolve = Promise.prototype.fulfill = function resolve( value ) {
+Promise.prototype.resolve = Promise.prototype.fulfill = function( value ) {
 	// Throw an error?
 	if ( this._then.settled ) { return this ; }
 
@@ -25881,7 +25994,7 @@ Promise.prototype.resolve = Promise.prototype.fulfill = function resolve( value 
 
 
 
-Promise.prototype._resolveValue = function _resolveValue( value ) {
+Promise.prototype._resolveValue = function( value ) {
 	this._then = Promise._fulfilledThen ;
 	this.value = value ;
 	if ( this.thenHandlers && this.thenHandlers.length ) { this._execFulfillHandlers() ; }
@@ -25892,7 +26005,7 @@ Promise.prototype._resolveValue = function _resolveValue( value ) {
 
 
 // Faster on node v8.x
-Promise.prototype._execThenPromise = function _execThenPromise( thenPromise ) {
+Promise.prototype._execThenPromise = function( thenPromise ) {
 	try {
 		thenPromise.then(
 			result_ => { this.resolve( result_ ) ; } ,
@@ -25906,7 +26019,7 @@ Promise.prototype._execThenPromise = function _execThenPromise( thenPromise ) {
 
 
 
-Promise.prototype.reject = function reject( error ) {
+Promise.prototype.reject = function( error ) {
 	// Throw an error?
 	if ( this._then.settled ) { return this ; }
 
@@ -25925,7 +26038,7 @@ Promise.prototype.reject = function reject( error ) {
 
 
 
-Promise.prototype._execFulfillHandlers = function _execFulfillHandlers() {
+Promise.prototype._execFulfillHandlers = function() {
 	var i ,
 		length = this.thenHandlers.length ;
 
@@ -25944,7 +26057,7 @@ Promise.prototype._execFulfillHandlers = function _execFulfillHandlers() {
 
 // Faster on node v8.x?
 //*
-Promise.prototype._execOneFulfillHandler = function _execOneFulfillHandler( promise , onFulfill ) {
+Promise.prototype._execOneFulfillHandler = function( promise , onFulfill ) {
 	try {
 		promise.resolve( onFulfill( this.value ) ) ;
 	}
@@ -25956,7 +26069,7 @@ Promise.prototype._execOneFulfillHandler = function _execOneFulfillHandler( prom
 
 
 
-Promise.prototype._execRejectionHandlers = function _execRejectionHandlers() {
+Promise.prototype._execRejectionHandlers = function() {
 	var i ,
 		length = this.thenHandlers.length ;
 
@@ -25975,7 +26088,7 @@ Promise.prototype._execRejectionHandlers = function _execRejectionHandlers() {
 
 // Faster on node v8.x?
 //*
-Promise.prototype._execOneRejectHandler = function _execOneRejectHandler( promise , onReject ) {
+Promise.prototype._execOneRejectHandler = function( promise , onReject ) {
 	try {
 		promise.resolve( onReject( this.value ) ) ;
 	}
@@ -25987,13 +26100,13 @@ Promise.prototype._execOneRejectHandler = function _execOneRejectHandler( promis
 
 
 
-Promise.prototype.resolveTimeout = Promise.prototype.fulfillTimeout = function resolveTimeout( time , result ) {
+Promise.prototype.resolveTimeout = Promise.prototype.fulfillTimeout = function( time , result ) {
 	setTimeout( () => this.resolve( result ) , time ) ;
 } ;
 
 
 
-Promise.prototype.rejectTimeout = function rejectTimeout( time , error ) {
+Promise.prototype.rejectTimeout = function( time , error ) {
 	setTimeout( () => this.reject( error ) , time ) ;
 } ;
 
@@ -26006,7 +26119,7 @@ Promise.prototype.rejectTimeout = function rejectTimeout( time , error ) {
 
 
 // .then() variant when the promise is dormant
-Promise._dormantThen = function _dormantThen( onFulfill , onReject ) {
+Promise._dormantThen = function( onFulfill , onReject ) {
 	if ( this.fn ) {
 		// If this is a dormant promise, wake it up now!
 		this._exec() ;
@@ -26035,7 +26148,7 @@ Promise._dormantThen.settled = false ;
 
 
 // .then() variant when the promise is pending
-Promise._pendingThen = function _pendingThen( onFulfill , onReject ) {
+Promise._pendingThen = function( onFulfill , onReject ) {
 	var promise = new Promise() ;
 
 	if ( ! this.thenHandlers ) {
@@ -26056,7 +26169,7 @@ Promise._pendingThen.settled = false ;
 
 
 // .then() variant when the promise is fulfilled
-Promise._fulfilledThen = function _fulfilledThen( onFulfill ) {
+Promise._fulfilledThen = function( onFulfill ) {
 	if ( ! onFulfill ) { return this ; }
 
 	var promise = new Promise() ;
@@ -26079,7 +26192,7 @@ Promise._fulfilledThen.settled = true ;
 
 
 // .then() variant when the promise is rejected
-Promise._rejectedThen = function _rejectedThen( onFulfill , onReject ) {
+Promise._rejectedThen = function( onFulfill , onReject ) {
 	if ( ! onReject ) { return this ; }
 
 	this.handledRejection = true ;
@@ -26108,33 +26221,33 @@ Promise._rejectedThen.settled = true ;
 
 
 
-Promise.prototype.then = function then( onFulfill , onReject ) {
+Promise.prototype.then = function( onFulfill , onReject ) {
 	return this._then( onFulfill , onReject ) ;
 } ;
 
 
 
-Promise.prototype.catch = function _catch( onReject = () => undefined ) {
+Promise.prototype.catch = function( onReject = () => undefined ) {
 	return this._then( undefined , onReject ) ;
 } ;
 
 
 
-Promise.prototype.tap = function tap( onFulfill ) {
+Promise.prototype.tap = function( onFulfill ) {
 	this._then( onFulfill , undefined ) ;
 	return this ;
 } ;
 
 
 
-Promise.prototype.tapCatch = function tapCatch( onReject ) {
+Promise.prototype.tapCatch = function( onReject ) {
 	this._then( undefined , onReject ) ;
 	return this ;
 } ;
 
 
 
-Promise.prototype.finally = function _finally( onSettled ) {
+Promise.prototype.finally = function( onSettled ) {
 	this._then( onSettled , onSettled ) ;
 	// Return this or this._then() ?
 	return this ;
@@ -26143,7 +26256,7 @@ Promise.prototype.finally = function _finally( onSettled ) {
 
 
 // Any unhandled error throw ASAP
-Promise.prototype.fatal = function fatal() {
+Promise.prototype.fatal = function() {
 	this._then( undefined , error => {
 		// Throw async, otherwise it would be catched by .then()
 		nextTick( () => { throw error ; } ) ;
@@ -26152,14 +26265,14 @@ Promise.prototype.fatal = function fatal() {
 
 
 
-Promise.prototype.done = function done( onFulfill , onReject ) {
+Promise.prototype.done = function( onFulfill , onReject ) {
 	this._then( onFulfill , onReject ).fatal() ;
 	return this ;
 } ;
 
 
 
-Promise.prototype.callback = function callback( cb ) {
+Promise.prototype.callback = function( cb ) {
 	this._then(
 		value => { cb( undefined , value ) ; } ,
 		error => { cb( error ) ; }
@@ -26170,7 +26283,7 @@ Promise.prototype.callback = function callback( cb ) {
 
 
 
-Promise.prototype.callbackAll = function callbackAll( cb ) {
+Promise.prototype.callbackAll = function( cb ) {
 	this._then(
 		values => {
 			if ( Array.isArray( values ) ) { cb( undefined , ... values ) ; }
@@ -26184,7 +26297,7 @@ Promise.prototype.callbackAll = function callbackAll( cb ) {
 
 
 
-Promise.prototype.toPromise = function toPromise( promise ) {
+Promise.prototype.toPromise = function( promise ) {
 	this._then(
 		value => { promise.resolve( value ) ; } ,
 		error => { promise.reject( error ) ; }
@@ -26203,14 +26316,14 @@ Promise.prototype.toPromise = function toPromise( promise ) {
 
 
 
-Promise.resolve = Promise.fulfill = function resolve( value ) {
+Promise.resolve = Promise.fulfill = function( value ) {
 	if ( Promise.isThenable( value ) ) { return Promise.fromThenable( value ) ; }
 	return Promise._resolveValue( value ) ;
 } ;
 
 
 
-Promise._resolveValue = function _resolveValue( value ) {
+Promise._resolveValue = function( value ) {
 	var promise = new Promise() ;
 	promise._then = Promise._fulfilledThen ;
 	promise.value = value ;
@@ -26219,7 +26332,7 @@ Promise._resolveValue = function _resolveValue( value ) {
 
 
 
-Promise.reject = function reject( error ) {
+Promise.reject = function( error ) {
 	//return new Promise().reject( error ) ;
 	var promise = new Promise() ;
 	promise._then = Promise._rejectedThen ;
@@ -26229,20 +26342,20 @@ Promise.reject = function reject( error ) {
 
 
 
-Promise.resolveTimeout = Promise.fulfillTimeout = function resolveTimeout( timeout , value ) {
+Promise.resolveTimeout = Promise.fulfillTimeout = function( timeout , value ) {
 	return new Promise( resolve => setTimeout( () => resolve( value ) , timeout ) ) ;
 } ;
 
 
 
-Promise.rejectTimeout = function rejectTimeout( timeout , error ) {
+Promise.rejectTimeout = function( timeout , error ) {
 	return new Promise( ( resolve , reject ) => setTimeout( () => reject( error ) , timeout ) ) ;
 } ;
 
 
 
 // A dormant promise is activated the first time a then handler is assigned
-Promise.dormant = function dormant( fn ) {
+Promise.dormant = function( fn ) {
 	var promise = new Promise() ;
 	promise.fn = fn ;
 	return promise ;
@@ -26251,7 +26364,7 @@ Promise.dormant = function dormant( fn ) {
 
 
 // Try-catched Promise.resolve( fn() )
-Promise.try = function try_( fn ) {
+Promise.try = function( fn ) {
 	try {
 		return Promise.resolve( fn() ) ;
 	}
@@ -26268,14 +26381,14 @@ Promise.try = function try_( fn ) {
 
 
 
-Promise.isThenable = function isThenable( value ) {
+Promise.isThenable = function( value ) {
 	return value && typeof value === 'object' && typeof value.then === 'function' ;
 } ;
 
 
 
 // We assume a thenable object here
-Promise.fromThenable = function fromThenable( thenable ) {
+Promise.fromThenable = function( thenable ) {
 	if ( thenable instanceof Promise ) { return thenable ; }
 
 	return new Promise( ( resolve , reject ) => {
@@ -26289,7 +26402,7 @@ Promise.fromThenable = function fromThenable( thenable ) {
 
 
 // When you just want a fast then() function out of anything, without any desync and unchainable
-Promise._bareThen = function _bareThen( value , onFulfill , onReject ) {
+Promise._bareThen = function( value , onFulfill , onReject ) {
 	//if ( Promise.isThenable( value ) )
 	if( value && typeof value === 'object' ) {
 		if ( value instanceof Promise ) {
@@ -26319,7 +26432,7 @@ Promise._bareThen = function _bareThen( value , onFulfill , onReject ) {
 
 // Internal usage, mark all promises as handled ahead of time, useful for series,
 // because a warning would be displayed for unhandled rejection for promises that are not yet processed.
-Promise._handleAll = function _handleAll( iterable ) {
+Promise._handleAll = function( iterable ) {
 	var value ;
 
 	for ( value of iterable ) {
@@ -26332,7 +26445,7 @@ Promise._handleAll = function _handleAll( iterable ) {
 
 
 
-Promise.prototype._unhandledRejection = function _unhandledRejection() {
+Promise.prototype._unhandledRejection = function() {
 	// This promise is currently unhandled
 	// If still unhandled at the end of the synchronous block of code,
 	// output an error message.
@@ -26382,7 +26495,7 @@ Promise.prototype._unhandledRejection = function _unhandledRejection() {
 
 
 
-Promise.prototype.getStatus = function getStatus() {
+Promise.prototype.getStatus = function() {
 	switch ( this._then ) {
 		case Promise._dormantThen :
 			return 'dormant' ;
@@ -26397,7 +26510,7 @@ Promise.prototype.getStatus = function getStatus() {
 
 
 
-Promise.prototype.inspect = function inspect() {
+Promise.prototype.inspect = function() {
 	switch ( this._then ) {
 		case Promise._dormantThen :
 			return 'Promise { <DORMANT> }' ;
@@ -26421,7 +26534,7 @@ Promise.resolved = Promise.dummy = Promise.resolve() ;
 /*
 	Seventh
 
-	Copyright (c) 2017 - 2018 Cédric Ronvel
+	Copyright (c) 2017 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -26632,7 +26745,7 @@ Promise.serialize = ( asyncFn , thisBinding ) => {
 
 		lastPromise.finally( () => {
 			asyncFn.call( thisBinding , ... args )
-			.then( ( value ) => promise.resolve( value ) , ( error ) => promise.reject( error ) ) ;
+				.then( ( value ) => promise.resolve( value ) , ( error ) => promise.reject( error ) ) ;
 		} ) ;
 
 		lastPromise = promise ;
@@ -26765,7 +26878,7 @@ Promise.variableRetry = ( asyncFn , thisBinding ) => {
 /*
 	Seventh
 
-	Copyright (c) 2017 - 2018 Cédric Ronvel
+	Copyright (c) 2017 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -26805,7 +26918,7 @@ var Promise = require( './seventh.js' ) ;
 
 var exitInProgress = false ;
 
-Promise.asyncExit = function asyncExit( exitCode , timeout ) {
+Promise.asyncExit = function( exitCode , timeout ) {
 	// Already exiting? no need to call it twice!
 	if ( exitInProgress ) { return ; }
 
@@ -26837,7 +26950,7 @@ Promise.asyncExit = function asyncExit( exitCode , timeout ) {
 
 	// We don't care about errors here... We are exiting!
 	Promise.map( listeners , callListener )
-	.finally( () => process.exit( exitCode ) ) ;
+		.finally( () => process.exit( exitCode ) ) ;
 
 	// Quit anyway if it's too long
 	setTimeout( () => process.exit( exitCode ) , timeout ) ;
@@ -26846,7 +26959,7 @@ Promise.asyncExit = function asyncExit( exitCode , timeout ) {
 
 
 // A timeout that ensure a task get the time to perform its action (when there are CPU-bound tasks)
-Promise.resolveSafeTimeout = function resolveSafeTimeout( timeout , value ) {
+Promise.resolveSafeTimeout = function( timeout , value ) {
 	return new Promise( resolve => {
 		setTimeout( () => {
 			setTimeout( () => {
@@ -26864,7 +26977,7 @@ Promise.resolveSafeTimeout = function resolveSafeTimeout( timeout , value ) {
 /*
 	Seventh
 
-	Copyright (c) 2017 - 2018 Cédric Ronvel
+	Copyright (c) 2017 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -26916,7 +27029,7 @@ Promise.parasite = () => {
 /*
 	Seventh
 
-	Copyright (c) 2017 - 2018 Cédric Ronvel
+	Copyright (c) 2017 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -26959,7 +27072,7 @@ require( './misc.js' ) ;
 /*
 	Seventh
 
-	Copyright (c) 2017 - 2018 Cédric Ronvel
+	Copyright (c) 2017 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -27041,16 +27154,135 @@ Promise.retry = ( options , asyncFn ) => {
 
 
 
+// Resolve once an event is fired
 Promise.onceEvent = ( emitter , eventName ) => {
-	return new Promise( resolve => emitter.once( eventName , arg => resolve( arg ) ) ) ;
+	return new Promise( resolve => emitter.once( eventName , resolve ) ) ;
 } ;
 
 
 
+// Resolve once an event is fired, resolve with an array of arguments
 Promise.onceEventAll = ( emitter , eventName ) => {
 	return new Promise( resolve => emitter.once( eventName , ( ... args ) => resolve( args ) ) ) ;
 } ;
 
+
+
+// Resolve once an event is fired, or reject on error
+Promise.onceEventOrError = ( emitter , eventName , excludeEvents ) => {
+	return new Promise( ( resolve , reject ) => {
+		var altRejects ;
+
+		// We care about removing listener, especially 'error', because if an error kick in after, it should throw because there is no listener
+		var resolve_ = arg => {
+			emitter.removeListener( 'error' , reject_ ) ;
+
+			if ( altRejects ) {
+				for ( let event in altRejects ) {
+					emitter.removeListener( event , altRejects[ event ] ) ;
+				}
+			}
+
+			resolve( arg ) ;
+		} ;
+
+		var reject_ = arg => {
+			emitter.removeListener( eventName , resolve_ ) ;
+
+			if ( altRejects ) {
+				for ( let event in altRejects ) {
+					emitter.removeListener( event , altRejects[ event ] ) ;
+				}
+			}
+
+			reject( arg ) ;
+		} ;
+
+		emitter.once( eventName , resolve_ ) ;
+		emitter.once( 'error' , reject_ ) ;
+
+		if ( excludeEvents ) {
+			if ( ! Array.isArray( excludeEvents ) ) { excludeEvents = [ excludeEvents ] ; }
+
+			altRejects = {} ;
+
+			excludeEvents.forEach( event => {
+				var altReject = ( ... args ) => {
+					emitter.removeListener( 'error' , reject_ ) ;
+					emitter.removeListener( eventName , resolve_ ) ;
+
+					var error = new Error( "Received an excluded event: " + event ) ;
+					error.event = event ;
+					error.eventArgs = args ;
+					reject( error ) ;
+				} ;
+
+				emitter.once( event , altReject ) ;
+
+				altRejects[ event ] = altReject ;
+			} ) ;
+		}
+	} ) ;
+} ;
+
+
+
+// Resolve once an event is fired, or reject on error, resolve with an array of arguments, reject with the first argument
+Promise.onceEventAllOrError = ( emitter , eventName , excludeEvents ) => {
+	return new Promise( ( resolve , reject ) => {
+		var altRejects ;
+
+		// We care about removing listener, especially 'error', because if an error kick in after, it should throw because there is no listener
+		var resolve_ = ( ... args ) => {
+			emitter.removeListener( 'error' , reject_ ) ;
+
+			if ( altRejects ) {
+				for ( let event in altRejects ) {
+					emitter.removeListener( event , altRejects[ event ] ) ;
+				}
+			}
+
+			resolve( args ) ;
+		} ;
+
+		var reject_ = arg => {
+			emitter.removeListener( eventName , resolve_ ) ;
+
+			if ( altRejects ) {
+				for ( let event in altRejects ) {
+					emitter.removeListener( event , altRejects[ event ] ) ;
+				}
+			}
+
+			reject( arg ) ;
+		} ;
+
+		emitter.once( eventName , resolve_ ) ;
+		emitter.once( 'error' , reject_ ) ;
+
+		if ( excludeEvents ) {
+			if ( ! Array.isArray( excludeEvents ) ) { excludeEvents = [ excludeEvents ] ; }
+
+			altRejects = {} ;
+
+			excludeEvents.forEach( event => {
+				var altReject = ( ... args ) => {
+					emitter.removeListener( 'error' , reject_ ) ;
+					emitter.removeListener( eventName , resolve_ ) ;
+
+					var error = new Error( "Received an excluded event: " + event ) ;
+					error.event = event ;
+					error.eventArgs = args ;
+					reject( error ) ;
+				} ;
+
+				emitter.once( event , altReject ) ;
+
+				altRejects[ event ] = altReject ;
+			} ) ;
+		}
+	} ) ;
+} ;
 
 
 },{"./seventh.js":73}],75:[function(require,module,exports){
@@ -27102,6 +27334,8 @@ module.exports = {
 	magenta: '\x1b[35m' ,
 	cyan: '\x1b[36m' ,
 	white: '\x1b[37m' ,
+	grey: '\x1b[90m' ,
+	gray: '\x1b[90m' ,
 	brightBlack: '\x1b[90m' ,
 	brightRed: '\x1b[91m' ,
 	brightGreen: '\x1b[92m' ,
@@ -27120,6 +27354,8 @@ module.exports = {
 	bgMagenta: '\x1b[45m' ,
 	bgCyan: '\x1b[46m' ,
 	bgWhite: '\x1b[47m' ,
+	bgGrey: '\x1b[100m' ,
+	bgGray: '\x1b[100m' ,
 	bgBrightBlack: '\x1b[100m' ,
 	bgBrightRed: '\x1b[101m' ,
 	bgBrightGreen: '\x1b[102m' ,
@@ -27129,7 +27365,6 @@ module.exports = {
 	bgBrightCyan: '\x1b[106m' ,
 	bgBrightWhite: '\x1b[107m'
 } ;
-
 
 
 },{}],76:[function(require,module,exports){
@@ -27285,8 +27520,10 @@ exports.htmlSpecialChars = function escapeHtmlSpecialChars( str ) {
 
 
 
-var escape = require( './escape.js' ) ;
-var ansi = require( './ansi.js' ) ;
+const escape = require( './escape.js' ) ;
+const ansi = require( './ansi.js' ) ;
+
+const EMPTY = {} ;
 
 
 
@@ -27326,7 +27563,8 @@ function inspect( options , variable ) {
 
 	if ( ! options.style ) { options.style = inspectStyle.none ; }
 	else if ( typeof options.style === 'string' ) { options.style = inspectStyle[ options.style ] ; }
-	else { options.style = Object.assign( {} , inspectStyle.none , options.style ) ; }
+	// Too slow:
+	//else { options.style = Object.assign( {} , inspectStyle.none , options.style ) ; }
 
 	if ( options.depth === undefined ) { options.depth = 3 ; }
 	if ( options.maxLength === undefined ) { options.maxLength = 250 ; }
@@ -27339,6 +27577,7 @@ function inspect( options , variable ) {
 		options.noFunc = true ;
 		options.noDescriptor = true ;
 		options.noType = true ;
+		options.noArrayProperty = true ;
 		options.enumOnly = true ;
 		options.funcDetails = false ;
 		options.proto = false ;
@@ -27347,7 +27586,8 @@ function inspect( options , variable ) {
 	var str = inspect_( runtime , options , variable ) ;
 
 	if ( str.length > options.outputMaxLength ) {
-		str = str.slice( 0 , options.outputMaxLength - 1 ) + '…' ;
+		//str = str.slice( 0 , options.outputMaxLength - 1 ) + options.style.truncate( '…' ) ;
+		str = options.style.truncate( str , options.outputMaxLength ) ;
 	}
 
 	return str ;
@@ -27406,6 +27646,9 @@ function inspect_( runtime , options , variable ) {
 
 	if ( variable === undefined ) {
 		str += pre + options.style.constant( 'undefined' ) + descriptorStr + options.style.newline ;
+	}
+	else if ( variable === EMPTY ) {
+		str += pre + options.style.constant( '[empty]' ) + descriptorStr + options.style.newline ;
 	}
 	else if ( variable === null ) {
 		str += pre + options.style.constant( 'null' ) + descriptorStr + options.style.newline ;
@@ -27471,10 +27714,11 @@ function inspect_( runtime , options , variable ) {
 			if ( ! isFunc || options.funcDetails ) { str += ' ' ; }	// if no funcDetails imply no space here
 		}
 
-		propertyList = Object.getOwnPropertyNames( variable ) ;
-
-		if ( options.noArrayProperty && Array.isArray( variable ) ) {
-			propertyList = propertyList.slice( 0 , variable.length ) ;
+		if ( isArray && options.noArrayProperty ) {
+			propertyList = [ ... Array( variable.length ).keys() ] ;
+		}
+		else {
+			propertyList = Object.getOwnPropertyNames( variable ) ;
 		}
 
 		if ( options.sort ) { propertyList.sort() ; }
@@ -27490,13 +27734,14 @@ function inspect_( runtime , options , variable ) {
 				str += '=> ' + specialObject + options.style.newline ;
 			}
 			else {
-				str += '=> ' + inspect_( {
-					depth: runtime.depth ,
-					ancestors: runtime.ancestors ,
-					noPre: true
-				} ,
-				options ,
-				specialObject
+				str += '=> ' + inspect_(
+					{
+						depth: runtime.depth ,
+						ancestors: runtime.ancestors ,
+						noPre: true
+					} ,
+					options ,
+					specialObject
 				) ;
 			}
 		}
@@ -27513,7 +27758,7 @@ function inspect_( runtime , options , variable ) {
 			str += options.style.limit( '[circular]' ) + options.style.newline ;
 		}
 		else {
-			str += ( isArray && options.noType ? '[' : '{' ) + options.style.newline ;
+			str += ( isArray && options.noType && options.noArrayProperty ? '[' : '{' ) + options.style.newline ;
 
 			// Do not use .concat() here, it doesn't works as expected with arrays...
 			nextAncestors = runtime.ancestors.slice() ;
@@ -27525,68 +27770,85 @@ function inspect_( runtime , options , variable ) {
 					continue ;
 				}
 
-				try {
-					descriptor = Object.getOwnPropertyDescriptor( variable , propertyList[ i ] ) ;
-
-					if ( ! descriptor.enumerable && options.enumOnly ) { continue ; }
-
-					keyIsProperty = ! isArray || ! descriptor.enumerable || isNaN( propertyList[ i ] ) ;
-
-					if ( ! options.noDescriptor && ( descriptor.get || descriptor.set ) ) {
-						str += inspect_( {
+				if ( isArray && options.noArrayProperty && ! ( propertyList[ i ] in variable ) ) {
+					// Hole in the array (sparse array, item deleted, ...)
+					str += inspect_(
+						{
 							depth: runtime.depth + 1 ,
 							ancestors: nextAncestors ,
 							key: propertyList[ i ] ,
-							keyIsProperty: keyIsProperty ,
-							descriptor: descriptor ,
-							forceType: 'getter/setter'
+							keyIsProperty: false
 						} ,
 						options ,
-						{ get: descriptor.get , set: descriptor.set }
-						) ;
-					}
-					else {
-						str += inspect_( {
-							depth: runtime.depth + 1 ,
-							ancestors: nextAncestors ,
-							key: propertyList[ i ] ,
-							keyIsProperty: keyIsProperty ,
-							descriptor: options.noDescriptor ? undefined : descriptor
-						} ,
-						options ,
-						variable[ propertyList[ i ] ]
-						) ;
-					}
-				}
-				catch ( error ) {
-					str += inspect_( {
-						depth: runtime.depth + 1 ,
-						ancestors: nextAncestors ,
-						key: propertyList[ i ] ,
-						keyIsProperty: keyIsProperty ,
-						descriptor: options.noDescriptor ? undefined : descriptor
-					} ,
-					options ,
-					error
+						EMPTY
 					) ;
+				}
+				else {
+					try {
+						descriptor = Object.getOwnPropertyDescriptor( variable , propertyList[ i ] ) ;
+						if ( ! descriptor.enumerable && options.enumOnly ) { continue ; }
+						keyIsProperty = ! isArray || ! descriptor.enumerable || isNaN( propertyList[ i ] ) ;
+
+						if ( ! options.noDescriptor && descriptor && ( descriptor.get || descriptor.set ) ) {
+							str += inspect_(
+								{
+									depth: runtime.depth + 1 ,
+									ancestors: nextAncestors ,
+									key: propertyList[ i ] ,
+									keyIsProperty: keyIsProperty ,
+									descriptor: descriptor ,
+									forceType: 'getter/setter'
+								} ,
+								options ,
+								{ get: descriptor.get , set: descriptor.set }
+							) ;
+						}
+						else {
+							str += inspect_(
+								{
+									depth: runtime.depth + 1 ,
+									ancestors: nextAncestors ,
+									key: propertyList[ i ] ,
+									keyIsProperty: keyIsProperty ,
+									descriptor: options.noDescriptor ? undefined : descriptor
+								} ,
+								options ,
+								variable[ propertyList[ i ] ]
+							) ;
+						}
+					}
+					catch ( error ) {
+						str += inspect_(
+							{
+								depth: runtime.depth + 1 ,
+								ancestors: nextAncestors ,
+								key: propertyList[ i ] ,
+								keyIsProperty: keyIsProperty ,
+								descriptor: options.noDescriptor ? undefined : descriptor
+							} ,
+							options ,
+							error
+						) ;
+					}
 				}
 
 				if ( i < propertyList.length - 1 ) { str += options.style.comma ; }
 			}
 
 			if ( options.proto ) {
-				str += inspect_( {
-					depth: runtime.depth + 1 ,
-					ancestors: nextAncestors ,
-					key: '__proto__' ,
-					keyIsProperty: true
-				} ,
-				options ,
-				proto
+				str += inspect_(
+					{
+						depth: runtime.depth + 1 ,
+						ancestors: nextAncestors ,
+						key: '__proto__' ,
+						keyIsProperty: true
+					} ,
+					options ,
+					proto
 				) ;
 			}
 
-			str += indent + ( isArray && options.noType ? ']' : '}' ) ;
+			str += indent + ( isArray && options.noType && options.noArrayProperty ? ']' : '}' ) ;
 			str += options.style.newline ;
 		}
 	}
@@ -27755,19 +28017,19 @@ function inspectStack( options , stack ) {
 	if ( ( options.browser || process.browser ) && stack.indexOf( '@' ) !== -1 ) {
 		// Assume a Firefox-compatible stack-trace here...
 		stack = stack
-		.replace( /[</]*(?=@)/g , '' )	// Firefox output some WTF </</</</< stuff in its stack trace -- removing that
-		.replace(
-			/^\s*([^@]*)\s*@\s*([^\n]*)(?::([0-9]+):([0-9]+))?$/mg ,
-			( matches , method , file , line , column ) => {
-				return options.style.errorStack( '    at ' ) +
+			.replace( /[</]*(?=@)/g , '' )	// Firefox output some WTF </</</</< stuff in its stack trace -- removing that
+			.replace(
+				/^\s*([^@]*)\s*@\s*([^\n]*)(?::([0-9]+):([0-9]+))?$/mg ,
+				( matches , method , file , line , column ) => {
+					return options.style.errorStack( '    at ' ) +
 						( method ? options.style.errorStackMethod( method ) + ' ' : '' ) +
 						options.style.errorStack( '(' ) +
 						( file ? options.style.errorStackFile( file ) : options.style.errorStack( 'unknown' ) ) +
 						( line ? options.style.errorStack( ':' ) + options.style.errorStackLine( line ) : '' ) +
 						( column ? options.style.errorStack( ':' ) + options.style.errorStackColumn( column ) : '' ) +
 						options.style.errorStack( ')' ) ;
-			}
-		) ;
+				}
+			) ;
 	}
 	else {
 		stack = stack.replace( /^[^\n]*\n/ , '' ) ;
@@ -27824,7 +28086,8 @@ inspectStyle.none = {
 	errorStackMethodAs: inspectStyleNoop ,
 	errorStackFile: inspectStyleNoop ,
 	errorStackLine: inspectStyleNoop ,
-	errorStackColumn: inspectStyleNoop
+	errorStackColumn: inspectStyleNoop ,
+	truncate: ( str , maxLength ) => str.slice( 0 , maxLength - 1 ) + '…'
 } ;
 
 
@@ -27860,7 +28123,18 @@ inspectStyle.color = Object.assign( {} , inspectStyle.none , {
 	errorStackMethodAs: str => ansi.yellow + str + ansi.reset ,
 	errorStackFile: str => ansi.brightCyan + str + ansi.reset ,
 	errorStackLine: str => ansi.blue + str + ansi.reset ,
-	errorStackColumn: str => ansi.magenta + str + ansi.reset
+	errorStackColumn: str => ansi.magenta + str + ansi.reset ,
+	truncate: ( str , maxLength ) => {
+		var trail = ansi.gray + '…' + ansi.reset ;
+		str = str.slice( 0 , maxLength - trail.length ) ;
+
+		// Search for an ansi escape sequence at the end, that could be truncated.
+		// The longest one is '\x1b[107m': 6 characters.
+		var lastEscape = str.lastIndexOf( '\x1b' ) ;
+		if ( lastEscape >= str.length - 6 ) { str = str.slice( 0 , lastEscape ) ; }
+
+		return str + trail ;
+	}
 } ) ;
 
 
@@ -27888,7 +28162,6 @@ inspectStyle.html = Object.assign( {} , inspectStyle.none , {
 	errorStackLine: str => '<span style="color:blue">' + str + '</span>' ,
 	errorStackColumn: str => '<span style="color:gray">' + str + '</span>'
 } ) ;
-
 
 
 }).call(this,{"isBuffer":require("../../is-buffer/index.js")},require('_process'))
@@ -28154,6 +28427,308 @@ module.exports = function clone( originalObject , circular ) {
 } ;
 
 },{}],83:[function(require,module,exports){
+/*
+	Tree Kit
+
+	Copyright (c) 2014 - 2018 Cédric Ronvel
+
+	The MIT License (MIT)
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
+"use strict" ;
+
+
+
+const dotPath = {} ;
+module.exports = dotPath ;
+
+
+
+const EMPTY_PATH = [] ;
+
+function toPathArray( path ) {
+	if ( Array.isArray( path ) ) {
+		return path ;
+	}
+	else if ( ! path ) {
+		return EMPTY_PATH ;
+	}
+	else if ( typeof path === 'string' ) {
+		return path.split( '.' ) ;
+	}
+
+	throw new TypeError( '[tree.dotPath]: the path argument should be a string or an array' ) ;
+}
+
+
+
+// Walk the tree using the path array.
+function walk( object , pathArray ) {
+	var i , iMax ,
+		pointer = object ;
+
+	for ( i = 0 , iMax = pathArray.length ; i < iMax ; i ++ ) {
+		if ( ! pointer || ( typeof pointer !== 'object' && typeof pointer !== 'function' ) ) {
+			return undefined ;
+		}
+
+		pointer = pointer[ pathArray[ i ] ] ;
+	}
+
+	return pointer ;
+}
+
+
+
+// Walk the tree, stop before the last path part.
+function walkBeforeLast( object , pathArray ) {
+	var i , iMax ,
+		pointer = object ;
+
+	for ( i = 0 , iMax = pathArray.length - 1 ; i < iMax ; i ++ ) {
+		if ( ! pointer || ( typeof pointer !== 'object' && typeof pointer !== 'function' ) ) {
+			return undefined ;
+		}
+
+		pointer = pointer[ pathArray[ i ] ] ;
+	}
+
+	return pointer ;
+}
+
+
+
+// Walk the tree, create missing element: pave the path up to before the last part of the path.
+// Return that before-the-last element.
+// Object MUST be an object! no check are performed for the first step!
+function pave( object , pathArray ) {
+	var i , iMax ,
+		key ,
+		pointer = object ;
+
+	for ( i = 0 , iMax = pathArray.length - 1 ; i < iMax ; i ++ ) {
+		key = pathArray[ i ] ;
+
+		if ( ! pointer[ key ] || ( typeof pointer[ key ] !== 'object' && typeof pointer[ key ] !== 'function' ) ) {
+			pointer[ key ] = {} ;
+		}
+
+		pointer = pointer[ key ] ;
+	}
+
+	return pointer ;
+}
+
+
+
+dotPath.get = function( object , path ) {
+	return walk( object , toPathArray( path ) ) ;
+} ;
+
+
+
+dotPath.set = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+
+	pointer[ pathArray[ pathArray.length - 1 ] ] = value ;
+
+	return value ;
+} ;
+
+
+
+dotPath.define = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+	var key = pathArray[ pathArray.length - 1 ] ;
+
+	if ( ! ( key in pointer ) ) { pointer[ key ] = value ; }
+
+	return value ;
+} ;
+
+
+
+dotPath.inc = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+	var key = pathArray[ pathArray.length - 1 ] ;
+
+	if ( typeof pointer[ key ] === 'number' ) { pointer[ key ] ++ ; }
+	else if ( ! pointer[ key ] || typeof pointer[ key ] !== 'object' ) { pointer[ key ] = 1 ; }
+
+	return value ;
+} ;
+
+
+
+dotPath.dec = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+	var key = pathArray[ pathArray.length - 1 ] ;
+
+	if ( typeof pointer[ key ] === 'number' ) { pointer[ key ] -- ; }
+	else if ( ! pointer[ key ] || typeof pointer[ key ] !== 'object' ) { pointer[ key ] = -1 ; }
+
+	return value ;
+} ;
+
+
+
+dotPath.concat = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+	var key = pathArray[ pathArray.length - 1 ] ;
+
+	if ( ! pointer[ key ] ) { pointer[ key ] = value ; }
+	else if ( Array.isArray( pointer[ key ] ) && Array.isArray( value ) ) {
+		pointer[ key ] = pointer[ key ].concat( value ) ;
+	}
+	//else ? do nothing???
+
+	return value ;
+} ;
+
+
+
+dotPath.insert = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+	var key = pathArray[ pathArray.length - 1 ] ;
+
+	if ( ! pointer[ key ] ) { pointer[ key ] = value ; }
+	else if ( Array.isArray( pointer[ key ] ) && Array.isArray( value ) ) {
+		pointer[ key ] = value.concat( pointer[ key ] ) ;
+	}
+	//else ? do nothing???
+
+	return value ;
+} ;
+
+
+
+dotPath.delete = function( object , path ) {
+	var pathArray = toPathArray( path ) ;
+	var pointer = walkBeforeLast( object , pathArray ) ;
+
+	if ( ! pointer || ( typeof pointer !== 'object' && typeof pointer !== 'function' ) ) {
+		return false ;
+	}
+
+	return delete pointer[ pathArray[ pathArray.length - 1 ] ] ;
+} ;
+
+
+
+dotPath.autoPush = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+
+	var key = pathArray[ pathArray.length - 1 ] ;
+
+	if ( pointer[ key ] === undefined ) { pointer[ key ] = value ; }
+	else if ( Array.isArray( pointer[ key ] ) ) { pointer[ key ].push( value ) ; }
+	else { pointer[ key ] = [ pointer[ key ] , value ] ; }
+
+	return pointer[ key ] ;
+} ;
+
+
+
+dotPath.append = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+
+	var key = pathArray[ pathArray.length - 1 ] ;
+
+	if ( ! pointer[ key ] ) { pointer[ key ] = [ value ] ; }
+	else if ( Array.isArray( pointer[ key ] ) ) { pointer[ key ].push( value ) ; }
+	//else ? do nothing???
+
+	return pointer[ key ] ;
+} ;
+
+
+
+dotPath.prepend = function( object , path , value ) {
+	if ( ! object || ( typeof object !== 'object' && typeof object !== 'function' ) ) {
+		// Throw?
+		return undefined ;
+	}
+
+	var pathArray = toPathArray( path ) ;
+	var pointer = pave( object , pathArray ) ;
+
+	var key = pathArray[ pathArray.length - 1 ] ;
+
+	if ( ! pointer[ key ] ) { pointer[ key ] = [ value ] ; }
+	else if ( Array.isArray( pointer[ key ] ) ) { pointer[ key ].unshift( value ) ; }
+	//else ? do nothing???
+
+	return pointer[ key ] ;
+} ;
+
+
+},{}],84:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -28887,7 +29462,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":84,"punycode":62,"querystring":65}],84:[function(require,module,exports){
+},{"./util":85,"punycode":62,"querystring":65}],85:[function(require,module,exports){
 'use strict';
 
 module.exports = {
