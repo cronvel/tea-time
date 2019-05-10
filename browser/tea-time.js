@@ -3,7 +3,7 @@
 /*
 	Tea Time!
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -504,7 +504,7 @@ Cover.prototype.getCoverage = function getCoverage() {
 /*
 	Tea Time!
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -1433,7 +1433,7 @@ TeaTime.prototype.patchError = function patchError( error ) {
 /*
 	Tea Time!
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -1698,7 +1698,7 @@ Reporter.prototype.reportOneError = function reportOneError( error ) {
 /*
 	Tea Time!
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -1785,7 +1785,7 @@ Reporter.report = function report( data ) {
 /*
 	Tea Time!
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -1888,7 +1888,7 @@ Reporter.exit = function exit( callback ) {
 /*
 	Tea Time!
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -2034,7 +2034,7 @@ dom.ready( () => {
 /*
 	Tea Time!
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -2061,7 +2061,7 @@ dom.ready( () => {
 
 
 
-const inspect = require( 'string-kit/lib/inspect.js' ) ;
+const inspect = require( 'string-kit/lib/inspect.js' ).inspect ;
 const jsdiff = require( 'diff' ) ;
 
 
@@ -2077,7 +2077,6 @@ function textDiff( oldValue , newValue ) {
 		diff = textDiff.raw( oldValue , newValue , true ) ;
 
 	diff.forEach( ( part ) => {
-
 		str += part.value.replace( /^(?!$)/mg , () => {
 			if ( part.added ) { return '++' ; }
 			else if ( part.removed ) { return '--' ; }
@@ -2092,39 +2091,49 @@ module.exports = textDiff ;
 
 
 
-textDiff.raw = function rawDiff( oldValue , newValue , noCharMode ) {
-	var diff , score = 0 ;
+textDiff.raw = function( oldValue , newValue , noCharMode ) {
+	var diff , score ;
 
-	var oldStr = inspect.inspect( inspectOptions , oldValue ) ;
-	var newStr = inspect.inspect( inspectOptions , newValue ) ;
+	var oldStr = inspect( inspectOptions , oldValue ) ;
+	var newStr = inspect( inspectOptions , newValue ) ;
 
-	if ( ! noCharMode && Math.max( oldStr.length , newStr.length ) < 2000 ) {
-		// First try the diffChars algorithm, it looks great if there are only few changes
-		diff = jsdiff.diffChars( oldStr , newStr ) ;
+	if ( ! noCharMode ) {
+		// First try to evaluate if it would be relevant to use diffChars at all,
+		// because it is slow and can be produce too much weirdness anyway.
+		score = Math.abs( oldStr.length - newStr.length ) + 0.05 * Math.max( oldStr.length , newStr.length ) ;
 
-		// Try to evaluate the weirdness
-		diff.forEach( ( part ) => {
-			if ( part.added || part.removed ) {
-				score += 15 + part.value.length ;
-			}
-		} ) ;
+		if ( score < 100 ) {
+			// First try the diffChars algorithm, it looks great if there are only few changes
+			//console.time( 'diffChars' ) ;
+			diff = jsdiff.diffChars( oldStr , newStr ) ;
+			//console.timeEnd( 'diffChars' ) ;
 
-		// If too much weirdness, fallback to line mode
-		if ( score < 80 ) { return diff ; }
+			// Try to evaluate the weirdness
+			score = 0 ;
+			diff.forEach( ( part ) => {
+				if ( part.added || part.removed ) {
+					score += 15 + part.value.length ;
+				}
+			} ) ;
+
+			// If too much weirdness, fallback to line mode
+			if ( score < 80 ) { return diff ; }
+		}
 	}
 
+	//console.time( 'diffLines' ) ;
 	diff = jsdiff.diffLines( oldStr , newStr ) ;
+	//console.timeEnd( 'diffLines' ) ;
 
 	return diff ;
 } ;
-
 
 
 },{"diff":32,"string-kit/lib/inspect.js":77}],8:[function(require,module,exports){
 /*
 	Tea Time!
 
-	Copyright (c) 2015 - 2018 Cédric Ronvel
+	Copyright (c) 2015 - 2019 Cédric Ronvel
 
 	The MIT License (MIT)
 
