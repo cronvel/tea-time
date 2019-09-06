@@ -1,7 +1,7 @@
 module.exports = {
 	'root': true ,
 	'env': {
-		'browser': true ,
+		'browser': false ,
 		'es6': true ,
 		'node': true
 	} ,
@@ -29,6 +29,7 @@ module.exports = {
 		'no-nested-ternary': 'error' ,
 		'no-shadow': 'warn' ,
 		'no-shadow-restricted-names': 'error' ,
+		'require-atomic-updates': 'off' ,	// check for possible race condition on assignment, interesting but too nitpicky
 		
 		
 		
@@ -128,8 +129,9 @@ module.exports = {
 				'minProperties': 4
 			} ,
 			'ObjectPattern' : {
+				// object destructuring assigment
 				'consistent': true ,
-				'minProperties': 6
+				'minProperties': 8
 			}
 		} ] ,
 		'object-curly-spacing': [ 'error' , 'always' ] ,
