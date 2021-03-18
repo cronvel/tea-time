@@ -568,6 +568,9 @@ function TeaTime( options ) {
 	this.skipOptional = !! options.skipOptional ;
 	this.cover = options.cover && Cover.create( options.cover ) ;
 
+	this.registeredTestOptions = [] ;
+	this.testOptions = options.testOptions || {} ;
+
 	this.token = options.token || null ; // for slave instance
 	this.acceptTokens = options.acceptTokens || null ; // for master instance
 
@@ -620,7 +623,7 @@ TeaTime.reporterAliases = {
 
 
 // CLI and browser share the same args
-TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , args ) {
+TeaTime.populateOptionsWithArgs = function( options , args ) {
 	var i , iMax , v ;
 
 	options.cover = args.cover ;
@@ -641,20 +644,15 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 	if ( args.timeout && ( v = parseInt( args.timeout , 10 ) ) ) { options.timeout = v ; }
 	if ( args.slow && ( v = parseInt( args.slow , 10 ) ) ) { options.slowTime = v ; }
 
-	if ( args.reporter ) {
-		options.reporters = args.reporter ;
-	}
+	if ( args.opt ) { options.testOptions = args.opt ; }
 
-	if ( args.addReporter ) {
-		options.reporters.push( ... args.addReporter ) ;
-	}
+	if ( args.reporter ) { options.reporters = args.reporter ; }
+	if ( args.addReporter ) { options.reporters.push( ... args.addReporter ) ; }
 
 	// Manage reporter aliases
 	options.reporters = options.reporters.map( ( r ) => { return TeaTime.reporterAliases[ r ] || r ; } ) ;
 
-	if ( args.clientReporter ) {
-		options.clientReporters = args.clientReporter ;
-	}
+	if ( args.clientReporter ) { options.clientReporters = args.clientReporter ; }
 
 
 	// Turn string into regexp for the "grep" feature
@@ -686,7 +684,7 @@ TeaTime.populateOptionsWithArgs = function populateOptionsWithArgs( options , ar
 
 
 
-TeaTime.prototype.init = function init() {
+TeaTime.prototype.init = function() {
 	// Register to global
 	global.asyncTry = asyncTry ;
 
@@ -727,13 +725,22 @@ TeaTime.prototype.init = function init() {
 		fail: () => this.assertionFailHook()
 	} ) ;
 
+	global.testOption = TeaTime.registerTestOption.bind( this ) ;
+	global.getTestOption = key => this.testOptions[ key ] ;
+
 	if ( this.huntConsole ) { TeaTime.huntConsole() ; }
 	else if ( ! this.allowConsole ) { TeaTime.disableConsole() ; }
 } ;
 
 
 
-TeaTime.disableConsole = function disableConsole() {
+TeaTime.registerTestOption = function( ... testOptions ) {
+	this.registeredTestOptions.push( ... testOptions ) ;
+} ;
+
+
+
+TeaTime.disableConsole = function() {
 	Object.keys( console ).forEach( key => {
 		if ( typeof console[ key ] === 'function' ) {
 			console[ key ] = function() {} ;
@@ -743,7 +750,7 @@ TeaTime.disableConsole = function disableConsole() {
 
 
 
-TeaTime.huntConsole = function huntConsole() {
+TeaTime.huntConsole = function() {
 	Object.keys( console ).forEach( key => {
 		if ( typeof console[ key ] === 'function' ) {
 			console[ key ] = () => { throw new ConsoleError( key ) ; } ;
@@ -767,7 +774,7 @@ ConsoleError.prototype.name = 'ConsoleError' ;
 
 
 
-TeaTime.createSuite = function createSuite( title ) {
+TeaTime.createSuite = function( title ) {
 	var suite = [] ;
 
 	suite.title = title ;
@@ -783,7 +790,7 @@ TeaTime.createSuite = function createSuite( title ) {
 
 
 
-TeaTime.sortSuite = function sortSuite( suite ) {
+TeaTime.sortSuite = function( suite ) {
 	suite.sort( ( a , b ) => {
 		var va = Array.isArray( a ) ? 1 : 0 ;
 		var vb = Array.isArray( b ) ? 1 : 0 ;
@@ -794,7 +801,7 @@ TeaTime.sortSuite = function sortSuite( suite ) {
 
 
 
-TeaTime.prototype.run = async function run() {
+TeaTime.prototype.run = async function() {
 	var duration , coverage ;
 
 	TeaTime.sortSuite( this.suite ) ;
@@ -839,7 +846,7 @@ TeaTime.prototype.run = async function run() {
 
 
 
-TeaTime.prototype.runSuite = async function runSuite( suite , depth ) {
+TeaTime.prototype.runSuite = async function( suite , depth ) {
 	if ( depth ) { this.emit( 'enterSuite' , { title: suite.title , depth: depth - 1 } ) ; }
 
 	// Run setup hooks
@@ -905,7 +912,7 @@ TeaTime.prototype.runSuite = async function runSuite( suite , depth ) {
 
 
 
-TeaTime.prototype.runSuiteTests = async function runSuiteTests( suite , depth ) {
+TeaTime.prototype.runSuiteTests = async function( suite , depth ) {
 	return Promise.forEach( suite , async ( item ) => {
 		try {
 			if ( Array.isArray( item ) ) {
@@ -923,7 +930,7 @@ TeaTime.prototype.runSuiteTests = async function runSuiteTests( suite , depth ) 
 
 
 
-TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , errorFn , error ) {
+TeaTime.prototype.failSuite = function( suite , depth , errorType , errorFn , error ) {
 	var i , iMax , testFn , data ;
 
 	for ( i = 0 , iMax = suite.length ; i < iMax ; i ++ ) {
@@ -953,7 +960,7 @@ TeaTime.prototype.failSuite = function failSuite( suite , depth , errorType , er
 
 
 
-TeaTime.prototype.runTest = async function runTest( suite , depth , testFn ) {
+TeaTime.prototype.runTest = async function( suite , depth , testFn ) {
 	// /!\ Useful?
 	this.testInProgress = testFn ;
 
@@ -1085,7 +1092,7 @@ TeaTime.prototype.runTest = async function runTest( suite , depth , testFn ) {
 
 
 
-TeaTime.prototype.runTestFn = function runTestFn( testFn_ ) {
+TeaTime.prototype.runTestFn = function( testFn_ ) {
 	var startTime , finishTriggered = false ,
 		timer = null , testFn ,
 		slowTime = this.slowTime ;
@@ -1195,7 +1202,7 @@ TeaTime.prototype.runTestFn = function runTestFn( testFn_ ) {
 
 
 
-TeaTime.prototype.runHooks = function runHooks( hookList , depth ) {
+TeaTime.prototype.runHooks = function( hookList , depth ) {
 	return Promise.forEach( hookList , hookFn => {
 		var data = {
 			hookType: hookFn.hookType ,
@@ -1221,7 +1228,7 @@ TeaTime.prototype.runHooks = function runHooks( hookList , depth ) {
 
 
 
-TeaTime.prototype.runHookFn = function runHookFn( hookFn_ ) {
+TeaTime.prototype.runHookFn = function( hookFn_ ) {
 	var hookFn , finishTriggered = false ;
 
 	var promise = new Promise() ;
@@ -1285,14 +1292,14 @@ TeaTime.prototype.runHookFn = function runHookFn( hookFn_ ) {
 
 
 
-TeaTime.prototype.assertionOkHook = function assertionOkHook() {
+TeaTime.prototype.assertionOkHook = function() {
 	this.assertionOk ++ ;
 	this.emit( 'assertionOk' ) ;
 } ;
 
 
 
-TeaTime.prototype.assertionFailHook = function assertionFailHook() {
+TeaTime.prototype.assertionFailHook = function() {
 	this.assertionFail ++ ;
 	this.emit( 'assertionFail' ) ;
 } ;
@@ -1306,7 +1313,7 @@ TeaTime.prototype.assertionFailHook = function assertionFailHook() {
 
 
 // suite(), describe(), context()
-TeaTime.registerSuite = function registerSuite( title , fn ) {
+TeaTime.registerSuite = function( title , fn ) {
 	if ( ! title || typeof title !== 'string' || typeof fn !== 'function' ) {
 		throw new Error( "Usage is suite( title , fn )" ) ;
 	}
@@ -1334,7 +1341,7 @@ TeaTime.registerSuite = function registerSuite( title , fn ) {
 
 
 // test(), it(), specify()
-TeaTime.registerTest = function registerTest( title , fn , optional ) {
+TeaTime.registerTest = function( title , fn , optional ) {
 	var i , iMax , j , jMax , found , parentSuite ;
 
 	if ( ! title || typeof title !== 'string' ) {
@@ -1381,14 +1388,14 @@ TeaTime.registerTest = function registerTest( title , fn , optional ) {
 
 
 // test.skip(), it.skip(), specify.skip()
-TeaTime.registerSkipTest = function registerSkipTest( title /*, fn */ ) {
+TeaTime.registerSkipTest = function( title /*, fn */ ) {
 	return TeaTime.registerTest.call( this , title ) ;
 } ;
 
 
 
 // test.next(), it.next(), specify.next()
-TeaTime.registerOptionalTest = function registerOptionalTest( title , fn ) {
+TeaTime.registerOptionalTest = function( title , fn ) {
 	return this.skipOptional ?
 		TeaTime.registerTest.call( this , title ) :
 		TeaTime.registerTest.call( this , title , fn , true ) ;
@@ -1397,7 +1404,7 @@ TeaTime.registerOptionalTest = function registerOptionalTest( title , fn ) {
 
 
 // setup(), suiteSetup(), teardown(), suiteTeardown(), before(), beforeEach(), after(), afterEach()
-TeaTime.registerHook = function registerHook( type , title , fn ) {
+TeaTime.registerHook = function( type , title , fn ) {
 	var parentSuite ;
 
 	if ( typeof title === 'function' ) {
@@ -1424,7 +1431,7 @@ TeaTime.registerHook = function registerHook( type , title , fn ) {
 
 
 // Remove the framework from the stack trace
-TeaTime.prototype.patchError = function patchError( error ) {
+TeaTime.prototype.patchError = function( error ) {
 	var i , iMax , stack ;
 
 	if ( ! error.stack ) { return ; }

@@ -1,6 +1,6 @@
 {
   "name": "tea-time",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "engines": {
     "node": ">=14.15.0"
   },
@@ -25,8 +25,8 @@
     "string-kit": "^0.12.0",
     "terminal-kit": "^2.0.5",
     "tree-kit": "^0.7.0",
-    "utterminal": "^0.5.49",
-    "ws": "^7.4.3"
+    "utterminal": "^0.5.50",
+    "ws": "^7.4.4"
   },
   "optionalDependencies": {
     "freedesktop-notifications": "^2.0.0"
