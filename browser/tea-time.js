@@ -2097,7 +2097,7 @@ const jsdiff = require( 'diff' ) ;
 
 
 const inspectOptions = {
-	minimal: true , depth: 10 , maxLength: 1000 , outputMaxLength: 10000 , sort: true
+	minimalPlusConstructor: true , depth: 10 , maxLength: 1000 , outputMaxLength: 10000 , sort: true
 } ;
 
 
@@ -17806,7 +17806,7 @@ AssertionError.create = ( from , actual , expectationPath , expectationType , ..
 		}
 	}
 
-	if ( expectationPath ) {
+	if ( typeof expectationPath === 'string' ) {
 		message += ' (offending path: ' + expectationPath + ')' ;
 		if ( expectationPath[ 0 ] === '.' ) { expectationPath = expectationPath.slice( 1 ) ; }
 	}
@@ -17816,13 +17816,13 @@ AssertionError.create = ( from , actual , expectationPath , expectationType , ..
 	if ( expectations.length === 1 ) {
 		outOpt.expected = expectations[ 0 ] ;
 		outOpt.showDiff = inOpt.showDiff ;
-		if ( expectationPath ) { outOpt.showPathDiff = inOpt.showPathDiff ; }
+		if ( typeof expectationPath === 'string' ) { outOpt.showPathDiff = inOpt.showPathDiff ; }
 	}
 
 	if ( actual instanceof Error ) {
 		outOpt.fromError = actual ;
 	}
-	else if ( actual instanceof assert.FunctionCall && actual.hasThrown ) {
+	else if ( ( actual instanceof assert.FunctionCall ) && actual.hasThrown ) {
 		outOpt.fromError = actual.error ;
 	}
 
@@ -18022,6 +18022,11 @@ ValidatorError.prototype.name = 'ValidatorError' ;
 
 
 
+const assert = {} ;
+module.exports = assert ;
+
+
+
 const typeCheckers = require( './typeCheckers.js' ) ;
 
 const isEqual = require( './isEqual.js' ) ;
@@ -18030,11 +18035,6 @@ const IS_EQUAL_PARTIALLY_LIKE = { like: true , oneWay: true } ;
 const IS_EQUAL_PARTIALLY_EQUAL = { oneWay: true } ;
 
 const VOWEL = new Set( [ 'a' , 'e' , 'i' , 'o' , 'u' , 'y' , 'A' , 'E' , 'I' , 'O' , 'U' , 'Y' ] ) ;
-
-
-
-var assert = {} ;
-module.exports = assert ;
 
 
 
@@ -21229,7 +21229,7 @@ var handler = {
 						() => {
 							target.expectFn.stats.fail ++ ;
 							if ( target.expectFn.hooks.fail ) { target.expectFn.hooks.fail() ; }
-							throw assert.AssertionError.create( traceError , target.value , null , "to resolve" ) ;
+							throw AssertionError.create( traceError , target.value , null , "to resolve" ) ;
 						}
 					) ;
 			}
@@ -33101,6 +33101,7 @@ const escape = require( './escape.js' ) ;
 const ansi = require( './ansi.js' ) ;
 
 const EMPTY = {} ;
+const TRIVIAL_CONSTRUCTOR = new Set( [ Object , Array ] ) ;
 
 
 
@@ -33122,12 +33123,14 @@ const EMPTY = {} ;
 		* noArrayProperty: do not display array properties
 		* noIndex: do not display array indexes
 		* noType: do not display type and constructor
+		* noTypeButConstructor: do not display type, display non-trivial constructor (not Object or Array, but all others)
 		* enumOnly: only display enumerable properties
 		* funcDetails: display function's details
 		* proto: display object's prototype
 		* sort: sort the keys
 		* minimal: imply noFunc: true, noDescriptor: true, noType: true, noArrayProperty: true, enumOnly: true, proto: false and funcDetails: false.
 		  Display a minimal JSON-like output
+		* minimalPlusConstructor: like minimal, but output non-trivial constructor
 		* protoBlackList: `Set` of blacklisted object prototype (will not recurse inside it)
 		* propertyBlackList: `Set` of blacklisted property names (will not even display it)
 		* useInspect: use .inspect() method when available on an object (default to false)
@@ -33163,6 +33166,16 @@ function inspect( options , variable ) {
 		options.funcDetails = false ;
 	}
 
+	if ( options.minimalPlusConstructor ) {
+		options.noFunc = true ;
+		options.noDescriptor = true ;
+		options.noTypeButConstructor = true ;
+		options.noArrayProperty = true ;
+		options.enumOnly = true ;
+		options.proto = false ;
+		options.funcDetails = false ;
+	}
+
 	var str = inspect_( runtime , options , variable ) ;
 
 	if ( str.length > options.outputMaxLength ) {
@@ -33175,7 +33188,7 @@ function inspect( options , variable ) {
 
 
 function inspect_( runtime , options , variable ) {
-	var i , funcName , length , proto , propertyList , constructor , keyIsProperty ,
+	var i , funcName , length , proto , propertyList , isTrivialConstructor , constructor , keyIsProperty ,
 		type , pre , indent , isArray , isFunc , specialObject ,
 		str = '' , key = '' , descriptorStr = '' , descriptor , nextAncestors ;
 
@@ -33240,18 +33253,18 @@ function inspect_( runtime , options , variable ) {
 	}
 	else if ( type === 'number' ) {
 		str += pre + options.style.number( variable.toString() ) +
-			( options.noType ? '' : ' ' + options.style.type( 'number' ) ) +
+			( options.noType || options.noTypeButConstructor ? '' : ' ' + options.style.type( 'number' ) ) +
 			descriptorStr + options.style.newline ;
 	}
 	else if ( type === 'string' ) {
 		if ( variable.length > options.maxLength ) {
 			str += pre + '"' + options.style.string( escape.control( variable.slice( 0 , options.maxLength - 1 ) ) ) + '…"' +
-				( options.noType ? '' : ' ' + options.style.type( 'string' ) + options.style.length( '(' + variable.length + ' - TRUNCATED)' ) ) +
+				( options.noType || options.noTypeButConstructor ? '' : ' ' + options.style.type( 'string' ) + options.style.length( '(' + variable.length + ' - TRUNCATED)' ) ) +
 				descriptorStr + options.style.newline ;
 		}
 		else {
 			str += pre + '"' + options.style.string( escape.control( variable ) ) + '"' +
-				( options.noType ? '' : ' ' + options.style.type( 'string' ) + options.style.length( '(' + variable.length + ')' ) ) +
+				( options.noType || options.noTypeButConstructor ? '' : ' ' + options.style.type( 'string' ) + options.style.length( '(' + variable.length + ')' ) ) +
 				descriptorStr + options.style.newline ;
 		}
 	}
@@ -33281,14 +33294,23 @@ function inspect_( runtime , options , variable ) {
 		else if ( ! variable.constructor.name ) { constructor = '(anonymous)' ; }
 		else { constructor = variable.constructor.name ; }
 
+		isTrivialConstructor = ! variable.constructor || TRIVIAL_CONSTRUCTOR.has( variable.constructor ) ;
+
 		constructor = options.style.constructorName( constructor ) ;
 		proto = Object.getPrototypeOf( variable ) ;
 
 		str += pre ;
 
-		if ( ! options.noType ) {
-			if ( runtime.forceType ) { str += options.style.type( runtime.forceType ) ; }
-			else { str += constructor + funcName + length + ' ' + options.style.type( type ) + descriptorStr ; }
+		if ( ! options.noType && ( ! options.noTypeButConstructor || ! isTrivialConstructor ) ) {
+			if ( runtime.forceType && ! options.noType && ! options.noTypeButConstructor ) {
+				str += options.style.type( runtime.forceType ) ;
+			}
+			else if ( options.noTypeButConstructor ) {
+				str += constructor ;
+			}
+			else {
+				str += constructor + funcName + length + ' ' + options.style.type( type ) + descriptorStr ;
+			}
 
 			if ( ! isFunc || options.funcDetails ) { str += ' ' ; }	// if no funcDetails imply no space here
 		}
@@ -33337,7 +33359,7 @@ function inspect_( runtime , options , variable ) {
 			str += options.style.limit( '[circular]' ) + options.style.newline ;
 		}
 		else {
-			str += ( isArray && options.noType && options.noArrayProperty ? '[' : '{' ) + options.style.newline ;
+			str += ( isArray ? '[' : '{' ) + options.style.newline ;
 
 			// Do not use .concat() here, it doesn't works as expected with arrays...
 			nextAncestors = runtime.ancestors.slice() ;
@@ -33430,7 +33452,7 @@ function inspect_( runtime , options , variable ) {
 				) ;
 			}
 
-			str += indent + ( isArray && options.noType && options.noArrayProperty ? ']' : '}' ) ;
+			str += indent + ( isArray ? ']' : '}' ) ;
 			str += options.style.newline ;
 		}
 	}
