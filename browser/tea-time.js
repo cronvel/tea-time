@@ -1485,6 +1485,8 @@ TeaTime.prototype.patchError = function( error ) {
 
 //const Report = require( './report.js' ) ;
 //const ErrorReport = require( './error-report.js' ) ;
+const dotPath = require( 'tree-kit/lib/dotPath.js' ) ;
+
 
 
 function Reporter( teaTime , self ) {
@@ -1546,6 +1548,7 @@ const optionalErrorStyle = "color:brown;font-weight:bold;" ;
 const errorStyle = "color:red;font-weight:bold;" ;
 const hookErrorStyle = "background-color:red;color:white;font-weight:bold;" ;
 
+const expectationPathStyle = "background-color:grey;color:white;" ;
 const expectedStyle = "background-color:green;color:white;font-weight:bold;" ;
 const actualStyle = "background-color:red;color:white;font-weight:bold;" ;
 
@@ -1705,6 +1708,20 @@ Reporter.prototype.reportOneError = function reportOneError( error ) {
 		content += '</pre>' ;
 	}
 
+	if (
+		typeof error.expectationPath === 'string' &&
+		( error.showPathDiff === true || ( error.showPathDiff === undefined && ( 'expected' in error ) && ( 'actual' in error ) ) )
+	) {
+		content += '<p class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
+			'<span style="' + expectationPathStyle + '">at [.' + error.expectationPath + ']</span> ' +
+			'<span style="' + expectedStyle + '">expected</span><span style="' + actualStyle + '">actual</span>' +
+			'</p>' ;
+
+		content += '<pre class="tea-time-classic-reporter"; style="' + indentStyle( 2 ) + '">' ;
+		content += this.teaTime.htmlColorDiff( dotPath.get( error.actual , error.expectationPath ) , dotPath.get( error.expected , error.expectationPath ) ) ;
+		content += '</pre>' ;
+	}
+
 	content +=
 		'<pre class="tea-time-classic-reporter" style="' + indentStyle( 2 ) + '">' +
 		this.teaTime.inspect.inspectError( { style: 'html' } , error ) +
@@ -1714,7 +1731,7 @@ Reporter.prototype.reportOneError = function reportOneError( error ) {
 } ;
 
 
-},{}],4:[function(require,module,exports){
+},{"tree-kit/lib/dotPath.js":106}],4:[function(require,module,exports){
 /*
 	Tea Time!
 
@@ -17677,7 +17694,7 @@ domKit.html = ( $element , html ) => $element.innerHTML = html ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -17703,7 +17720,7 @@ domKit.html = ( $element , html ) => $element.innerHTML = html ;
 "use strict" ;
 
 
-//function AssertionError( message , from , actual , expected , showDiff ) {
+
 function AssertionError( message , from , options = {} ) {
 	this.message = message ;
 
@@ -17712,8 +17729,10 @@ function AssertionError( message , from , options = {} ) {
 	// This will make Mocha and Tea-Time show the diff:
 	this.actual = options.actual ;
 	this.expected = options.expected ;
+	this.expectationPath = options.expectationPath ;
 	this.expectationType = options.expectationType ;
 	this.showDiff = !! options.showDiff ;
+	this.showPathDiff = !! options.showPathDiff ;
 
 	this.from = options.fromError ;
 
@@ -17729,11 +17748,162 @@ AssertionError.prototype.constructor = AssertionError ;
 AssertionError.prototype.name = 'AssertionError' ;
 
 
-},{}],44:[function(require,module,exports){
+
+// Should be loaded after exporting
+const assert = require( './assert.js' ) ;
+
+
+
+AssertionError.create = ( from , actual , expectationPath , expectationType , ... expectations ) => {
+	var middleMessage , inspectStr ;
+
+	var inOpt = {
+		inspect: false ,
+		glue: ' and ' ,
+		showDiff: false ,
+		showPathDiff: false ,
+		none: false
+	} ;
+
+	if ( expectationType && typeof expectationType === 'object' ) {
+		middleMessage = expectationType.middleMessage || ' to <insert here your expectation> ' ;
+		expectationType = expectationType.expectationType ;
+	}
+	else {
+		middleMessage = expectationType ;
+	}
+
+	if ( assert[ expectationType ] ) { Object.assign( inOpt , assert[ expectationType ] ) ; }
+
+	var message = '' ;
+
+	if ( actual !== assert.NONE ) {
+		inspectStr = inspectVar( actual , expectations.length >= 2 ) ;
+
+		if ( inspectStr.length > 80 ) {
+			message += 'Expected\n\t' + inspectStr + '\n' ;
+		}
+		else {
+			message += 'Expected ' + inspectStr + ' ' ;
+		}
+	}
+	else if ( ! inOpt.none ) {
+		message += 'Expected nothing ' ;
+	}
+
+	message += middleMessage ;
+
+	if ( expectations.length ) {
+		if ( inOpt.inspect ) {
+			message += ' ' + expectations.map( e => {
+				inspectStr = inspectVar( e ) ;
+				if ( inspectStr.length > 80 ) { return '\n\t' + inspectStr + '\n' ; }
+				return inspectStr ;
+			} ).join( inOpt.glue ) ;
+		}
+		else {
+			message += ' ' + expectations.join( inOpt.glue ) ;
+		}
+	}
+
+	if ( expectationPath ) {
+		message += ' (offending path: ' + expectationPath + ')' ;
+		if ( expectationPath[ 0 ] === '.' ) { expectationPath = expectationPath.slice( 1 ) ; }
+	}
+
+	var outOpt = { actual , expectationPath , expectationType } ;
+
+	if ( expectations.length === 1 ) {
+		outOpt.expected = expectations[ 0 ] ;
+		outOpt.showDiff = inOpt.showDiff ;
+		if ( expectationPath ) { outOpt.showPathDiff = inOpt.showPathDiff ; }
+	}
+
+	if ( actual instanceof Error ) {
+		outOpt.fromError = actual ;
+	}
+	else if ( actual instanceof assert.FunctionCall && actual.hasThrown ) {
+		outOpt.fromError = actual.error ;
+	}
+
+	return new AssertionError( message , from , outOpt ) ;
+} ;
+
+
+
+// Inspect
+
+const inspect = require( 'string-kit/lib/inspect.js' ).inspect ;
+
+
+
+const inspectOptions = {
+	style: 'inline' ,
+	depth: 2 ,
+	maxLength: 80 ,
+	outputMaxLength: 400 ,
+	noDescriptor: true ,
+	noType: true ,
+	noArrayProperty: true
+} ;
+
+
+
+function inspectVar( variable , extraExpectations ) {
+	var str ;
+
+	if ( typeof variable === 'function' ) {
+		return ( variable.name || '(anonymous)' ) + "()" ;
+	}
+
+	if ( variable instanceof Error ) {
+		str = '' + variable ;
+
+		if ( extraExpectations ) {
+			let replacement = Object.assign( {} , variable ) ;
+			delete replacement.message ;
+			delete replacement.safeMessage ;
+			delete replacement.stack ;
+			delete replacement.at ;
+			delete replacement.constructor ;
+			str += ' having ' + inspect( inspectOptions , replacement ) ;
+		}
+
+		return str ;
+	}
+
+	if ( variable instanceof assert.FunctionCall ) {
+		str = ( variable.function.name || '(anonymous)' ) ;
+
+		if ( variable.args.length ) {
+			let argStr = "( " + variable.args.map( a => inspectVar( a ) ).join( ', ' ) + " )" ;
+
+			if ( argStr.length > inspectOptions.maxLength ) {
+				argStr = argStr.slice( 0 , inspectOptions.maxLength - 1 ) + '…' ;
+			}
+
+			str += argStr ;
+		}
+		else {
+			str += "()" ;
+		}
+
+		if ( variable.hasThrown ) {
+			str += ', which has thrown ' + inspectVar( variable.error , extraExpectations ) + ',' ;
+		}
+
+		return str ;
+	}
+
+	return inspect( inspectOptions , variable ) ;
+}
+
+
+},{"./assert.js":46,"string-kit/lib/inspect.js":98}],44:[function(require,module,exports){
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -17778,7 +17948,7 @@ SchemaError.prototype.name = 'SchemaError' ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -17825,7 +17995,7 @@ ValidatorError.prototype.name = 'ValidatorError' ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -17852,7 +18022,6 @@ ValidatorError.prototype.name = 'ValidatorError' ;
 
 
 
-const AssertionError = require( './AssertionError.js' ) ;
 const typeCheckers = require( './typeCheckers.js' ) ;
 
 const isEqual = require( './isEqual.js' ) ;
@@ -17860,19 +18029,22 @@ const IS_EQUAL_LIKE = { like: true } ;
 const IS_EQUAL_PARTIALLY_LIKE = { like: true , oneWay: true } ;
 const IS_EQUAL_PARTIALLY_EQUAL = { oneWay: true } ;
 
-const inspect = require( 'string-kit/lib/inspect.js' ).inspect ;
+const VOWEL = new Set( [ 'a' , 'e' , 'i' , 'o' , 'u' , 'y' , 'A' , 'E' , 'I' , 'O' , 'U' , 'Y' ] ) ;
 
 
 
-const inspectOptions = {
-	style: 'inline' ,
-	depth: 2 ,
-	maxLength: 80 ,
-	outputMaxLength: 400 ,
-	noDescriptor: true ,
-	noType: true ,
-	noArrayProperty: true
-} ;
+var assert = {} ;
+module.exports = assert ;
+
+
+
+// Should be loaded after exporting
+const AssertionError = require( './AssertionError.js' ) ;
+
+
+
+// Constant
+assert.NONE = {} ;
 
 
 
@@ -17911,157 +18083,7 @@ function FunctionCall( fn , isAsync , thisArg , ... args ) {
 	}
 }
 
-
-
-function inspectVar( variable , extraExpectations ) {
-	var str ;
-
-	if ( typeof variable === 'function' ) {
-		return ( variable.name || '(anonymous)' ) + "()" ;
-	}
-
-	if ( variable instanceof Error ) {
-		str = '' + variable ;
-
-		if ( extraExpectations ) {
-			let replacement = Object.assign( {} , variable ) ;
-			delete replacement.message ;
-			delete replacement.safeMessage ;
-			delete replacement.stack ;
-			delete replacement.at ;
-			delete replacement.constructor ;
-			str += ' having ' + inspect( inspectOptions , replacement ) ;
-		}
-
-		return str ;
-	}
-
-	if ( variable instanceof FunctionCall ) {
-		str = ( variable.function.name || '(anonymous)' ) ;
-
-		if ( variable.args.length ) {
-			let argStr = "( " + variable.args.map( a => inspectVar( a ) ).join( ', ' ) + " )" ;
-
-			if ( argStr.length > inspectOptions.maxLength ) {
-				argStr = argStr.slice( 0 , inspectOptions.maxLength - 1 ) + '…' ;
-			}
-
-			str += argStr ;
-		}
-		else {
-			str += "()" ;
-		}
-
-		if ( variable.hasThrown ) {
-			str += ', which has thrown ' + inspectVar( variable.error , extraExpectations ) + ',' ;
-		}
-
-		return str ;
-	}
-
-	return inspect( inspectOptions , variable ) ;
-}
-
-
-
-const VOWEL = {
-	a: true ,
-	e: true ,
-	i: true ,
-	o: true ,
-	u: true ,
-	y: true ,
-	A: true ,
-	E: true ,
-	I: true ,
-	O: true ,
-	U: true ,
-	Y: true
-} ;
-
-
-
-function assertionError( from , actual , expectationType , ... expectations ) {
-	var middleMessage , inspectStr ;
-
-	var inOpt = {
-		inspect: false ,
-		glue: ' and ' ,
-		showDiff: false ,
-		none: false
-	} ;
-
-	if ( expectationType && typeof expectationType === 'object' ) {
-		middleMessage = expectationType.middleMessage || ' to <insert here your expectation> ' ;
-		expectationType = expectationType.expectationType ;
-	}
-	else {
-		middleMessage = expectationType ;
-	}
-
-	if ( assert[ expectationType ] ) { Object.assign( inOpt , assert[ expectationType ] ) ; }
-
-	var message = '' ;
-
-	if ( actual !== assert.NONE ) {
-		inspectStr = inspectVar( actual , expectations.length >= 2 ) ;
-
-		if ( inspectStr.length > 80 ) {
-			message += 'Expected\n\t' + inspectStr + '\n' ;
-		}
-		else {
-			message += 'Expected ' + inspectStr + ' ' ;
-		}
-	}
-	else if ( ! inOpt.none ) {
-		message += 'Expected nothing ' ;
-	}
-
-	message += middleMessage ;
-
-	if ( expectations.length ) {
-		if ( inOpt.inspect ) {
-			message += ' ' + expectations.map( e => {
-				inspectStr = inspectVar( e ) ;
-				if ( inspectStr.length > 80 ) { return '\n\t' + inspectStr + '\n' ; }
-				return inspectStr ;
-			} ).join( inOpt.glue ) ;
-		}
-		else {
-			message += ' ' + expectations.join( inOpt.glue ) ;
-		}
-	}
-
-	var outOpt = { actual , expectationType } ;
-
-	if ( expectations.length === 1 ) {
-		outOpt.expected = expectations[ 0 ] ;
-		outOpt.showDiff = inOpt.showDiff ;
-	}
-
-	if ( actual instanceof Error ) {
-		outOpt.fromError = actual ;
-	}
-	else if ( actual instanceof FunctionCall && actual.hasThrown ) {
-		outOpt.fromError = actual.error ;
-	}
-
-	return new AssertionError( message , from , outOpt ) ;
-}
-
-
-
-var assert = {} ;
-module.exports = assert ;
-
-
-
-assert.__assertionError__ = assertionError ;
-
-
-
-// Constant
-assert.NONE = {} ;
+assert.FunctionCall = FunctionCall ;
 
 
 
@@ -18104,7 +18126,7 @@ assert['to be defined'] =
 assert.defined =
 assert.isDefined = ( from , actual ) => {
 	if ( actual === undefined ) {
-		throw assertionError( from , actual , 'to be defined' ) ;
+		throw AssertionError.create( from , actual , null , 'to be defined' ) ;
 	}
 } ;
 
@@ -18116,7 +18138,7 @@ assert['to be undefined'] =
 assert.undefined =
 assert.isUndefined = ( from , actual ) => {
 	if ( actual !== undefined ) {
-		throw assertionError( from , actual , 'to be undefined' ) ;
+		throw AssertionError.create( from , actual , null , 'to be undefined' ) ;
 	}
 } ;
 
@@ -18130,7 +18152,7 @@ assert.isOk =
 assert.truthy =
 assert.isTruthy = ( from , actual ) => {
 	if ( ! actual ) {
-		throw assertionError( from , actual , 'to be truthy' ) ;
+		throw AssertionError.create( from , actual , null , 'to be truthy' ) ;
 	}
 } ;
 
@@ -18146,7 +18168,7 @@ assert.isNotOk =
 assert.falsy =
 assert.isFalsy = ( from , actual ) => {
 	if ( actual ) {
-		throw assertionError( from , actual , 'to be falsy' ) ;
+		throw AssertionError.create( from , actual , null , 'to be falsy' ) ;
 	}
 } ;
 
@@ -18157,7 +18179,7 @@ assert['to be true'] =
 assert.true =
 assert.isTrue = ( from , actual ) => {
 	if ( actual !== true ) {
-		throw assertionError( from , actual , 'to be true' ) ;
+		throw AssertionError.create( from , actual , null , 'to be true' ) ;
 	}
 } ;
 
@@ -18168,7 +18190,7 @@ assert['to be not true'] = assert['to not be true'] = assert['not to be true'] =
 assert.notTrue =
 assert.isNotTrue = ( from , actual ) => {
 	if ( actual === true ) {
-		throw assertionError( from , actual , 'not to be true' ) ;
+		throw AssertionError.create( from , actual , null , 'not to be true' ) ;
 	}
 } ;
 
@@ -18179,7 +18201,7 @@ assert['to be false'] =
 assert.false =
 assert.isFalse = ( from , actual ) => {
 	if ( actual !== false ) {
-		throw assertionError( from , actual , 'to be false' ) ;
+		throw AssertionError.create( from , actual , null , 'to be false' ) ;
 	}
 } ;
 
@@ -18190,7 +18212,7 @@ assert['to be not false'] = assert['to not be false'] = assert['not to be false'
 assert.notFalse =
 assert.isNotFalse = ( from , actual ) => {
 	if ( actual === false ) {
-		throw assertionError( from , actual , 'not to be false' ) ;
+		throw AssertionError.create( from , actual , null , 'not to be false' ) ;
 	}
 } ;
 
@@ -18201,7 +18223,7 @@ assert['to be null'] =
 assert.null =
 assert.isNull = ( from , actual ) => {
 	if ( actual !== null ) {
-		throw assertionError( from , actual , 'to be null' ) ;
+		throw AssertionError.create( from , actual , null , 'to be null' ) ;
 	}
 } ;
 
@@ -18212,7 +18234,7 @@ assert['to be not null'] = assert['to not be null'] = assert['not to be null'] =
 assert.notNull =
 assert.isNotNull = ( from , actual ) => {
 	if ( actual === null ) {
-		throw assertionError( from , actual , 'not to be null' ) ;
+		throw AssertionError.create( from , actual , null , 'not to be null' ) ;
 	}
 } ;
 
@@ -18224,7 +18246,7 @@ assert['to be nan'] =
 assert.NaN =
 assert.isNaN = ( from , actual ) => {
 	if ( ! Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'to be NaN' ) ;
+		throw AssertionError.create( from , actual , null , 'to be NaN' ) ;
 	}
 } ;
 
@@ -18236,7 +18258,7 @@ assert['to be not nan'] = assert['to not be nan'] = assert['not to be nan'] =
 assert.notNaN =
 assert.isNotNaN = ( from , actual ) => {
 	if ( Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'not to be NaN' ) ;
+		throw AssertionError.create( from , actual , null , 'not to be NaN' ) ;
 	}
 } ;
 
@@ -18245,11 +18267,11 @@ assert.isNotNaN = ( from , actual ) => {
 assert['to be finite'] =
 assert.finite = ( from , actual ) => {
 	if ( typeof actual !== 'number' ) {
-		throw assertionError( from , actual , 'to be a number' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number' ) ;
 	}
 
 	if ( Number.isNaN( actual ) || actual === Infinity || actual === -Infinity ) {
-		throw assertionError( from , actual , 'to be finite' ) ;
+		throw AssertionError.create( from , actual , null , 'to be finite' ) ;
 	}
 } ;
 
@@ -18258,11 +18280,11 @@ assert.finite = ( from , actual ) => {
 assert['to be not finite'] = assert['to not be finite'] = assert['not to be finite'] =
 assert.notFinite = ( from , actual ) => {
 	if ( typeof actual !== 'number' ) {
-		throw assertionError( from , actual , 'to be a number' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number' ) ;
 	}
 
 	if ( ! Number.isNaN( actual ) && actual !== Infinity && actual !== -Infinity ) {
-		throw assertionError( from , actual , 'to be finite' ) ;
+		throw AssertionError.create( from , actual , null , 'to be finite' ) ;
 	}
 } ;
 
@@ -18276,7 +18298,7 @@ assert.notFinite = ( from , actual ) => {
 assert['to be'] =
 assert.strictEqual = ( from , actual , expected ) => {
 	if ( actual !== expected && ! ( Number.isNaN( actual ) && Number.isNaN( expected ) ) ) {
-		throw assertionError( from , actual , 'to be' , expected ) ;
+		throw AssertionError.create( from , actual , null , 'to be' , expected ) ;
 	}
 } ;
 assert.strictEqual.showDiff = true ;
@@ -18288,7 +18310,7 @@ assert.strictEqual.inspect = true ;
 assert['to be not'] = assert['to not be'] = assert['not to be'] =
 assert.notStrictEqual = ( from , actual , notExpected ) => {
 	if ( actual === notExpected || ( Number.isNaN( actual ) && Number.isNaN( notExpected ) ) ) {
-		throw assertionError( from , actual , 'not to be' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to be' , notExpected ) ;
 	}
 } ;
 assert.notStrictEqual.inspect = true ;
@@ -18301,7 +18323,7 @@ assert['to equal'] =
 assert['to eql'] =		// compatibility with expect.js
 assert.equal = ( from , actual , expected ) => {
 	if ( ! isEqual( actual , expected ) ) {
-		throw assertionError( from , actual , 'to equal' , expected ) ;
+		throw AssertionError.create( from , actual , isEqual.getLastPath() , 'to equal' , expected ) ;
 	}
 } ;
 assert.equal.showDiff = true ;
@@ -18315,7 +18337,7 @@ assert['to not equal'] = assert['not to equal'] =
 assert['to not eql'] = assert['not to eql'] =		// compatibility with expect.js
 assert.notEqual = ( from , actual , notExpected ) => {
 	if ( isEqual( actual , notExpected ) ) {
-		throw assertionError( from , actual , 'not to equal' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to equal' , notExpected ) ;
 	}
 } ;
 assert.notEqual.inspect = true ;
@@ -18328,7 +18350,7 @@ assert['to be alike'] =
 assert['to be alike to'] =
 assert.like = ( from , actual , expected ) => {
 	if ( ! isEqual( actual , expected , IS_EQUAL_LIKE ) ) {
-		throw assertionError( from , actual , 'to be like' , expected ) ;
+		throw AssertionError.create( from , actual , isEqual.getLastPath() , 'to be like' , expected ) ;
 	}
 } ;
 assert.like.showDiff = true ;
@@ -18342,7 +18364,7 @@ assert['to be not alike'] = assert['to not be alike'] = assert['not to be alike'
 assert['to be not alike to'] = assert['to not be alike to'] = assert['not to be alike to'] =
 assert.notLike = ( from , actual , notExpected ) => {
 	if ( isEqual( actual , notExpected , IS_EQUAL_LIKE ) ) {
-		throw assertionError( from , actual , 'not to be like' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to be like' , notExpected ) ;
 	}
 } ;
 assert.notLike.inspect = true ;
@@ -18359,10 +18381,10 @@ assert['to equal partial'] =
 assert.partialEqual =
 assert.partiallyEqual = ( from , actual , expected ) => {
 	if ( ! isEqual( expected , actual , IS_EQUAL_PARTIALLY_EQUAL ) ) {
-		throw assertionError( from , actual , 'to partially equal' , expected ) ;
+		throw AssertionError.create( from , actual , isEqual.getLastPath() , 'to partially equal' , expected ) ;
 	}
 } ;
-//assert.partiallyEqual.showDiff = true ;
+assert.partiallyEqual.showPathDiff = true ;
 assert.partiallyEqual.inspect = true ;
 
 
@@ -18377,7 +18399,7 @@ assert['to not equal partial'] = assert['not to equal partial'] =
 assert.notPartialEqual =
 assert.notPartiallyEqual = ( from , actual , notExpected ) => {
 	if ( isEqual( notExpected , actual , IS_EQUAL_PARTIALLY_EQUAL ) ) {
-		throw assertionError( from , actual , 'not to partially equal' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to partially equal' , notExpected ) ;
 	}
 } ;
 assert.notPartiallyEqual.inspect = true ;
@@ -18390,10 +18412,10 @@ assert['to be like partial'] =
 assert.partialLike =
 assert.partiallyLike = ( from , actual , expected ) => {
 	if ( ! isEqual( expected , actual , IS_EQUAL_PARTIALLY_LIKE ) ) {
-		throw assertionError( from , actual , 'to be partially like' , expected ) ;
+		throw AssertionError.create( from , actual , isEqual.getLastPath() , 'to be partially like' , expected ) ;
 	}
 } ;
-//assert.partiallyLike.showDiff = true ;
+assert.partiallyLike.showPathDiff = true ;
 assert.partiallyLike.inspect = true ;
 
 
@@ -18404,7 +18426,7 @@ assert['to be not like partial'] = assert['to not be like partial'] = assert['no
 assert.notPartialLike =
 assert.notPartiallyLike = ( from , actual , notExpected ) => {
 	if ( isEqual( notExpected , actual , IS_EQUAL_PARTIALLY_LIKE ) ) {
-		throw assertionError( from , actual , 'not to be partially like' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to be partially like' , notExpected ) ;
 	}
 } ;
 assert.notPartiallyLike.inspect = true ;
@@ -18415,7 +18437,7 @@ assert.notPartiallyLike.inspect = true ;
 assert['to map'] =
 assert.map = ( from , actual , expected ) => {
 	if ( ! actual || typeof actual !== 'object' || typeof actual.get !== 'function' || typeof actual.keys !== 'function' ) {
-		throw assertionError( from , actual , 'to be be a mappable object' ) ;
+		throw AssertionError.create( from , actual , null , 'to be be a mappable object' ) ;
 	}
 
 	if ( ! Array.isArray( expected ) ) {
@@ -18425,7 +18447,7 @@ assert.map = ( from , actual , expected ) => {
 	var actualKeys = [ ... actual.keys() ] ;
 
 	if ( actualKeys.length !== expected.length ) {
-		throw assertionError( from , actual , 'to map' , expected ) ;
+		throw AssertionError.create( from , actual , null , 'to map' , expected ) ;
 	}
 
 	expected.forEach( expectedEntry => {
@@ -18444,11 +18466,11 @@ assert.map = ( from , actual , expected ) => {
 			actualKey = actualKeys.splice( indexOf , 1 )[ 0 ] ;
 
 			if ( ! isEqual( expectedEntry[ 1 ] , actual.get( actualKey ) ) ) {
-				throw assertionError( from , actual , 'to map' , expected ) ;
+				throw AssertionError.create( from , actual , null , 'to map' , expected ) ;
 			}
 		}
 		else {
-			throw assertionError( from , actual , 'to map' , expected ) ;
+			throw AssertionError.create( from , actual , null , 'to map' , expected ) ;
 		}
 	} ) ;
 } ;
@@ -18462,7 +18484,7 @@ assert['to be shallow clone of'] =
 assert['to be a shallow clone of'] =
 assert.shallowCloneOf = ( from , actual , expected ) => {
 	if ( typeof actual !== 'function' && ( ! actual || typeof actual !== 'object' ) ) {
-		throw assertionError( from , actual , 'to be be an object or a function' ) ;
+		throw AssertionError.create( from , actual , null , 'to be be an object or a function' ) ;
 	}
 
 	// Or throw?
@@ -18470,31 +18492,31 @@ assert.shallowCloneOf = ( from , actual , expected ) => {
 
 	if ( Array.isArray( actual ) ) {
 		if ( ! Array.isArray( expected ) || actual.length !== expected.length ) {
-			throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+			throw AssertionError.create( from , actual , null , 'to be a shallow clone of' , expected ) ;
 		}
 
 		actual.forEach( ( element , index ) => {
 			if ( element !== expected[ index ] ) {
-				throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+				throw AssertionError.create( from , actual , null , 'to be a shallow clone of' , expected ) ;
 			}
 		} ) ;
 	}
 	else {
 		if ( Array.isArray( expected ) ) {
-			throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+			throw AssertionError.create( from , actual , null , 'to be a shallow clone of' , expected ) ;
 		}
 
 		let actualKeys = Object.keys( actual ) ;
 		let expectedKeys = Object.keys( expected ) ;
 
 		if ( actualKeys.length !== expectedKeys.length ) {
-			throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+			throw AssertionError.create( from , actual , null , 'to be a shallow clone of' , expected ) ;
 		}
 
 		// The .hasOwnProperty() check is mandatory, or we have to iterate over actualKeys too
 		expectedKeys.forEach( key => {
 			if ( ! Object.prototype.hasOwnProperty.call( actual , key ) || actual[ key ] !== expected[ key ] ) {
-				throw assertionError( from , actual , 'to be a shallow clone of' , expected ) ;
+				throw AssertionError.create( from , actual , null , 'to be a shallow clone of' , expected ) ;
 			}
 		} ) ;
 	}
@@ -18509,7 +18531,7 @@ assert['to be not shallow clone of'] = assert['to not be shallow clone of'] = as
 assert['to be not a shallow clone of'] = assert['to not be a shallow clone of'] = assert['not to be a shallow clone of'] =
 assert.notShallowCloneOf = ( from , actual , notExpected ) => {
 	if ( typeof actual !== 'function' && ( ! actual || typeof actual !== 'object' ) ) {
-		throw assertionError( from , actual , 'to be be an object or a function' ) ;
+		throw AssertionError.create( from , actual , null , 'to be be an object or a function' ) ;
 	}
 
 	// Too boring to code, we use the reverse of shallowClone() now...
@@ -18521,7 +18543,7 @@ assert.notShallowCloneOf = ( from , actual , notExpected ) => {
 		return ;
 	}
 
-	throw assertionError( from , actual , 'not to be a shallow clone of' , notExpected ) ;
+	throw AssertionError.create( from , actual , null , 'not to be a shallow clone of' , notExpected ) ;
 } ;
 assert.notShallowCloneOf.inspect = true ;
 
@@ -18539,11 +18561,11 @@ assert['to be close to'] =
 assert['to be around'] =
 assert.around = ( from , actual , value , delta ) => {
 	if ( typeof actual !== 'number' ) {
-		throw assertionError( from , actual , 'to be a number' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number' ) ;
 	}
 
 	if ( Number.isNaN( actual ) || Number.isNaN( value ) ) {
-		throw assertionError( from , actual , 'to be around' , value ) ;
+		throw AssertionError.create( from , actual , null , 'to be around' , value ) ;
 	}
 
 	if ( ! delta ) {
@@ -18552,22 +18574,22 @@ assert.around = ( from , actual , value , delta ) => {
 
 		if ( absActual <= EPSILON_ZERO_DELTA || absValue <= EPSILON_ZERO_DELTA ) {
 			if ( actual > value + EPSILON_ZERO_DELTA || value > actual + EPSILON_ZERO_DELTA ) {
-				throw assertionError( from , actual , 'to be around' , value ) ;
+				throw AssertionError.create( from , actual , null , 'to be around' , value ) ;
 			}
 		}
 		else if ( actual * value < 0 ) {
 			// Sign mismatch
-			throw assertionError( from , actual , 'to be around' , value ) ;
+			throw AssertionError.create( from , actual , null , 'to be around' , value ) ;
 		}
 		else if ( absActual > absValue * EPSILON_DELTA_RATE || absValue > absActual * EPSILON_DELTA_RATE ) {
-			throw assertionError( from , actual , 'to be around' , value ) ;
+			throw AssertionError.create( from , actual , null , 'to be around' , value ) ;
 		}
 
 		return ;
 	}
 
 	if ( actual < value - delta || actual > value + delta ) {
-		throw assertionError( from , actual , 'to be around' , value ) ;
+		throw AssertionError.create( from , actual , null , 'to be around' , value ) ;
 	}
 } ;
 
@@ -18582,7 +18604,7 @@ assert['to not be around'] =
 assert['not to be around'] =
 assert.notAround = ( from , actual , value , delta ) => {
 	if ( typeof actual !== 'number' ) {
-		throw assertionError( from , actual , 'to be a number' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number' ) ;
 	}
 
 	if ( Number.isNaN( actual ) || Number.isNaN( value ) ) { return ; }
@@ -18590,18 +18612,18 @@ assert.notAround = ( from , actual , value , delta ) => {
 	if ( ! delta ) {
 		if ( actual === 0 || value === 0 ) {
 			if ( actual <= value + EPSILON_ZERO_DELTA && value <= actual + EPSILON_ZERO_DELTA ) {
-				throw assertionError( from , actual , 'not to be around' , value ) ;
+				throw AssertionError.create( from , actual , null , 'not to be around' , value ) ;
 			}
 		}
 		else if ( actual <= value * EPSILON_DELTA_RATE && value <= actual * EPSILON_DELTA_RATE ) {
-			throw assertionError( from , actual , 'not to be around' , value ) ;
+			throw AssertionError.create( from , actual , null , 'not to be around' , value ) ;
 		}
 
 		return ;
 	}
 
 	if ( ( actual >= value - delta && actual <= value + delta ) || Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'not to be around' , value ) ;
+		throw AssertionError.create( from , actual , null , 'not to be around' , value ) ;
 	}
 } ;
 
@@ -18615,11 +18637,11 @@ assert.gt =
 assert.greater =
 assert.greaterThan = ( from , actual , value ) => {
 	if ( typeof actual !== 'number' && ! ( actual instanceof Date ) ) {
-		throw assertionError( from , actual , 'to be a number or a Date' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number or a Date' ) ;
 	}
 
 	if ( actual <= value || Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'to be above' , value ) ;
+		throw AssertionError.create( from , actual , null , 'to be above' , value ) ;
 	}
 } ;
 
@@ -18631,11 +18653,11 @@ assert.least =
 assert.gte =
 assert.greaterThanOrEqualTo = ( from , actual , value ) => {
 	if ( typeof actual !== 'number' && ! ( actual instanceof Date ) ) {
-		throw assertionError( from , actual , 'to be a number or a Date' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number or a Date' ) ;
 	}
 
 	if ( actual < value || Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'to be at least' , value ) ;
+		throw AssertionError.create( from , actual , null , 'to be at least' , value ) ;
 	}
 } ;
 
@@ -18649,11 +18671,11 @@ assert.lt =
 assert.lesser =
 assert.lesserThan = ( from , actual , value ) => {
 	if ( typeof actual !== 'number' && ! ( actual instanceof Date ) ) {
-		throw assertionError( from , actual , 'to be a number or a Date' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number or a Date' ) ;
 	}
 
 	if ( actual >= value || Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'to be below' , value ) ;
+		throw AssertionError.create( from , actual , null , 'to be below' , value ) ;
 	}
 } ;
 
@@ -18665,11 +18687,11 @@ assert.most =
 assert.lte =
 assert.lesserThanOrEqualTo = ( from , actual , value ) => {
 	if ( typeof actual !== 'number' && ! ( actual instanceof Date ) ) {
-		throw assertionError( from , actual , 'to be a number or a Date' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number or a Date' ) ;
 	}
 
 	if ( actual > value || Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'to be at most' , value ) ;
+		throw AssertionError.create( from , actual , null , 'to be at most' , value ) ;
 	}
 } ;
 
@@ -18678,11 +18700,11 @@ assert.lesserThanOrEqualTo = ( from , actual , value ) => {
 assert['to be within'] =
 assert.within = ( from , actual , lower , higher ) => {
 	if ( typeof actual !== 'number' && ! ( actual instanceof Date ) ) {
-		throw assertionError( from , actual , 'to be a number or a Date' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number or a Date' ) ;
 	}
 
 	if ( actual < lower || actual > higher || Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'to be within' , lower , higher ) ;
+		throw AssertionError.create( from , actual , null , 'to be within' , lower , higher ) ;
 	}
 } ;
 
@@ -18693,11 +18715,11 @@ assert['to not be within'] =
 assert['not to be within'] =
 assert.notWithin = ( from , actual , lower , higher ) => {
 	if ( typeof actual !== 'number' && ! ( actual instanceof Date ) ) {
-		throw assertionError( from , actual , 'to be a number or a Date' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a number or a Date' ) ;
 	}
 
 	if ( ( actual >= lower && actual <= higher ) || Number.isNaN( actual ) ) {
-		throw assertionError( from , actual , 'not to be within' , lower , higher ) ;
+		throw AssertionError.create( from , actual , null , 'not to be within' , lower , higher ) ;
 	}
 } ;
 
@@ -18711,11 +18733,11 @@ assert.notWithin = ( from , actual , lower , higher ) => {
 assert['to match'] =
 assert.match = ( from , actual , expected ) => {
 	if ( typeof actual !== 'string' ) {
-		throw assertionError( from , actual , 'to be a string' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a string' ) ;
 	}
 
 	if ( ! actual.match( expected ) ) {
-		throw assertionError( from , actual , 'to match' , expected ) ;
+		throw AssertionError.create( from , actual , null , 'to match' , expected ) ;
 	}
 } ;
 
@@ -18726,11 +18748,11 @@ assert['to not match'] =
 assert['not to match'] =
 assert.notMatch = ( from , actual , notExpected ) => {
 	if ( typeof actual !== 'string' ) {
-		throw assertionError( from , actual , 'to be a string' ) ;
+		throw AssertionError.create( from , actual , null , 'to be a string' ) ;
 	}
 
 	if ( actual.match( notExpected ) ) {
-		throw assertionError( from , actual , 'not to match' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to match' , notExpected ) ;
 	}
 } ;
 
@@ -18745,11 +18767,11 @@ assert['to have length of'] =
 assert['to have a length of'] =
 assert.lengthOf = ( from , actual , expected ) => {
 	if ( typeof actual !== 'string' && ( ! actual || typeof actual !== 'object' ) ) {
-		throw assertionError( from , actual , 'to have some length' ) ;
+		throw AssertionError.create( from , actual , null , 'to have some length' ) ;
 	}
 
 	if ( actual.length !== expected ) {
-		throw assertionError( from , actual , 'to have a length of' , expected ) ;
+		throw AssertionError.create( from , actual , null , 'to have a length of' , expected ) ;
 	}
 } ;
 
@@ -18760,11 +18782,11 @@ assert['to have length not of'] = assert['to have not length of'] = assert['to n
 assert['to have a length not of'] = assert['to have not a length of'] = assert['to not have a length of'] = assert['not to have a length of'] =
 assert.notLengthOf = ( from , actual , notExpected ) => {
 	if ( typeof actual !== 'string' && ( ! actual || typeof actual !== 'object' ) ) {
-		throw assertionError( from , actual , 'to have some length' ) ;
+		throw AssertionError.create( from , actual , null , 'to have some length' ) ;
 	}
 
 	if ( actual.length === notExpected ) {
-		throw assertionError( from , actual , 'not to have a length of' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to have a length of' , notExpected ) ;
 	}
 } ;
 
@@ -18791,7 +18813,7 @@ assert.contain = ( from , actual , ... expected ) => {
 	}
 
 	if ( ! has ) {
-		throw assertionError( from , actual , 'to contain' , expected ) ;
+		throw AssertionError.create( from , actual , null , 'to contain' , expected ) ;
 	}
 } ;
 assert.contain.inspect = true ;
@@ -18819,7 +18841,7 @@ assert.notContain = ( from , actual , ... notExpected ) => {
 	}
 
 	if ( has ) {
-		throw assertionError( from , actual , 'not to contain' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to contain' , notExpected ) ;
 	}
 } ;
 assert.notContain.inspect = true ;
@@ -18852,7 +18874,7 @@ assert.containOnly = ( from , actual , ... expected ) => {
 	}
 
 	if ( ! has ) {
-		throw assertionError( from , actual , 'to contain only' , expected ) ;
+		throw AssertionError.create( from , actual , null , 'to contain only' , expected ) ;
 	}
 } ;
 assert.containOnly.inspect = true ;
@@ -18898,7 +18920,7 @@ assert.empty = ( from , actual ) => {
 	}
 
 	if ( ! isEmpty ) {
-		throw assertionError( from , actual , 'to be empty' ) ;
+		throw AssertionError.create( from , actual , null , 'to be empty' ) ;
 	}
 } ;
 
@@ -18929,7 +18951,7 @@ assert.notEmpty = ( from , actual ) => {
 	}
 
 	if ( isEmpty ) {
-		throw assertionError( from , actual , 'to be empty' ) ;
+		throw AssertionError.create( from , actual , null , 'to be empty' ) ;
 	}
 } ;
 
@@ -18944,12 +18966,12 @@ assert['to have keys'] =
 assert.key =
 assert.keys = ( from , actual , ... keys ) => {
 	if ( ! typeCheckers.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or a function' ) ;
+		throw AssertionError.create( from , actual , null , 'to be an object or a function' ) ;
 	}
 
 	keys.forEach( key => {
 		if ( ! ( key in actual ) ) {
-			throw assertionError( from , actual , 'to have key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
+			throw AssertionError.create( from , actual , null , 'to have key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -18965,12 +18987,12 @@ assert.noKey =
 assert.notKey =
 assert.notKeys = ( from , actual , ... keys ) => {
 	if ( ! typeCheckers.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or a function' ) ;
+		throw AssertionError.create( from , actual , null , 'to be an object or a function' ) ;
 	}
 
 	keys.forEach( key => {
 		if ( key in actual ) {
-			throw assertionError( from , actual , 'not to have key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
+			throw AssertionError.create( from , actual , null , 'not to have key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -18984,12 +19006,12 @@ assert['to have own keys'] =
 assert.ownKey =
 assert.ownKeys = ( from , actual , ... keys ) => {
 	if ( ! typeCheckers.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or a function' ) ;
+		throw AssertionError.create( from , actual , null , 'to be an object or a function' ) ;
 	}
 
 	keys.forEach( key => {
 		if ( ! Object.prototype.hasOwnProperty.call( actual , key ) ) {
-			throw assertionError( from , actual , 'to have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
+			throw AssertionError.create( from , actual , null , 'to have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -19013,18 +19035,18 @@ assert['to only have own keys'] = assert['to have only own keys'] = assert['to h
 assert.onlyOwnKey =
 assert.onlyOwnKeys = ( from , actual , ... keys ) => {
 	if ( ! typeCheckers.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or a function' ) ;
+		throw AssertionError.create( from , actual , null , 'to be an object or a function' ) ;
 	}
 
 	// First, check if the number of keys match
 	if ( Object.getOwnPropertyNames( actual ).length !== keys.length ) {
-		throw assertionError( from , actual , 'to only have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
+		throw AssertionError.create( from , actual , null , 'to only have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 	}
 
 	// Then, each expected keys should be present
 	keys.forEach( key => {
 		if ( ! Object.prototype.hasOwnProperty.call( actual , key ) ) {
-			throw assertionError( from , actual , 'to only have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
+			throw AssertionError.create( from , actual , null , 'to only have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -19040,12 +19062,12 @@ assert.noOwnKey =
 assert.notOwnKey =
 assert.notOwnKeys = ( from , actual , ... keys ) => {
 	if ( ! typeCheckers.looseObject( actual ) ) {
-		throw assertionError( from , actual , 'to be an object or a function' ) ;
+		throw AssertionError.create( from , actual , null , 'to be an object or a function' ) ;
 	}
 
 	keys.forEach( key => {
 		if ( Object.prototype.hasOwnProperty.call( actual , key ) ) {
-			throw assertionError( from , actual , 'not to have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
+			throw AssertionError.create( from , actual , null , 'not to have own key' + ( keys.length > 1 ? 's' : '' ) , ... keys ) ;
 		}
 	} ) ;
 } ;
@@ -19115,7 +19137,7 @@ assert['to throw a'] =
 assert['to throw an'] =
 assert.throw = ( from , fn , fnThisAndArgs , expectedErrorInstance , expectedPartialError ) => {
 	if ( typeof fn !== 'function' ) {
-		throw assertionError( from , fn , 'to be a function' ) ;
+		throw AssertionError.create( from , fn , null , 'to be a function' ) ;
 	}
 
 	if ( ! Array.isArray( fnThisAndArgs ) ) { fnThisAndArgs = [] ; }
@@ -19124,17 +19146,17 @@ assert.throw = ( from , fn , fnThisAndArgs , expectedErrorInstance , expectedPar
 
 	if ( expectedErrorInstance ) {
 		if ( ! call.hasThrown || ! ( call.error instanceof expectedErrorInstance ) ) {
-			let article = VOWEL[ ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-			throw assertionError( from , call , 'to throw ' + article , expectedErrorInstance ) ;
+			let article = VOWEL.has(  ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+			throw AssertionError.create( from , call , null , 'to throw ' + article , expectedErrorInstance ) ;
 		}
 
 		if ( expectedPartialError && ! isEqual( expectedPartialError , call.error , IS_EQUAL_PARTIALLY_LIKE ) ) {
-			let article = VOWEL[ ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-			throw assertionError( from , call , 'to throw ' + article , expectedErrorInstance , expectedPartialError ) ;
+			let article = VOWEL.has(  ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+			throw AssertionError.create( from , call , isEqual.getLastPath() , 'to throw ' + article , expectedErrorInstance , expectedPartialError ) ;
 		}
 	}
 	else if ( ! call.hasThrown ) {
-		throw assertionError( from , call , 'to throw' ) ;
+		throw AssertionError.create( from , call , null , 'to throw' ) ;
 	}
 } ;
 assert.throw.fnParams = true ;
@@ -19148,7 +19170,7 @@ assert['to throw not a'] = assert['to not throw a'] = assert['not to throw a'] =
 assert['to throw not an'] = assert['to not throw an'] = assert['not to throw an'] =
 assert.notThrow = ( from , fn , fnThisAndArgs , notExpectedErrorInstance , notExpectedPartialError ) => {
 	if ( typeof fn !== 'function' ) {
-		throw assertionError( from , fn , 'to be a function' ) ;
+		throw AssertionError.create( from , fn , null , 'to be a function' ) ;
 	}
 
 	if ( ! Array.isArray( fnThisAndArgs ) ) { fnThisAndArgs = [] ; }
@@ -19159,18 +19181,18 @@ assert.notThrow = ( from , fn , fnThisAndArgs , notExpectedErrorInstance , notEx
 		if ( call.hasThrown && call.error instanceof notExpectedErrorInstance ) {
 			if ( notExpectedPartialError ) {
 				if ( isEqual( notExpectedPartialError , call.error , IS_EQUAL_PARTIALLY_LIKE ) ) {
-					let article = VOWEL[ ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-					throw assertionError( from , call , 'not to throw ' + article , notExpectedErrorInstance , notExpectedPartialError ) ;
+					let article = VOWEL.has(  ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+					throw AssertionError.create( from , call , null , 'not to throw ' + article , notExpectedErrorInstance , notExpectedPartialError ) ;
 				}
 			}
 			else {
-				let article = VOWEL[ ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-				throw assertionError( from , call , 'not to throw ' + article , notExpectedErrorInstance ) ;
+				let article = VOWEL.has(  ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+				throw AssertionError.create( from , call , null , 'not to throw ' + article , notExpectedErrorInstance ) ;
 			}
 		}
 	}
 	else if ( call.hasThrown ) {
-		throw assertionError( from , call , 'not to throw' ) ;
+		throw AssertionError.create( from , call , null , 'not to throw' ) ;
 	}
 } ;
 assert.notThrow.fnParams = true ;
@@ -19201,17 +19223,17 @@ assert.reject = async ( from , fn , fnThisAndArgs , expectedErrorInstance , expe
 
 	if ( expectedErrorInstance ) {
 		if ( ! call.hasThrown || ! ( call.error instanceof expectedErrorInstance ) ) {
-			let article = VOWEL[ ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-			throw assertionError( from , call , 'to reject with ' + article , expectedErrorInstance ) ;
+			let article = VOWEL.has(  ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+			throw AssertionError.create( from , call , null , 'to reject with ' + article , expectedErrorInstance ) ;
 		}
 
 		if ( expectedPartialError && ! isEqual( expectedPartialError , call.error , IS_EQUAL_PARTIALLY_LIKE ) ) {
-			let article = VOWEL[ ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-			throw assertionError( from , call , 'to reject with ' + article , expectedErrorInstance , expectedPartialError ) ;
+			let article = VOWEL.has(  ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+			throw AssertionError.create( from , call , isEqual.getLastPath() , 'to reject with ' + article , expectedErrorInstance , expectedPartialError ) ;
 		}
 	}
 	else if ( ! call.hasThrown ) {
-		throw assertionError( from , call , 'to reject' ) ;
+		throw AssertionError.create( from , call , null , 'to reject' ) ;
 	}
 } ;
 assert.throw.promise = assert.reject ;
@@ -19246,18 +19268,18 @@ assert.fulfill = async ( from , fn , fnThisAndArgs , notExpectedErrorInstance , 
 		if ( call.hasThrown && call.error instanceof notExpectedErrorInstance ) {
 			if ( notExpectedPartialError ) {
 				if ( isEqual( notExpectedPartialError , call.error , IS_EQUAL_PARTIALLY_LIKE ) ) {
-					let article = VOWEL[ ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-					throw assertionError( from , call , 'not to reject with ' + article , notExpectedErrorInstance , notExpectedPartialError ) ;
+					let article = VOWEL.has(  ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+					throw AssertionError.create( from , call , null , 'not to reject with ' + article , notExpectedErrorInstance , notExpectedPartialError ) ;
 				}
 			}
 			else {
-				let article = VOWEL[ ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-				throw assertionError( from , call , 'not to reject with ' + article , notExpectedErrorInstance ) ;
+				let article = VOWEL.has(  ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+				throw AssertionError.create( from , call , null , 'not to reject with ' + article , notExpectedErrorInstance ) ;
 			}
 		}
 	}
 	else if ( call.hasThrown ) {
-		throw assertionError( from , call , 'not to reject' ) ;
+		throw AssertionError.create( from , call , null , 'not to reject' ) ;
 	}
 } ;
 assert.notThrow.promise = assert.fulfill ;
@@ -19295,17 +19317,17 @@ assert.rejected = async ( from , promise , expectedErrorInstance , expectedParti
 
 	if ( expectedErrorInstance ) {
 		if ( ! hasThrown || ! ( error instanceof expectedErrorInstance ) ) {
-			let article = VOWEL[ ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-			throw assertionError( from , promise , 'to be rejected with ' + article , expectedErrorInstance ) ;
+			let article = VOWEL.has(  ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+			throw AssertionError.create( from , promise , null , 'to be rejected with ' + article , expectedErrorInstance ) ;
 		}
 
 		if ( expectedPartialError && ! isEqual( expectedPartialError , error , IS_EQUAL_PARTIALLY_LIKE ) ) {
-			let article = VOWEL[ ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-			throw assertionError( from , promise , 'to be rejected with ' + article , expectedErrorInstance , expectedPartialError ) ;
+			let article = VOWEL.has(  ( '' + ( expectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+			throw AssertionError.create( from , promise , isEqual.getLastPath() , 'to be rejected with ' + article , expectedErrorInstance , expectedPartialError ) ;
 		}
 	}
 	else if ( ! hasThrown ) {
-		throw assertionError( from , promise , 'to be rejected' ) ;
+		throw AssertionError.create( from , promise , null , 'to be rejected' ) ;
 	}
 } ;
 assert.rejected.promise = true ;
@@ -19339,18 +19361,18 @@ assert.notRejected = async ( from , promise , notExpectedErrorInstance , notExpe
 		if ( hasThrown && error instanceof notExpectedErrorInstance ) {
 			if ( notExpectedPartialError ) {
 				if ( isEqual( notExpectedPartialError , error , IS_EQUAL_PARTIALLY_LIKE ) ) {
-					let article = VOWEL[ ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-					throw assertionError( from , promise , 'not to be rejected with ' + article , notExpectedErrorInstance , notExpectedPartialError ) ;
+					let article = VOWEL.has(  ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+					throw AssertionError.create( from , promise , null , 'not to be rejected with ' + article , notExpectedErrorInstance , notExpectedPartialError ) ;
 				}
 			}
 			else {
-				let article = VOWEL[ ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-				throw assertionError( from , promise , 'not to be rejected with ' + article , notExpectedErrorInstance ) ;
+				let article = VOWEL.has(  ( '' + ( notExpectedErrorInstance.name || '(anonymous)' ) )[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+				throw AssertionError.create( from , promise , null , 'not to be rejected with ' + article , notExpectedErrorInstance ) ;
 			}
 		}
 	}
 	else if ( hasThrown ) {
-		throw assertionError( from , promise , 'not to be rejected' ) ;
+		throw AssertionError.create( from , promise , null , 'not to be rejected' ) ;
 	}
 } ;
 assert.fulfilled.promise = true ;
@@ -19401,8 +19423,8 @@ assert.typeOf = ( from , actual , expected ) => {
 	}
 
 	if ( ! typeCheckers[ expected ]( actual ) ) {
-		let article = VOWEL[ expected[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-		throw assertionError( from , actual , 'to be ' + article , expected ) ;
+		let article = VOWEL.has(  expected[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+		throw AssertionError.create( from , actual , null , 'to be ' + article , expected ) ;
 	}
 } ;
 
@@ -19418,8 +19440,8 @@ assert.notTypeOf = ( from , actual , notExpected ) => {
 	}
 
 	if ( typeCheckers[ notExpected ]( actual ) ) {
-		let article = VOWEL[ notExpected[ 0 ] ] ? 'an' : 'a' ;	// cosmetic
-		throw assertionError( from , actual , 'not to be ' + article , notExpected ) ;
+		let article = VOWEL.has(  notExpected[ 0 ] ) ? 'an' : 'a' ;	// cosmetic
+		throw AssertionError.create( from , actual , null , 'not to be ' + article , notExpected ) ;
 	}
 } ;
 
@@ -19429,7 +19451,7 @@ assert.notTypeOf = ( from , actual , notExpected ) => {
 assert['to be an instance of'] =
 assert.instanceOf = ( from , actual , expected ) => {
 	if ( ! ( actual instanceof expected ) ) {
-		throw assertionError( from , actual , 'to be an instance of' , expected ) ;
+		throw AssertionError.create( from , actual , null , 'to be an instance of' , expected ) ;
 	}
 } ;
 assert.instanceOf.inspect = true ;
@@ -19442,7 +19464,7 @@ assert['to not be an instance of'] =
 assert['not to be an instance of'] =
 assert.notInstanceOf = ( from , actual , notExpected ) => {
 	if ( actual instanceof notExpected ) {
-		throw assertionError( from , actual , 'not to be an instance of' , notExpected ) ;
+		throw AssertionError.create( from , actual , null , 'not to be an instance of' , notExpected ) ;
 	}
 } ;
 assert.notInstanceOf.inspect = true ;
@@ -19451,18 +19473,18 @@ assert.notInstanceOf.inspect = true ;
 
 // Force failure
 assert.fail = ( from , actual , middleMessage , ... expectations ) => {
-	throw assertionError( from , actual , { expectationType: 'fail' , middleMessage: middleMessage } , ... expectations ) ;
+	throw AssertionError.create( from , actual , null , { expectationType: 'fail' , middleMessage: middleMessage } , ... expectations ) ;
 } ;
 assert.fail.inspect = true ;
 assert.fail.none = true ;
 
 
-},{"./AssertionError.js":43,"./isEqual.js":52,"./typeCheckers.js":56,"string-kit/lib/inspect.js":98}],47:[function(require,module,exports){
+},{"./AssertionError.js":43,"./isEqual.js":52,"./typeCheckers.js":56}],47:[function(require,module,exports){
 (function (global){(function (){
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -19703,7 +19725,7 @@ constraints.extraction = function( data , params , element , clone ) {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -20181,31 +20203,34 @@ function addToPatch( patch , path , data ) {
 
 
 
-doormen.path = function( schema , path , noSubmasking = false , noOpaque = false ) {
-	var index = 0 ;
+doormen.path =	// DEPRECATED name, use doormen.subSchema()
+doormen.subSchema = ( schema , path , noSubmasking = false , noOpaque = false ) => {
+	var i , iMax ;
 
 	if ( ! Array.isArray( path ) ) {
 		if ( typeof path !== 'string' ) { throw new Error( "Argument #1 'path' should be a string or an array" ) ; }
-		path = path.split( '.' ) ;
+		path = path.split( '.' ).filter( e => e ) ;
 	}
 
-	if ( ! schema || typeof schema !== 'object' ) {
-		throw new doormen.SchemaError( schema + " is not a schema (not an object or an array of object)." ) ;
+	try {
+		for ( i = 0 , iMax = path.length ; i < iMax && schema ; i ++ ) {
+			schema = doormen.directSubSchema( schema , path[ i ] , noSubmasking , noOpaque ) ;
+		}
+	}
+	catch ( error ) {
+		error.message += ' (at: ' + path.slice( 0 , i + 1 ).join( '.' ) + ')' ;
+		throw error ;
 	}
 
-	// Skip empty path
-	while ( index < path.length && ! path[ index ] ) { index ++ ; }
-
-	return schemaPath_( schema , path , index , noSubmasking , noOpaque ) ;
+	return schema ;
 } ;
 
 
 
-function schemaPath_( schema , path , index , noSubmasking , noOpaque ) {
-	var key ;
-
-	// Found it! return now!
-	if ( index >= path.length ) { return schema ; }
+doormen.directSubSchema = ( schema , key , noSubmasking , noOpaque ) => {
+	if ( ! schema || typeof schema !== 'object' ) {
+		throw new doormen.SchemaError( "Not a schema (not an object or an array of object)." ) ;
+	}
 
 	if ( noOpaque && schema.opaque ) {
 		throw new doormen.ValidatorError( "Path leading inside an opaque object." ) ;
@@ -20213,45 +20238,53 @@ function schemaPath_( schema , path , index , noSubmasking , noOpaque ) {
 
 	if ( noSubmasking && schema.noSubmasking ) { return null ; }
 
-	key = path[ index ] ;
-
-
 	// 0) Arrays are alternatives
-	if ( Array.isArray( schema ) ) { throw new Error( "Schema alternatives are not supported for path matching ATM." ) ; }
+	if ( Array.isArray( schema ) ) { throw new Error( "Schema alternatives are not supported for subSchema ATM." ) ; }
 
 	// 1) Recursivity
 	if ( schema.properties !== undefined ) {
 		if ( ! schema.properties || typeof schema.properties !== 'object' ) {
-			throw new doormen.SchemaError( "Bad schema (at " + path + "), 'properties' should be an object." ) ;
+			throw new doormen.SchemaError( "Bad schema: 'properties' should be an object." ) ;
 		}
 
 		if ( schema.properties[ key ] ) {
-			//path.shift() ;
-			return schemaPath_( schema.properties[ key ] , path , index + 1 , noSubmasking , noOpaque ) ;
+			return schema.properties[ key ] ;
 		}
 		else if ( ! schema.extraProperties ) {
-			throw new doormen.SchemaError( "Bad path (at " + path + "), property '" + key + "' not found and the schema does not allow extra properties." ) ;
+			throw new doormen.SchemaError( "Bad path: property '" + key + "' not found and the schema does not allow extra properties." ) ;
+		}
+	}
+
+	if ( schema.elements !== undefined ) {
+		if ( ! Array.isArray( schema.elements ) ) {
+			throw new doormen.SchemaError( "Bad schema: 'elements' should be an array." ) ;
+		}
+
+		key = + key ;
+
+		if ( schema.elements[ key ] ) {
+			return schema.elements[ key ] ;
+		}
+		else if ( ! schema.extraElements ) {
+			throw new doormen.SchemaError( "Bad path: element #" + key + " not found and the schema does not allow extra elements." ) ;
 		}
 	}
 
 	if ( schema.of !== undefined ) {
 		if ( ! schema.of || typeof schema.of !== 'object' ) {
-			throw new doormen.SchemaError( "Bad schema (at " + path + "), 'of' should contain a schema object." ) ;
+			throw new doormen.SchemaError( "Bad schema: 'of' should contain a schema object." ) ;
 		}
 
-		//path.shift() ;
-		return schemaPath_( schema.of , path , index + 1 , noSubmasking , noOpaque ) ;
+		return schema.of ;
 	}
-
-	// "element" is not supported ATM
-	//if ( schema.elements !== undefined ) {}
 
 	// Sub-schema not found, it should be open to anything, so return {}
 	return {} ;
-}
+} ;
 
 
 
+// Refacto:
 // Manage recursivity when dealing with schemas and data
 // ----------------------------------------------------------------------------------------------------------- TODO ----------------------------------------------------
 // The main check() function should use it
@@ -20542,7 +20575,7 @@ doormen.patchTier = function( schema , patch ) {
 		path = paths[ i ].split( '.' ) ;
 
 		while ( path.length ) {
-			maxTier = Math.max( maxTier , doormen.path( schema , path ).tier || 1 ) ;
+			maxTier = Math.max( maxTier , doormen.subSchema( schema , path ).tier || 1 ) ;
 			path.pop() ;
 		}
 	}
@@ -20574,7 +20607,7 @@ function checkOnePatchPathByTags( schema , path , allowedTags , element ) {
 	path = path.split( '.' ) ;
 
 	while ( path.length ) {
-		subSchema = doormen.path( schema , path ) ;
+		subSchema = doormen.subSchema( schema , path ) ;
 
 		if ( subSchema.tags ) {
 			found = false ;
@@ -20662,10 +20695,10 @@ doormen.patch = function( ... args ) {
 			}
 
 			if ( patchCommands[ patchCommandName ].applyToChildren ) {
-				subSchema = doormen.path( schema , path , undefined , true ).of || {} ;
+				subSchema = doormen.subSchema( schema , path , undefined , true ).of || {} ;
 			}
 			else {
-				subSchema = doormen.path( schema , path , undefined , true ) ;
+				subSchema = doormen.subSchema( schema , path , undefined , true ) ;
 			}
 
 			if ( patchCommands[ patchCommandName ].sanitize ) {
@@ -20685,7 +20718,7 @@ doormen.patch = function( ... args ) {
 			}
 		}
 		else {
-			subSchema = doormen.path( schema , path , undefined , true ) ;
+			subSchema = doormen.subSchema( schema , path , undefined , true ) ;
 
 			//sanitized[ path ] = doormen( options , subSchema , value ) ;
 			sanitized[ path ] = context.check( subSchema , value , {
@@ -20983,7 +21016,7 @@ doormen.not.alike = function notAlike( left , right ) {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -21027,7 +21060,7 @@ defaultFunctions.now = () => new Date() ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -21054,8 +21087,8 @@ defaultFunctions.now = () => new Date() ;
 
 
 
-//const AssertionError = require( './AssertionError.js' ) ;
 const assert = require( './assert.js' ) ;
+const AssertionError = require( './AssertionError.js' ) ;
 
 
 
@@ -21196,7 +21229,7 @@ var handler = {
 						() => {
 							target.expectFn.stats.fail ++ ;
 							if ( target.expectFn.hooks.fail ) { target.expectFn.hooks.fail() ; }
-							throw assert.__assertionError__( traceError , target.value , "to resolve" ) ;
+							throw assert.AssertionError.create( traceError , target.value , null , "to resolve" ) ;
 						}
 					) ;
 			}
@@ -21249,12 +21282,12 @@ var handler = {
 } ;
 
 
-},{"./assert.js":46}],51:[function(require,module,exports){
+},{"./AssertionError.js":43,"./assert.js":46}],51:[function(require,module,exports){
 (function (global){(function (){
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -21476,7 +21509,7 @@ filters.notIn = function( data , params , element ) {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -21507,6 +21540,8 @@ const DEFAULT_OPTIONS = {} ;
 const EPSILON_DELTA_RATE = 1 + 4 * Number.EPSILON ;
 const EPSILON_ZERO_DELTA = 4 * Number.MIN_VALUE ;
 
+var lastDiffPath = '' ;
+
 /*
 	Should be FAST! Some critical application parts are depending on it.
 	When a reporter will be coded, it should be plugged in a way that does not slow it down.
@@ -21529,12 +21564,17 @@ function isEqual( left , right , options = DEFAULT_OPTIONS ) {
 		unordered: !! options.unordered
 	} ;
 
-	return isEqual_( runtime , left , right ) ;
+	lastDiffPath = null ;
+	return isEqual_( runtime , left , right , '' ) ;
 }
 
 
 
-function isEqual_( runtime , left , right ) {
+isEqual.getLastPath = () => lastDiffPath ;
+
+
+
+function isEqual_( runtime , left , right , path ) {
 	var index , indexMax , index2 , index2Max , found , indexUsed , keys , key , leftIndexOf , rightIndexOf , recursiveTest ,
 		valueOfLeft , valueOfRight , leftProto , rightProto , leftConstructor , rightConstructor ;
 
@@ -21542,7 +21582,7 @@ function isEqual_( runtime , left , right ) {
 	if ( left === right ) { return true ; }
 
 	// If the type mismatch exit now.
-	if ( typeof left !== typeof right ) { return false ; }
+	if ( typeof left !== typeof right ) { lastDiffPath = path ; return false ; }
 
 	// Below, left and rights have the same type
 
@@ -21562,10 +21602,10 @@ function isEqual_( runtime , left , right ) {
 	// Should comes after the number check
 	// If one is truthy and the other falsy, early exit now
 	// It is an important test since it catch the "null is an object" case that can confuse things later
-	if ( ! left !== ! right ) { return false ; }
+	if ( ! left !== ! right ) { lastDiffPath = path ; return false ; }
 
 	// Should come after the NaN check
-	if ( ! left ) { return false ; }
+	if ( ! left ) { lastDiffPath = path ; return false ; }
 
 	// Objects and arrays
 	if ( typeof left === 'object' ) {
@@ -21578,11 +21618,12 @@ function isEqual_( runtime , left , right ) {
 
 		if ( runtime.leftCircular && runtime.rightCircular ) { return true ; }
 
-		if ( ! runtime.like && Object.getPrototypeOf( left ) !== Object.getPrototypeOf( right ) ) { return false ; }
+		if ( ! runtime.like && Object.getPrototypeOf( left ) !== Object.getPrototypeOf( right ) ) { lastDiffPath = path ; return false ; }
 
 		if ( Array.isArray( left ) ) {
 			// Arrays
-			if ( ! Array.isArray( right ) || left.length !== right.length ) { return false ; }
+			if ( ! Array.isArray( right ) ) { lastDiffPath = path ; return false ; }
+			if ( left.length !== right.length ) { lastDiffPath = path + '.' + Math.min( left.length , right.length ) ; return false ; }
 
 			if ( runtime.unordered ) {
 				if ( indexUsed ) { indexUsed.length = 0 ; }
@@ -21600,7 +21641,7 @@ function isEqual_( runtime , left , right ) {
 
 						runtime.leftStack.push( left ) ;
 						runtime.rightStack.push( right ) ;
-						recursiveTest = isEqual_( runtime , left[ index ] , right[ index ] ) ;
+						recursiveTest = isEqual_( runtime , left[ index ] , right[ index ] , path + '.' + index ) ;
 						runtime.leftStack.pop() ;
 						runtime.rightStack.pop() ;
 
@@ -21627,7 +21668,7 @@ function isEqual_( runtime , left , right ) {
 
 						runtime.leftStack.push( left ) ;
 						runtime.rightStack.push( right ) ;
-						recursiveTest = isEqual_( runtime , left[ index ] , right[ index2 ] ) ;
+						recursiveTest = isEqual_( runtime , left[ index ] , right[ index2 ] , path + '.' + index ) ;
 						runtime.leftStack.pop() ;
 						runtime.rightStack.pop() ;
 
@@ -21638,7 +21679,7 @@ function isEqual_( runtime , left , right ) {
 						}
 					}
 
-					if ( ! found ) { return false ; }
+					if ( ! found ) { lastDiffPath = path ; return false ; }
 				}
 			}
 			else {
@@ -21647,10 +21688,11 @@ function isEqual_( runtime , left , right ) {
 
 					runtime.leftStack.push( left ) ;
 					runtime.rightStack.push( right ) ;
-					recursiveTest = isEqual_( runtime , left[ index ] , right[ index ] ) ;
+					recursiveTest = isEqual_( runtime , left[ index ] , right[ index ] , path + '.' + index ) ;
 					runtime.leftStack.pop() ;
 					runtime.rightStack.pop() ;
 
+					// Don't change lastDiffPath here, we preserve the recursive one
 					if ( ! recursiveTest ) { return false ; }
 				}
 			}
@@ -21660,7 +21702,7 @@ function isEqual_( runtime , left , right ) {
 		}
 		else {
 			// Objects
-			if ( Array.isArray( right ) ) { return false ; }
+			if ( Array.isArray( right ) ) { lastDiffPath = path ; return false ; }
 
 			if ( typeof left.valueOf === 'function' && typeof right.valueOf === 'function' ) {
 				valueOfLeft = left.valueOf() ;
@@ -21682,10 +21724,12 @@ function isEqual_( runtime , left , right ) {
 
 						runtime.leftStack.push( left ) ;
 						runtime.rightStack.push( right ) ;
-						recursiveTest = isEqual_( runtime , valueOfLeft , valueOfRight ) ;
+						recursiveTest = isEqual_( runtime , valueOfLeft , valueOfRight , path ) ;
 						//if ( ! recursiveTest ) { return false ; }
 						runtime.leftStack.pop() ;
 						runtime.rightStack.pop() ;
+
+						// Don't change lastDiffPath here, we preserve the recursive one
 						if ( ! recursiveTest ) { return false ; }
 					}
 				}
@@ -21697,15 +21741,17 @@ function isEqual_( runtime , left , right ) {
 				key = keys[ index ] ;
 
 				if ( left[ key ] === undefined ) { continue ; }			// undefined and no key are considered the same
-				if ( right[ key ] === undefined ) { return false ; }
+				if ( right[ key ] === undefined ) { lastDiffPath = path + '.' + key ; return false ; }
 				if ( left[ key ] === right[ key ] ) { continue ; }
 
 				runtime.leftStack.push( left ) ;
 				runtime.rightStack.push( right ) ;
-				recursiveTest = isEqual_( runtime , left[ key ] , right[ key ] ) ;
+				recursiveTest = isEqual_( runtime , left[ key ] , right[ key ] , path + '.' + key ) ;
 				//if ( ! recursiveTest ) { return false ; }
 				runtime.leftStack.pop() ;
 				runtime.rightStack.pop() ;
+
+				// Don't change lastDiffPath here, we preserve the recursive one
 				if ( ! recursiveTest ) { return false ; }
 			}
 
@@ -21716,7 +21762,7 @@ function isEqual_( runtime , left , right ) {
 					key = keys[ index ] ;
 
 					if ( right[ key ] === undefined ) { continue ; }		// undefined and no key are considered the same
-					if ( left[ key ] === undefined ) { return false ; }
+					if ( left[ key ] === undefined ) { lastDiffPath = path + '.' + key ; return false ; }
 					// No need to check equality: already done in the previous loop
 				}
 			}
@@ -21725,6 +21771,7 @@ function isEqual_( runtime , left , right ) {
 		return true ;
 	}
 
+	lastDiffPath = path ;
 	return false ;
 }
 
@@ -21736,7 +21783,7 @@ module.exports = isEqual ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -21995,7 +22042,7 @@ exports.getAllSchemaTags = function( schema , tags = new Set() , depthLimit = 10
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -22282,7 +22329,7 @@ sanitizers.mongoId = data => {
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -22407,7 +22454,7 @@ module.exports = schemaSchema ;
 /*
 	Doormen
 
-	Copyright (c) 2015 - 2020 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
