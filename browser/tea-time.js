@@ -17807,7 +17807,7 @@ AssertionError.create = ( from , actual , expectationPath , expectationType , ..
 	}
 
 	if ( typeof expectationPath === 'string' ) {
-		message += ' (offending path: ' + expectationPath + ')' ;
+		if ( expectationPath ) { message += ' (offending path: ' + expectationPath + ')' ; }
 		if ( expectationPath[ 0 ] === '.' ) { expectationPath = expectationPath.slice( 1 ) ; }
 	}
 
@@ -18030,9 +18030,13 @@ module.exports = assert ;
 const typeCheckers = require( './typeCheckers.js' ) ;
 
 const isEqual = require( './isEqual.js' ) ;
+const IS_EQUAL_AROUND = { around: true } ;
 const IS_EQUAL_LIKE = { like: true } ;
+const IS_EQUAL_LIKE_AROUND = { like: true , around: true } ;
 const IS_EQUAL_PARTIALLY_LIKE = { like: true , oneWay: true } ;
+const IS_EQUAL_PARTIALLY_LIKE_AROUND = { like: true , oneWay: true , around: true } ;
 const IS_EQUAL_PARTIALLY_EQUAL = { oneWay: true } ;
+const IS_EQUAL_PARTIALLY_EQUAL_AROUND = { oneWay: true , around: true } ;
 
 const VOWEL = new Set( [ 'a' , 'e' , 'i' , 'o' , 'u' , 'y' , 'A' , 'E' , 'I' , 'O' , 'U' , 'Y' ] ) ;
 
@@ -18084,6 +18088,33 @@ function FunctionCall( fn , isAsync , thisArg , ... args ) {
 }
 
 assert.FunctionCall = FunctionCall ;
+
+
+
+function toArrayOfValues( value ) {
+	return (
+		! value || typeof value !== 'object' ? [ value ] :
+		Array.isArray( value ) ? value :
+		typeof value.values === 'function' ? [ ... value.values() ] :
+		Object.values( value )
+	) ;
+}
+
+assert._toArrayOfValues = toArrayOfValues ;
+
+
+
+function toSetOfValues( value ) {
+	return (
+		! value || typeof value !== 'object' ? new Set( [ value ] ) :
+		value instanceof Set ? value :
+		Array.isArray( value ) ? new Set( value ) :
+		typeof value.values === 'function' ? new Set( value.values() ) :
+		new Set( Object.values( value ) )
+	) ;
+}
+
+assert._toSetOfValues = toSetOfValues ;
 
 
 
@@ -18344,6 +18375,29 @@ assert.notEqual.inspect = true ;
 
 
 
+// Equal around
+assert['to equal around'] =
+assert.equalAround = ( from , actual , expected ) => {
+	if ( ! isEqual( actual , expected , IS_EQUAL_AROUND ) ) {
+		throw AssertionError.create( from , actual , isEqual.getLastPath() , 'to equal around' , expected ) ;
+	}
+} ;
+assert.equalAround.showDiff = true ;
+assert.equalAround.inspect = true ;
+
+
+
+// Not equal around
+assert['to not equal around'] = assert['not to equal around'] =
+assert.notEqualAround = ( from , actual , notExpected ) => {
+	if ( isEqual( actual , notExpected , IS_EQUAL_AROUND ) ) {
+		throw AssertionError.create( from , actual , null , 'not to equal around' , notExpected ) ;
+	}
+} ;
+assert.notEqualAround.inspect = true ;
+
+
+
 // Like
 assert['to be like'] =
 assert['to be alike'] =
@@ -18368,6 +18422,31 @@ assert.notLike = ( from , actual , notExpected ) => {
 	}
 } ;
 assert.notLike.inspect = true ;
+
+
+
+// Like around
+assert['to be like around'] =
+assert['to be alike around'] =
+assert.likeAround = ( from , actual , expected ) => {
+	if ( ! isEqual( actual , expected , IS_EQUAL_LIKE_AROUND ) ) {
+		throw AssertionError.create( from , actual , isEqual.getLastPath() , 'to be like around' , expected ) ;
+	}
+} ;
+assert.likeAround.showDiff = true ;
+assert.likeAround.inspect = true ;
+
+
+
+// Not like around
+assert['to be not like around'] = assert['to not be like around'] = assert['not to be like around'] =
+assert['to be not alike around'] = assert['to not be alike around'] = assert['not to be alike around'] =
+assert.notLikeAround = ( from , actual , notExpected ) => {
+	if ( isEqual( actual , notExpected , IS_EQUAL_LIKE_AROUND ) ) {
+		throw AssertionError.create( from , actual , null , 'not to be like around' , notExpected ) ;
+	}
+} ;
+assert.notLikeAround.inspect = true ;
 
 
 
@@ -18406,6 +18485,29 @@ assert.notPartiallyEqual.inspect = true ;
 
 
 
+// Equal (around) to a partial object
+assert['to partially equal around'] =
+assert.partiallyEqualAround = ( from , actual , expected ) => {
+	if ( ! isEqual( expected , actual , IS_EQUAL_PARTIALLY_EQUAL_AROUND ) ) {
+		throw AssertionError.create( from , actual , isEqual.getLastPath() , 'to partially equal around' , expected ) ;
+	}
+} ;
+assert.partiallyEqualAround.showPathDiff = true ;
+assert.partiallyEqualAround.inspect = true ;
+
+
+
+// Not equal (around) to a partial object
+assert['to not partially equal around'] = assert['not to partially equal around'] =
+assert.notPartiallyEqualAround = ( from , actual , notExpected ) => {
+	if ( isEqual( notExpected , actual , IS_EQUAL_PARTIALLY_EQUAL_AROUND ) ) {
+		throw AssertionError.create( from , actual , null , 'not to partially equal around' , notExpected ) ;
+	}
+} ;
+assert.notPartiallyEqualAround.inspect = true ;
+
+
+
 // Like partial
 assert['to be partially like'] =
 assert['to be like partial'] =
@@ -18430,6 +18532,29 @@ assert.notPartiallyLike = ( from , actual , notExpected ) => {
 	}
 } ;
 assert.notPartiallyLike.inspect = true ;
+
+
+
+// Like (around) partial
+assert['to be partially like around'] =
+assert.partiallyLikeAround = ( from , actual , expected ) => {
+	if ( ! isEqual( expected , actual , IS_EQUAL_PARTIALLY_LIKE_AROUND ) ) {
+		throw AssertionError.create( from , actual , isEqual.getLastPath() , 'to be partially like around' , expected ) ;
+	}
+} ;
+assert.partiallyLikeAround.showPathDiff = true ;
+assert.partiallyLikeAround.inspect = true ;
+
+
+
+// Not like (around) partial
+assert['to be not partially like around'] = assert['to not be partially like around'] = assert['not to be partially like around'] =
+assert.notPartiallyLikeAround = ( from , actual , notExpected ) => {
+	if ( isEqual( notExpected , actual , IS_EQUAL_PARTIALLY_LIKE_AROUND ) ) {
+		throw AssertionError.create( from , actual , null , 'not to be partially like around' , notExpected ) ;
+	}
+} ;
+assert.notPartiallyLikeAround.inspect = true ;
 
 
 
@@ -18796,17 +18921,13 @@ assert['to contain'] =
 assert['to have'] =
 assert['to include'] =
 assert.has =
-assert.include =
-assert.contain = ( from , actual , ... expected ) => {
+assert.includes = assert.include =
+assert.contains = assert.contain = ( from , actual , ... expected ) => {
 	var has = false ;
 
 	if ( actual && typeof actual === 'object' ) {
-		if ( Array.isArray( actual ) ) {
-			has = expected.every( value => actual.includes( value ) ) ;
-		}
-		else if ( typeof actual.has === 'function' ) {
-			has = expected.every( value => actual.has( value ) ) ;
-		}
+		let actualValues = toArrayOfValues( actual ) ;
+		has = expected.every( value => actualValues.includes( value ) ) ;
 	}
 	else if ( typeof actual === 'string' ) {
 		has = expected.every( value => actual.includes( value ) ) ;
@@ -18829,12 +18950,8 @@ assert.notContain = ( from , actual , ... notExpected ) => {
 	var has = false ;
 
 	if ( actual && typeof actual === 'object' ) {
-		if ( Array.isArray( actual ) ) {
-			has = notExpected.some( value => actual.includes( value ) ) ;
-		}
-		else if ( typeof actual.has === 'function' ) {
-			has = notExpected.some( value => actual.has( value ) ) ;
-		}
+		let actualValues = toArrayOfValues( actual ) ;
+		has = notExpected.some( value => actualValues.includes( value ) ) ;
 	}
 	else if ( typeof actual === 'string' ) {
 		has = notExpected.some( value => actual.includes( value ) ) ;
@@ -18848,28 +18965,58 @@ assert.notContain.inspect = true ;
 
 
 
+// .has() is ambigous, it's like .contain() except for object having a .has() method: e.g. Map, for Set it still produces the same result
+assert['to have'] =
+assert.has = ( from , actual , ... expected ) => {
+	if ( actual && typeof actual === 'object' ) {
+		if ( typeof actual.has === 'function' ) {
+			if ( ! expected.every( value => actual.has( value ) ) ) {
+				throw AssertionError.create( from , actual , null , 'to have' , expected ) ;
+			}
+
+			return ;
+		}
+	}
+
+	assert.contain( from , actual , ... expected ) ;
+} ;
+assert.has.inspect = true ;
+
+
+
+// .hasNot() is ambigous, it's like .notContain() except for object having a .has() method: e.g. Map, for Set it still produces the same result
+assert['to have not'] = assert['to not have'] = assert['not to have'] =
+assert.hasNot = ( from , actual , ... notExpected ) => {
+	if ( actual && typeof actual === 'object' ) {
+		if ( typeof actual.has === 'function' ) {
+			if ( notExpected.some( value => actual.has( value ) ) ) {
+				throw AssertionError.create( from , actual , null , 'not to have' , notExpected ) ;
+			}
+			return ;
+		}
+	}
+
+	assert.notContain( from , actual , ... notExpected ) ;
+} ;
+assert.hasNot.inspect = true ;
+
+
+
 assert['to only contain'] = assert['to contain only'] =
 assert['to only have'] = assert['to have only'] =
 assert['to only include'] = assert['to include only'] =
-assert.includeOnly =
-assert.containOnly = ( from , actual , ... expected ) => {
+assert.includeOnly = assert.includesOnly =
+assert.containOnly = assert.containsOnly = ( from , actual , ... expected ) => {
 	var has = false ;
 
 	if ( actual && typeof actual === 'object' ) {
-		if ( Array.isArray( actual ) ) {
-			// Turn 'actual' to a Set to dedup everything
-			actual = new Set( actual ) ;
-		}
-
-		if ( typeof actual.has === 'function' ) {
-			// Turn 'expected' to a Set to dedup everything
-			expected = new Set( expected ) ;
-			// Check size, then iterate...
-			has = actual.size === expected.size && [ ... expected ].every( value => actual.has( value ) ) ;
-		}
+		let actualValues = toSetOfValues( actual ) ;
+		let expectedValues = toSetOfValues( expected ) ;
+		// Check size, then iterate...
+		has = actualValues.size === expectedValues.size && [ ... expectedValues ].every( value => actualValues.has( value ) ) ;
 	}
 	else if ( typeof actual === 'string' ) {
-		// Does not make sens at all to use this assertion for strings, but well...
+		// Does not make sense at all to use this assertion for strings, but well...
 		has = expected.every( value => actual === value ) ;
 	}
 
@@ -18884,13 +19031,79 @@ assert.containOnly.glue = ', ' ;
 
 assert['not to only contain'] = assert['to not only contain'] =
 assert['not to contain only'] = assert['to not contain only'] = assert['to contain not only'] =
-assert['not to only have'] = assert['to not only have'] =
-assert['not to have only'] = assert['to not have only'] = assert['to have not only'] =
 assert['not to only include'] = assert['to not only include'] =
 assert['not to include only'] = assert['to not include only'] = assert['to include not only'] =
 assert.notIncludeOnly =
 assert.notContainOnly = ( from ) => {
 	throw new AssertionError( "Ambigous assertion type 'not to contain only'" , from ) ;
+} ;
+
+
+
+assert['to only have'] = assert['to have only'] =
+assert.hasOnly = ( from , actual , ... expected ) => {
+	if ( actual && typeof actual === 'object' ) {
+		if ( typeof actual.has === 'function' ) {
+			let actualValues = toSetOfValues( actual ) ;
+			let expectedValues = toSetOfValues( expected ) ;
+			// Check size, then iterate...
+			// Use actual, not actualValues inside every()
+			if ( actualValues.size !== expectedValues.size || ! [ ... expectedValues ].every( value => actual.has( value ) ) ) {
+				throw AssertionError.create( from , actual , null , 'to have only' , expected ) ;
+			}
+
+			return ;
+		}
+	}
+
+	assert.containOnly( from , actual , ... expected ) ;
+} ;
+assert.hasOnly.inspect = true ;
+assert.hasOnly.glue = ', ' ;
+
+
+
+assert['not to only have'] = assert['to not only have'] =
+assert['not to have only'] = assert['to not have only'] = assert['to have not only'] =
+assert.hasNotOnly = ( from ) => {
+	throw new AssertionError( "Ambigous assertion type 'not to have only'" , from ) ;
+} ;
+
+
+
+assert['to only have unique values'] =
+assert['to have only unique values'] =
+assert['to only contain unique values'] =
+assert['to contain only unique values'] =
+assert['to only include unique values'] =
+assert['to include only unique values'] =
+assert.onlyUniqueValues = ( from , actual ) => {
+	if ( ! actual || typeof actual !== 'object' ) {
+		throw AssertionError.create( from , actual , null , 'to only contain unique values' ) ;
+	}
+
+	var actualValues = toArrayOfValues( actual ) ;
+
+	for ( let i = 0 ; i < actualValues.length ; i ++ ) {
+		for ( let j = i + 1 ; j < actualValues.length ; j ++ ) {
+			if ( actualValues[ i ] === actualValues[ j ] ) {
+				throw AssertionError.create( from , actual , null , 'to only contain unique values' ) ;
+			}
+		}
+	}
+} ;
+assert.onlyUniqueValues.inspect = true ;
+
+
+
+assert['not to only have unique values'] = assert['to not only have unique values'] =
+assert['not to have only unique values'] = assert['to not have only unique values'] = assert['to have not only unique values'] =
+assert['not to only contain unique values'] = assert['to not only contain unique values'] =
+assert['not to contain only unique values'] = assert['to not contain only unique values'] = assert['to contain not only unique values'] =
+assert['not to only include unique values'] = assert['to not only include unique values'] =
+assert['not to include only unique values'] = assert['to not include only unique values'] = assert['to include not only unique values'] =
+assert.notOnlyUniqueValues = ( from ) => {
+	throw new AssertionError( "Ambigous assertion type 'not to contain only unique values'" , from ) ;
 } ;
 
 
@@ -19023,10 +19236,9 @@ assert.ownKeys.glue = ', ' ;
 assert['to only have key'] = assert['to have only key'] = assert['to have only key'] =
 assert['to only have keys'] = assert['to have only keys'] = assert['to have only keys'] =
 assert.onlyKey =
-assert.onlyKeys = ( from , actual , ... keys ) => {
+assert.onlyKeys = ( from ) => {
 	throw new AssertionError( "Instead of using assertion 'onlyKeys', you should use assertion 'onlyOwnKeys'." , from ) ;
 } ;
-assert.onlyKeys.glue = ', ' ;
 
 
 
@@ -20213,6 +20425,7 @@ doormen.subSchema = ( schema , path , noSubmasking = false , noOpaque = false ) 
 	}
 
 	try {
+		// It should exit if schema is falsy (e.g. when the noSubmasking option on)
 		for ( i = 0 , iMax = path.length ; i < iMax && schema ; i ++ ) {
 			schema = doormen.directSubSchema( schema , path[ i ] , noSubmasking , noOpaque ) ;
 		}
@@ -20226,6 +20439,9 @@ doormen.subSchema = ( schema , path , noSubmasking = false , noOpaque = false ) 
 } ;
 
 
+
+const EMPTY_SCHEMA = {} ;
+Object.freeze( EMPTY_SCHEMA ) ;
 
 doormen.directSubSchema = ( schema , key , noSubmasking , noOpaque ) => {
 	if ( ! schema || typeof schema !== 'object' ) {
@@ -20279,7 +20495,7 @@ doormen.directSubSchema = ( schema , key , noSubmasking , noOpaque ) => {
 	}
 
 	// Sub-schema not found, it should be open to anything, so return {}
-	return {} ;
+	return EMPTY_SCHEMA ;
 } ;
 
 
@@ -21101,7 +21317,6 @@ ExpectPrototype.toString = function() { return '' + this ; } ;
 function factory( hooks = {} ) {
 
 	var ExpectFn = function Expect( value , expectationType , ... args ) {
-
 		// Direct usage, e.g.: expect( actual , "to equal" , expected )
 		if ( expectationType ) {
 			if ( ! assert[ expectationType ] ) {
@@ -21121,6 +21336,7 @@ function factory( hooks = {} ) {
 		assertion.expectationType = null ;
 		assertion.fnArgs = null ;	// Extra-values, for function arguments
 		assertion.isPromise = false ;	// true if it is asynchronous
+		assertion.each = false ;
 		assertion.expectFn = ExpectFn ;
 		assertion.proxy = new Proxy( assertion , handler ) ;
 
@@ -21133,6 +21349,36 @@ function factory( hooks = {} ) {
 		fail: 0
 	} ;
 	ExpectFn.prototype = ExpectPrototype ;
+
+	// expect.each() function
+	ExpectFn.each = function ExpectEach( values , expectationType , ... args ) {
+		values = assert._toArrayOfValues( values ) ;
+
+		// Direct usage, e.g.: expect( actual , "to equal" , expected )
+		if ( expectationType ) {
+			if ( ! assert[ expectationType ] ) {
+				throw new Error( "Unknown expectationType '" + expectationType + "'." ) ;
+			}
+
+			return values.forEach( value => assert[ expectationType ]( ExpectEach , value , ... args ) ) ;
+		}
+
+		// Sadly, Proxy are not callable on regular object, so the target has to be a function.
+		// The name is purposedly the same.
+		var assertion = function Expect() {} ;	// eslint-disable-line no-shadow
+
+		if ( arguments.length ) { assertion.value = values ; }
+		else { assertion.value = assert.NONE ; }
+
+		assertion.expectationType = null ;
+		assertion.fnArgs = null ;	// Extra-values, for function arguments
+		assertion.isPromise = false ;	// true if it is asynchronous
+		assertion.each = true ;
+		assertion.expectFn = ExpectFn ;	// not ExpectFn.each, it's used for stats
+		assertion.proxy = new Proxy( assertion , handler ) ;
+
+		return assertion.proxy ;
+	} ;
 
 	return ExpectFn ;
 }
@@ -21176,7 +21422,6 @@ var handler = {
 		}
 
 		if ( typeof property === 'string' && ! Function.prototype[ property ] && ! Object.prototype[ property ] && ! ExpectPrototype[ property ] ) {
-			//console.error( ">>> inside" ) ;
 			if ( target.expectationType ) { target.expectationType += ' ' + property ; }
 			else { target.expectationType = property ; }
 
@@ -21219,19 +21464,25 @@ var handler = {
 				traceError = new Error() ;
 				if ( Error.captureStackTrace ) { Error.captureStackTrace( traceError , handler.apply ) ; }
 
-				return Promise.resolve( target.value )
-					.then(
-						value => {
-							target.value = value ;
-							target.isPromise = false ;
-							target.proxy( ... args ) ;
-						} ,
-						() => {
-							target.expectFn.stats.fail ++ ;
-							if ( target.expectFn.hooks.fail ) { target.expectFn.hooks.fail() ; }
-							throw AssertionError.create( traceError , target.value , null , "to resolve" ) ;
-						}
-					) ;
+				if ( target.each ) {
+					promise = Promise.all( target.value ) ;
+				}
+				else {
+					promise = Promise.resolve( target.value ) ;
+				}
+
+				return promise.then(
+					value => {
+						target.value = value ;
+						target.isPromise = false ;
+						target.proxy( ... args ) ;
+					} ,
+					() => {
+						target.expectFn.stats.fail ++ ;
+						if ( target.expectFn.hooks.fail ) { target.expectFn.hooks.fail() ; }
+						throw AssertionError.create( traceError , target.value , null , "to resolve" ) ;
+					}
+				) ;
 			}
 
 			if ( typeof fn.promise === 'function' ) { fn = fn.promise ; }
@@ -21243,7 +21494,15 @@ var handler = {
 			if ( Error.captureStackTrace ) { Error.captureStackTrace( traceError , handler.apply ) ; }
 
 			if ( fn.fnParams ) {
-				promise = fn( traceError , target.value , target.fnArgs , ... args ) ;
+				if ( target.each ) {
+					promise = Promise.all( target.value.map( value => fn( traceError , value , target.fnArgs , ... args ) ) ) ;
+				}
+				else {
+					promise = fn( traceError , target.value , target.fnArgs , ... args ) ;
+				}
+			}
+			else if ( target.each ) {
+				promise = Promise.all( target.value.map( value => fn( traceError , value , ... args ) ) ) ;
 			}
 			else {
 				promise = fn( traceError , target.value , ... args ) ;
@@ -21264,7 +21523,15 @@ var handler = {
 
 		try {
 			if ( fn.fnParams ) {
-				fn( handler.apply , target.value , target.fnArgs , ... args ) ;
+				if ( target.each ) {
+					target.value.forEach( value => fn( handler.apply , value , target.fnArgs , ... args ) ) ;
+				}
+				else {
+					fn( handler.apply , target.value , target.fnArgs , ... args ) ;
+				}
+			}
+			else if ( target.each ) {
+				target.value.forEach( value => fn( handler.apply , value , ... args ) ) ;
 			}
 			else {
 				fn( handler.apply , target.value , ... args ) ;
@@ -24019,7 +24286,7 @@ module.exports = function isTypedArray(value) {
 /*
 	Next-Gen Events
 
-	Copyright (c) 2015 - 2019 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -24256,6 +24523,14 @@ NextGenEvents.prototype.addListener = function( eventName , fn , options ) {
 
 	listener.fn = fn || options.fn ;
 	listener.id = options.id !== undefined ? options.id : listener.fn ;
+
+	if ( options.unique ) {
+		if ( this.__ngev.listeners[ eventName ].find( e => e.id === listener.id ) ) {
+			// Not unique! Return now!
+			return ;
+		}
+	}
+
 	listener.once = !! options.once ;
 	listener.async = !! options.async ;
 	listener.eventObject = !! options.eventObject ;
@@ -25430,7 +25705,7 @@ NextGenEvents.Proxy = require( './Proxy.js' ) ;
 /*
 	Next-Gen Events
 
-	Copyright (c) 2015 - 2019 Cédric Ronvel
+	Copyright (c) 2015 - 2021 Cédric Ronvel
 
 	The MIT License (MIT)
 
@@ -25976,20 +26251,21 @@ RemoteService.prototype.receiveAckEmit = function( message ) {
 },{"./NextGenEvents.js":72}],74:[function(require,module,exports){
 module.exports={
   "name": "nextgen-events",
-  "version": "1.3.4",
+  "version": "1.5.2",
   "description": "The next generation of events handling for javascript! New: abstract away the network!",
   "main": "lib/NextGenEvents.js",
   "engines": {
     "node": ">=6.0.0"
   },
   "directories": {
-    "test": "test"
+    "test": "test",
+    "bench": "bench"
   },
   "dependencies": {},
   "devDependencies": {
-    "browserify": "^16.2.2",
+    "browserify": "^17.0.0",
     "uglify-js-es6": "^2.8.9",
-    "ws": "^5.1.1"
+    "ws": "^7.4.6"
   },
   "scripts": {
     "test": "tea-time -R dot"
@@ -26026,7 +26302,7 @@ module.exports={
     "title": "Next-Gen Events",
     "years": [
       2015,
-      2019
+      2021
     ],
     "owner": "Cédric Ronvel"
   }
@@ -31662,16 +31938,20 @@ Promise.onceEventAllOrError = ( emitter , eventName , excludeEvents ) => {
 	Number formatting class.
 	.format() should entirely use it for everything related to number formatting.
 	It avoids unsolvable rounding error with epsilon.
-	It is dedicated to number display to user, not computing.
+	It is dedicated for number display, not for computing.
 */
 
 
 
-function StringNumber( number ) {
+function StringNumber( number , decimalSeparator = '.' , groupSeparator = '' ) {
 	this.sign = 1 ;
 	this.digits = [] ;
 	this.exposant = 0 ;
-	this.special = null ;
+	this.special = null ;	// 'special' store special values like NaN, Infinity, etc
+
+	this.decimalSeparator = decimalSeparator ;
+	this.groupSeparator = groupSeparator ;
+
 	this.set( number ) ;
 }
 
@@ -31761,6 +32041,30 @@ StringNumber.prototype.toString = function( ... args ) {
 
 
 
+StringNumber.prototype.toExponential =
+StringNumber.prototype.toExponentialString = function() {
+	if ( this.special !== null ) { return '' + this.special ; }
+
+	var str = this.sign < 0 ? '-' : '' ;
+	if ( ! this.digits.length ) { return str + '0' ; }
+
+	str += this.digits[ 0 ] ;
+
+	if ( this.digits.length > 1 ) {
+		str += this.decimalSeparator + this.digits.join( '' ).slice( 1 ) ;
+	}
+
+	str += 'e' + ( this.exposant > 0 ? '+' : '' ) + ( this.exposant - 1 ) ;
+	return str ;
+} ;
+
+
+
+const SUPER_NUMBER = [ '⁰' , '¹' , '²' , '³' , '⁴' , '⁵' , '⁶' , '⁷' , '⁸' , '⁹' ] ;
+const SUPER_PLUS = '⁺' ;
+const SUPER_MINUS = '⁻' ;
+const ZERO_CHAR_CODE = '0'.charCodeAt( 0 ) ;
+
 StringNumber.prototype.toScientific =
 StringNumber.prototype.toScientificString = function() {
 	if ( this.special !== null ) { return '' + this.special ; }
@@ -31771,58 +32075,83 @@ StringNumber.prototype.toScientificString = function() {
 	str += this.digits[ 0 ] ;
 
 	if ( this.digits.length > 1 ) {
-		str += '.' + this.digits.join( '' ).slice( 1 ) ;
+		str += this.decimalSeparator + this.digits.join( '' ).slice( 1 ) ;
 	}
 
-	str += 'e' + ( this.exposant > 1 ? '+' : this.exposant < 1 ? '-' : '' ) + ( this.exposant - 1 ) ;
+	var exposantStr =
+		( this.exposant <= 0 ? SUPER_MINUS : '' ) +
+		( '' + Math.abs( this.exposant - 1 ) ).split( '' ).map( c => SUPER_NUMBER[ c.charCodeAt( 0 ) - ZERO_CHAR_CODE ] )
+			.join( '' ) ;
+
+	str += ' × 10' + exposantStr ;
 	return str ;
 } ;
 
 
 
 // leadingZero = minimal number of number before the dot, they will be left-padded with zero if needed.
-// trailingZero = minimal number of number before the dot, they will be right-padded with zero if needed.
+// trailingZero = minimal number of number after the dot, they will be right-padded with zero if needed.
 // onlyIfDecimal: set it to true if you don't want right padding zero when there is no decimal
 StringNumber.prototype.toNoExp =
-StringNumber.prototype.toNoExpString = function( leadingZero = 1 , trailingZero = 0 , onlyIfDecimal = false , exposant = this.exposant ) {
+StringNumber.prototype.toNoExpString = function( leadingZero = 1 , trailingZero = 0 , onlyIfDecimal = false , forcePlusSign = false , exposant = this.exposant ) {
 	if ( this.special !== null ) { return '' + this.special ; }
 
-	var str = this.sign < 0 ? '-' : '' ;
+	var integerDigits = [] , decimalDigits = [] ,
+		str = this.sign < 0 ? '-' : forcePlusSign ? '+' : '' ;
 
 	if ( ! this.digits.length ) {
-		str += '0'.repeat( leadingZero ) ;
-		if ( trailingZero && ! onlyIfDecimal ) { str += '.' + '0'.repeat( trailingZero ) ; }
-		return str ;
-	}
+		arrayFill( integerDigits , 0 , leadingZero ) ;
 
-	var digits = this.digits.join( '' ) ;
-
-	if ( exposant <= 0 ) {
-		// This number is of type 0.[0...]xyz
-		str += '0'.repeat( leadingZero ) + '.' + '0'.repeat( -exposant ) + digits ;
-		if ( trailingZero && digits.length - exposant < trailingZero ) {
-			str += '0'.repeat( trailingZero - digits.length + exposant ) ;
+		if ( trailingZero && ! onlyIfDecimal ) {
+			arrayFill( decimalDigits , 0 , trailingZero ) ;
 		}
-		return str ;
 	}
+	else if ( exposant <= 0 ) {
+		// This number is of type 0.[0...]xyz
+		arrayFill( integerDigits , 0 , leadingZero ) ;
 
-	if ( exposant >= this.digits.length ) {
+		arrayFill( decimalDigits , 0 , -exposant ) ;
+		arrayConcatSlice( decimalDigits , this.digits ) ;
+
+		if ( trailingZero && this.digits.length - exposant < trailingZero ) {
+			arrayFill( decimalDigits , 0 , trailingZero - this.digits.length + exposant ) ;
+		}
+	}
+	else if ( exposant >= this.digits.length ) {
 		// This number is of type xyz[0...]
-		if ( exposant < leadingZero ) { str += '0'.repeat( leadingZero - exposant ) ; }
-		str += digits + '0'.repeat( exposant - this.digits.length ) ;
-		if ( trailingZero && ! onlyIfDecimal ) { str += '.' + '0'.repeat( trailingZero ) ; }
-		return str ;
+		if ( exposant < leadingZero ) { arrayFill( integerDigits , 0 , leadingZero - exposant ) ; }
+		arrayConcatSlice( integerDigits , this.digits ) ;
+		arrayFill( integerDigits , 0 , exposant - this.digits.length ) ;
+
+		if ( trailingZero && ! onlyIfDecimal ) {
+			arrayFill( decimalDigits , 0 , trailingZero ) ;
+		}
+	}
+	else {
+		// Here the digits are splitted with a dot in the middle
+		if ( exposant < leadingZero ) { arrayFill( integerDigits , 0 , leadingZero - exposant ) ; }
+		arrayConcatSlice( integerDigits , this.digits , 0 , exposant ) ;
+
+		arrayConcatSlice( decimalDigits , this.digits , exposant ) ;
+
+		if (
+			trailingZero && this.digits.length - exposant < trailingZero
+			&& ( ! onlyIfDecimal || this.digits.length - exposant > 0 )
+		) {
+			arrayFill( decimalDigits , 0 , trailingZero - this.digits.length + exposant ) ;
+		}
 	}
 
-	// Here the digits are splitted with a dot in the middle
-	if ( exposant < leadingZero ) { str += '0'.repeat( leadingZero - exposant ) ; }
-	str += digits.slice( 0 , exposant ) + '.' + digits.slice( exposant ) ;
+	str += this.groupSeparator ?
+		this.groupDigits( integerDigits , this.groupSeparator ) :
+		integerDigits.join( '' ) ;
 
-	if (
-		trailingZero && digits.length - exposant < trailingZero
-		&& ( ! onlyIfDecimal || digits.length - exposant > 0 )
-	) {
-		str += '0'.repeat( trailingZero - digits.length + exposant ) ;
+	if ( decimalDigits.length ) {
+		str += this.decimalSeparator + (
+			this.decimalGroupSeparator ?
+				this.groupDigits( decimalDigits , this.decimalGroupSeparator ) :
+				decimalDigits.join( '' )
+		) ;
 	}
 
 	return str ;
@@ -31837,7 +32166,7 @@ const SUB_MUL_PREFIX = [ '' , 'm' , 'µ' , 'n' , 'p' , 'f' , 'a' , 'z' , 'y' ] ;
 
 
 StringNumber.prototype.toMetric =
-StringNumber.prototype.toMetricString = function() {
+StringNumber.prototype.toMetricString = function( leadingZero = 1 , trailingZero = 0 , onlyIfDecimal = false , forcePlusSign = false ) {
 	if ( this.special !== null ) { return '' + this.special ; }
 	if ( ! this.digits.length ) { return this.sign > 0 ? '0' : '-0' ; }
 
@@ -31856,7 +32185,7 @@ StringNumber.prototype.toMetricString = function() {
 		if ( prefix === undefined ) { return this.toScientificString() ; }
 	}
 
-	return this.toNoExpString( undefined , undefined , undefined , fakeExposant ) + prefix ;
+	return this.toNoExpString( leadingZero , trailingZero , onlyIfDecimal , forcePlusSign , fakeExposant ) + prefix ;
 } ;
 
 
@@ -31907,6 +32236,37 @@ StringNumber.prototype.removeTrailingZero = function() {
 	while( i >= 0 && this.digits[ i ] === 0 ) { i -- ; }
 	this.digits.length = i + 1 ;
 } ;
+
+
+
+const GROUP_SIZE = 3 ;
+
+StringNumber.prototype.groupDigits = function( digits , separator , inverseOrder = false ) {
+	var str = '' ,
+		offset = inverseOrder ? 0 : GROUP_SIZE - ( digits.length % GROUP_SIZE ) ,
+		i = 0 ,
+		iMax = digits.length ;
+
+	for ( ; i < iMax ; i ++ ) {
+		str += i && ( ( i + offset ) % GROUP_SIZE === 0 ) ? separator + digits[ i ] : digits[ i ] ;
+	}
+
+	return str ;
+} ;
+
+
+
+function arrayFill( intoArray , value , repeat ) {
+	while ( repeat -- ) { intoArray[ intoArray.length ] = value ; }
+	return intoArray ;
+}
+
+
+
+function arrayConcatSlice( intoArray , sourceArray , start = 0 , end = sourceArray.length ) {
+	for ( let i = start ; i < end ; i ++ ) { intoArray[ intoArray.length ] = sourceArray[ i ] ; }
+	return intoArray ;
+}
 
 
 },{}],95:[function(require,module,exports){
@@ -32152,11 +32512,14 @@ const StringNumber = require( './StringNumber.js' ) ;
 	%n		natural: output the most natural representation for this type, object entries are sorted by keys
 	%N		even more natural: avoid type hinting marks like bracket for array
 	%f		float
-	%e		for scientific notation
-	%d	%i	integer
+	%k		number with metric system prefixes
+	%e		for exponential notation (e.g. 1.23e+2)
+	%K		for scientific notation (e.g. 1.23 × 10²)
+	%i	%d	integer
 	%u		unsigned integer
 	%U		unsigned positive integer (>0)
-	%k		number with metric system prefixes
+	%P		number to (absolute) percent (e.g.: 0.75 -> 75%)
+	%p		number to relative percent (e.g.: 1.25 -> +25% ; 0.75 -> -25%)
 	%t		time duration, convert ms into H:min:s
 	%m		convert degree into degree, minutes and seconds
 	%h		hexadecimal (input is a number)
@@ -32386,8 +32749,12 @@ modes.S.noCommonModeArg = true ;
 modes.N = ( arg , isSubCall ) => {
 	if ( typeof arg === 'string' ) { return arg ; }
 
-	if ( arg === null || arg === undefined || arg === true || arg === false || typeof arg === 'number' ) {
+	if ( arg === null || arg === undefined || arg === true || arg === false ) {
 		return '' + arg ;
+	}
+
+	if ( typeof arg === 'number' ) {
+		return modes.f( arg , '.3g ' ) ;
 	}
 
 	if ( Array.isArray( arg ) ) {
@@ -32435,105 +32802,117 @@ modes.n = arg => modes.N( arg , true ) ;
 
 // float
 modes.f = ( arg , modeArg ) => {
-	var match , k , v , lv , sn ,
-		leftPadding = 1 ,
-		rightPadding = 0 ,
-		rightPaddingOnlyIfDecimal = false ,
-		rounding = null ,
-		precision = null ;
-
 	if ( typeof arg === 'string' ) { arg = parseFloat( arg ) ; }
 	if ( typeof arg !== 'number' ) { arg = 0 ; }
 
-	if ( modeArg ) {
-		MODE_ARG_FORMAT_REGEX.lastIndex = 0 ;
+	var modes = floatModeArg( modeArg ) ,
+		sn = new StringNumber( arg , '.' , modes.groupSeparator ) ;
 
-		while ( ( match = MODE_ARG_FORMAT_REGEX.exec( modeArg ) ) ) {
-			[ , k , v ] = match ;
+	if ( modes.rounding !== null ) { sn.round( modes.rounding ) ; }
+	if ( modes.precision ) { sn.precision( modes.precision ) ; }
 
-			if ( k === 'z' ) {
-				// Zero-left padding
-				leftPadding = + v ;
-			}
-			else if ( ! k ) {
-				if ( v[ 0 ] === '.' ) {
-					// Rounding after the decimal
-					lv = v[ v.length - 1 ] ;
-
-					// Zero-right padding?
-					if ( lv === '!' ) {
-						rounding = rightPadding = parseInt( v.slice( 1 , -1 ) , 10 ) ;
-					}
-					else if ( lv === '?' ) {
-						rounding = rightPadding = parseInt( v.slice( 1 , -1 ) , 10 ) ;
-						rightPaddingOnlyIfDecimal = true ;
-					}
-					else {
-						rounding = parseInt( v.slice( 1 ) , 10 ) ;
-					}
-				}
-				else if ( v[ v.length - 1 ] === '.' ) {
-					// Rounding before the decimal
-					rounding = -parseInt( v.slice( 0 , -1 ) , 10 ) ;
-				}
-				else {
-					// Precision
-					precision = parseInt( v , 10 ) ;
-				}
-			}
-		}
-	}
-
-	sn = new StringNumber( arg ) ;
-	if ( rounding !== null ) { sn.round( rounding ) ; }
-	if ( precision !== null ) { sn.precision( precision ) ; }
-	return sn.toString( leftPadding , rightPadding , rightPaddingOnlyIfDecimal ) ;
+	return sn.toString( modes.leftPadding , modes.rightPadding , modes.rightPaddingOnlyIfDecimal ) ;
 } ;
 
 modes.f.noSanitize = true ;
 
 
 
+// absolute percent
+modes.P = ( arg , modeArg ) => {
+	if ( typeof arg === 'string' ) { arg = parseFloat( arg ) ; }
+	if ( typeof arg !== 'number' ) { arg = 0 ; }
+
+	arg *= 100 ;
+
+	var modes = floatModeArg( modeArg ) ,
+		sn = new StringNumber( arg , '.' , modes.groupSeparator ) ;
+
+	// Force rounding to zero by default
+	if ( modes.rounding !== null || ! modes.precision ) { sn.round( modes.rounding || 0 ) ; }
+	if ( modes.precision ) { sn.precision( modes.precision ) ; }
+
+	return sn.toNoExpString( modes.leftPadding , modes.rightPadding , modes.rightPaddingOnlyIfDecimal ) + '%' ;
+} ;
+
+modes.P.noSanitize = true ;
+
+
+
+// relative percent
+modes.p = ( arg , modeArg ) => {
+	if ( typeof arg === 'string' ) { arg = parseFloat( arg ) ; }
+	if ( typeof arg !== 'number' ) { arg = 0 ; }
+
+	arg = ( arg - 1 ) * 100 ;
+
+	var modes = floatModeArg( modeArg ) ,
+		sn = new StringNumber( arg , '.' , modes.groupSeparator ) ;
+
+	// Force rounding to zero by default
+	if ( modes.rounding !== null || ! modes.precision ) { sn.round( modes.rounding || 0 ) ; }
+	if ( modes.precision ) { sn.precision( modes.precision ) ; }
+
+	// 4th argument force a '+' sign
+	return sn.toNoExpString( modes.leftPadding , modes.rightPadding , modes.rightPaddingOnlyIfDecimal , true ) + '%' ;
+} ;
+
+modes.p.noSanitize = true ;
+
+
+
 // metric system
-modes.k = arg => {
+modes.k = ( arg , modeArg ) => {
 	if ( typeof arg === 'string' ) { arg = parseFloat( arg ) ; }
 	if ( typeof arg !== 'number' ) { return '0' ; }
-	//return metricPrefix( arg ) ;
 
-	var sn = new StringNumber( arg ) ;
-	sn.precision( 3 ) ;
-	return sn.toMetricString() ;
+	var modes = floatModeArg( modeArg ) ,
+		sn = new StringNumber( arg , '.' , modes.groupSeparator ) ;
+
+	if ( modes.rounding !== null ) { sn.round( modes.rounding ) ; }
+	// Default to 3 numbers precision
+	if ( modes.precision || modes.rounding === null ) { sn.precision( modes.precision || 3 ) ; }
+
+	return sn.toMetricString( modes.leftPadding , modes.rightPadding , modes.rightPaddingOnlyIfDecimal ) ;
 } ;
 
 modes.k.noSanitize = true ;
 
 
 
-// /!\ Should use StringNumber
-// scientific notation
+// exponential notation, a.k.a. "E notation" (e.g. 1.23e+2)
 modes.e = ( arg , modeArg ) => {
-	var match , k , v ;
-
 	if ( typeof arg === 'string' ) { arg = parseFloat( arg ) ; }
 	if ( typeof arg !== 'number' ) { arg = 0 ; }
 
-	if ( modeArg ) {
-		MODE_ARG_FORMAT_REGEX.lastIndex = 0 ;
+	var modes = floatModeArg( modeArg ) ,
+		sn = new StringNumber( arg , '.' , modes.groupSeparator ) ;
 
-		if ( ( match = MODE_ARG_FORMAT_REGEX.exec( modeArg ) ) ) {
-			[ , k , v ] = match ;
+	if ( modes.rounding !== null ) { sn.round( modes.rounding ) ; }
+	if ( modes.precision ) { sn.precision( modes.precision ) ; }
 
-			if ( ! k ) {
-				return '' + arg.toExponential( parseInt( v , 10 ) - 1 ) ;
-			}
-		}
-	}
-
-	return '' + arg.toExponential() ;
-
+	return sn.toExponential() ;
 } ;
 
 modes.e.noSanitize = true ;
+
+
+
+// scientific notation (e.g. 1.23 × 10²)
+modes.K = ( arg , modeArg ) => {
+	if ( typeof arg === 'string' ) { arg = parseFloat( arg ) ; }
+	if ( typeof arg !== 'number' ) { arg = 0 ; }
+
+	var modes = floatModeArg( modeArg ) ,
+		sn = new StringNumber( arg , '.' , modes.groupSeparator ) ;
+
+	if ( modes.rounding !== null ) { sn.round( modes.rounding ) ; }
+	if ( modes.precision ) { sn.precision( modes.precision ) ; }
+
+	return sn.toScientific() ;
+} ;
+
+modes.K.noSanitize = true ;
 
 
 
@@ -32989,6 +33368,78 @@ function commonModeArg( str , modeArg ) {
 	}
 
 	return str ;
+}
+
+
+
+const FLOAT_MODES = {
+	leftPadding: 1 ,
+	rightPadding: 0 ,
+	rightPaddingOnlyIfDecimal: false ,
+	rounding: null ,
+	precision: null ,
+	groupSeparator: ''
+} ;
+
+// Generic number modes
+function floatModeArg( modeArg ) {
+	var match , k , v , lv ;
+
+	FLOAT_MODES.leftPadding = 1 ;
+	FLOAT_MODES.rightPadding = 0 ;
+	FLOAT_MODES.rightPaddingOnlyIfDecimal = false ;
+	FLOAT_MODES.rounding = null ;
+	FLOAT_MODES.precision = null ;
+	FLOAT_MODES.groupSeparator = '' ;
+
+	if ( modeArg ) {
+		MODE_ARG_FORMAT_REGEX.lastIndex = 0 ;
+
+		while ( ( match = MODE_ARG_FORMAT_REGEX.exec( modeArg ) ) ) {
+			[ , k , v ] = match ;
+
+			if ( k === 'z' ) {
+				// Zero-left padding
+				FLOAT_MODES.leftPadding = + v ;
+			}
+			else if ( k === 'g' ) {
+				// Group separator
+				FLOAT_MODES.groupSeparator = v || ' ' ;
+			}
+			else if ( ! k ) {
+				if ( v === 'g' ) {
+					// Group separator
+					FLOAT_MODES.groupSeparator = ' ' ;
+				}
+				else if ( v[ 0 ] === '.' ) {
+					// Rounding after the decimal
+					lv = v[ v.length - 1 ] ;
+
+					// Zero-right padding?
+					if ( lv === '!' ) {
+						FLOAT_MODES.rounding = FLOAT_MODES.rightPadding = parseInt( v.slice( 1 , -1 ) , 10 ) || 0 ;
+					}
+					else if ( lv === '?' ) {
+						FLOAT_MODES.rounding = FLOAT_MODES.rightPadding = parseInt( v.slice( 1 , -1 ) , 10 ) || 0 ;
+						FLOAT_MODES.rightPaddingOnlyIfDecimal = true ;
+					}
+					else {
+						FLOAT_MODES.rounding = parseInt( v.slice( 1 ) , 10 ) || 0 ;
+					}
+				}
+				else if ( v[ v.length - 1 ] === '.' ) {
+					// Rounding before the decimal
+					FLOAT_MODES.rounding = -parseInt( v.slice( 0 , -1 ) , 10 ) || 0 ;
+				}
+				else {
+					// Precision, but only if integer
+					FLOAT_MODES.precision = parseInt( v , 10 ) || null ;
+				}
+			}
+		}
+	}
+
+	return FLOAT_MODES ;
 }
 
 
