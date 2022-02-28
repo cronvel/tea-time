@@ -24,7 +24,9 @@
 	SOFTWARE.
 */
 
-var SeventhPromise = require( 'seventh' ) ;
+"use strict" ;
+
+const SeventhPromise = require( 'seventh' ) ;
 
 
 
@@ -577,6 +579,10 @@ describe( "Misc tests" , function() {
 	
 	it( "Same name" , function() {
 		throw new Error( "Failed!" ) ;
+	} ) ;
+
+	it( "Test with log" , function() {
+		log( "Trying some debug: %N" , { a: 1, b: 2 } ) ;
 	} ) ;
 } ) ;
 
